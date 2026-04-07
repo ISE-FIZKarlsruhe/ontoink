@@ -2,7 +2,7 @@
 
 A [FOAF](http://xmlns.com/foaf/0.1/) Person must have a name and at most one mailbox.
 
-```ontoview
+```ontoink
 source: shapes/foaf-person/shape-data.ttl
 shape: shapes/foaf-person/shape.ttl
 height: 500px

@@ -3,8 +3,8 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ontoview"
-version = "0.2.1"
+name = "ontoink"
+version = "0.1.0"
 description = "Interactive ontology visualization, SHACL validation, and live TTL editing plugin for MkDocs"
 readme = "README.md"
 license = {text = "MIT"}
@@ -56,19 +56,19 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ISE-FIZKarlsruhe/ontoview"
-Documentation = "https://ise-fizkarlsruhe.github.io/ontoview/"
-Repository = "https://github.com/ISE-FIZKarlsruhe/ontoview"
-Issues = "https://github.com/ISE-FIZKarlsruhe/ontoview/issues"
+Homepage = "https://github.com/ISE-FIZKarlsruhe/ontoink"
+Documentation = "https://ise-fizkarlsruhe.github.io/ontoink/"
+Repository = "https://github.com/ISE-FIZKarlsruhe/ontoink"
+Issues = "https://github.com/ISE-FIZKarlsruhe/ontoink/issues"
 
 [project.entry-points."mkdocs.plugins"]
-ontoview = "ontoview.plugin:OntoviewPlugin"
+ontoink = "ontoink.plugin:OntoinkPlugin"
 
 [tool.setuptools.packages.find]
 where = ["."]
 
 [tool.setuptools.package-data]
-ontoview = ["resources/*.js", "resources/*.css"]
+ontoink = ["resources/*.js", "resources/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

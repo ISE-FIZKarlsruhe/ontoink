@@ -1,4 +1,4 @@
-/* ontoview — Interactive ontology visualization & validation */
+/* ontoink — Interactive ontology visualization & validation */
 
 :root {
   --ov-font: 'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
@@ -13,7 +13,7 @@
 
 /* ── Container ─────────────────────────────────────────────────── */
 
-.ontoview-container {
+.ontoink-container {
   position: relative;
   border: 1px solid var(--ov-border);
   border-radius: var(--ov-radius);
@@ -22,8 +22,8 @@
   overflow: hidden;
   font-family: var(--ov-font);
 }
-.ontoview-container:fullscreen { background: #fff; }
-.ontoview-container:fullscreen .ov-canvas { height: calc(100vh - 60px) !important; }
+.ontoink-container:fullscreen { background: #fff; }
+.ontoink-container:fullscreen .ov-canvas { height: calc(100vh - 60px) !important; }
 .ov-canvas { background: #fff; }
 
 /* ── Toolbar ───────────────────────────────────────────────────── */

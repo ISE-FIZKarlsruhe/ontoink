@@ -1,6 +1,6 @@
 """Tests for the TTL parser."""
 
-from ontoview.ttl_parser import (
+from ontoink.ttl_parser import (
     detect_source,
     local_name,
     parse_ttl_to_cytoscape,

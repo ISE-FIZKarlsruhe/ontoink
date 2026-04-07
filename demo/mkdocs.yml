@@ -1,4 +1,4 @@
-site_name: ontoview Demo
+site_name: ontoink Demo
 theme: readthedocs
 nav:
   - Home: index.md
@@ -8,7 +8,7 @@ nav:
 
 plugins:
   - search
-  - ontoview
+  - ontoink
 
 markdown_extensions:
   - pymdownx.superfences:

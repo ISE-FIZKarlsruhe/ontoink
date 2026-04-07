@@ -1,23 +1,23 @@
-"""MkDocs plugin that registers the ontoview custom fence and injects assets."""
+"""MkDocs plugin that registers the ontoink custom fence and injects assets."""
 
 from pathlib import Path
 
 from mkdocs.plugins import BasePlugin
 
 
-class OntoviewPlugin(BasePlugin):
+class OntoinkPlugin(BasePlugin):
 
     def on_config(self, config):
-        """Register the ontoview custom fence with pymdownx.superfences."""
-        from .fence import render_ontoview, reset_counter
+        """Register the ontoink custom fence with pymdownx.superfences."""
+        from .fence import render_ontoink, reset_counter
 
         reset_counter()
-        render_ontoview.docs_dir = config["docs_dir"]
+        render_ontoink.docs_dir = config["docs_dir"]
 
         fence_entry = {
-            "name": "ontoview",
-            "class": "ontoview",
-            "format": render_ontoview,
+            "name": "ontoink",
+            "class": "ontoink",
+            "format": render_ontoink,
         }
 
         mdx_configs = config.setdefault("mdx_configs", {})
@@ -30,13 +30,13 @@ class OntoviewPlugin(BasePlugin):
         return config
 
     def on_post_page(self, output, page, config):
-        """Inject CDN scripts and plugin JS/CSS into pages that use ontoview."""
-        if "data-ontoview-graph" not in output:
+        """Inject CDN scripts and plugin JS/CSS into pages that use ontoink."""
+        if "data-ontoink-graph" not in output:
             return output
 
         resources_dir = Path(__file__).parent / "resources"
-        js_content = (resources_dir / "ontoview.js").read_text(encoding="utf-8")
-        css_content = (resources_dir / "ontoview.css").read_text(encoding="utf-8")
+        js_content = (resources_dir / "ontoink.js").read_text(encoding="utf-8")
+        css_content = (resources_dir / "ontoink.css").read_text(encoding="utf-8")
 
         cdn_tags = "\n".join([
             # Cytoscape.js core + dagre layout

@@ -1,6 +1,6 @@
 """Tests for the SHACL validator."""
 
-from ontoview.shacl_validator import validate_graph
+from ontoink.shacl_validator import validate_graph
 
 
 def test_valid_data_conforms(sample_data, sample_shape):

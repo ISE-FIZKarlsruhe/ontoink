@@ -2,7 +2,7 @@
 
 A role (BFO_0000023) must always have a bearer via `ro:role_of` and be realized in a process via `bfo:realized_in`.
 
-```ontoview
+```ontoink
 source: shapes/role-bearer/shape-data.ttl
 shape: shapes/role-bearer/shape.ttl
 ```

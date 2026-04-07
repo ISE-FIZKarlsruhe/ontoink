@@ -2,7 +2,7 @@
 
 A [Schema.org](https://schema.org/) ScholarlyArticle must have a name, at least one author, and exactly one publication date.
 
-```ontoview
+```ontoink
 source: shapes/schema-article/shape-data.ttl
 shape: shapes/schema-article/shape.ttl
 height: 550px

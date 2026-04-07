@@ -1,8 +1,8 @@
 /**
- * ontoview.js v0.2.0 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.2.0 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
-var ontoview = (function () {
+var ontoink = (function () {
   "use strict";
 
   var instances = {};
@@ -182,7 +182,7 @@ var ontoview = (function () {
       edges.forEach(function(e) { var ed=e.data(), oth=ed.source===d.id?ed.target:ed.source; html+='<li>'+(ed.source===d.id?"\u2192":"\u2190")+' <em>'+esc(ed.label)+'</em> '+esc(cy.getElementById(oth).data("label")||oth)+'</li>'; });
       html += '</ul></div>';
     }
-    var shacl = instances[node.cy().container().closest(".ontoview-container").id]?.data?.shacl || [];
+    var shacl = instances[node.cy().container().closest(".ontoink-container").id]?.data?.shacl || [];
     var rel = shacl.filter(function(c){return c.targetClass===d.iri;});
     if (rel.length) {
       html += '<div class="ov-popup-section"><strong>SHACL Constraints:</strong><ul class="ov-popup-edges">';
@@ -253,7 +253,7 @@ var ontoview = (function () {
     var cid = container.id;
     var hasHidden = allKeys.length > activeKeys.length;
     var html = '<div class="ov-overlay-head"><span>Prefixes</span>';
-    if (hasHidden) html += '<button class="ov-ns-toggle" onclick="ontoview.toggleAllNs(\'' + cid + '\')">Show all</button>';
+    if (hasHidden) html += '<button class="ov-ns-toggle" onclick="ontoink.toggleAllNs(\'' + cid + '\')">Show all</button>';
     html += '<button class="ov-overlay-close" onclick="this.closest(\'.ov-ns-overlay\').style.display=\'none\'">&times;</button></div>';
     html += '<div class="ov-overlay-body"><div class="ov-ns-tags">';
     activeKeys.forEach(function(p) { html += '<span class="ov-ns-tag"><b>' + esc(p) + ':</b> ' + esc(activeNs[p]) + '</span>'; });
@@ -273,7 +273,7 @@ var ontoview = (function () {
   function initGraph(containerId) {
     var container = document.getElementById(containerId);
     if (!container) return;
-    var b64 = container.getAttribute("data-ontoview-graph");
+    var b64 = container.getAttribute("data-ontoink-graph");
     if (!b64) return;
     var data; try { data = JSON.parse(atob(b64)); } catch(e) { return; }
     var canvas = container.querySelector(".ov-canvas");
@@ -603,7 +603,7 @@ var ontoview = (function () {
 
   // ── Auto-init ──────────────────────────────────────────────────────────
 
-  document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll(".ontoview-container").forEach(function(el){initGraph(el.id);});});
+  document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll(".ontoink-container").forEach(function(el){initGraph(el.id);});});
 
   return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors };
 })();

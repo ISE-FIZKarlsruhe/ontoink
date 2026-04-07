@@ -1,4 +1,4 @@
-"""Custom fence handler for ```ontoview code blocks."""
+"""Custom fence handler for ```ontoink code blocks."""
 
 import base64
 import json
@@ -18,7 +18,7 @@ def reset_counter():
     _graph_counter = 0
 
 
-def render_ontoview(source, language, class_name, options, md, **kwargs):
+def render_ontoink(source, language, class_name, options, md, **kwargs):
     """
     Custom fence handler called by pymdownx.superfences.
 
@@ -31,12 +31,12 @@ def render_ontoview(source, language, class_name, options, md, **kwargs):
         namespaces: true       # optional, default true
     """
     global _graph_counter
-    graph_id = f"ontoview-graph-{_graph_counter}"
+    graph_id = f"ontoink-graph-{_graph_counter}"
     _graph_counter += 1
 
     try:
         config = yaml.safe_load(source)
-        docs_dir = getattr(render_ontoview, "docs_dir", ".")
+        docs_dir = getattr(render_ontoink, "docs_dir", ".")
 
         data_path = os.path.join(docs_dir, config["source"])
         shape_path = ""
@@ -66,27 +66,27 @@ def render_ontoview(source, language, class_name, options, md, **kwargs):
 
         editor_btn = ""
         if show_editor:
-            editor_btn = f'<button class="ov-btn ov-btn-accent" onclick="ontoview.toggleEditor(\'{graph_id}\')" title="Edit TTL & Validate">Edit &amp; Validate</button>\n'
+            editor_btn = f'<button class="ov-btn ov-btn-accent" onclick="ontoink.toggleEditor(\'{graph_id}\')" title="Edit TTL & Validate">Edit &amp; Validate</button>\n'
 
         return (
-            f'<div id="{graph_id}" class="ontoview-container" '
-            f'data-ontoview-graph="{b64_data}" '
+            f'<div id="{graph_id}" class="ontoink-container" '
+            f'data-ontoink-graph="{b64_data}" '
             f'data-show-legend="{str(show_legend).lower()}" '
             f'data-show-ns="{str(show_ns).lower()}">\n'
             f'  <div class="ov-toolbar">\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <button class="ov-btn" onclick="ontoview.zoomIn(\'{graph_id}\')" title="Zoom in">+</button>\n'
-            f'      <button class="ov-btn" onclick="ontoview.zoomOut(\'{graph_id}\')" title="Zoom out">&minus;</button>\n'
-            f'      <button class="ov-btn" onclick="ontoview.fit(\'{graph_id}\')" title="Fit to view">Fit</button>\n'
-            f'      <button class="ov-btn" onclick="ontoview.fullscreen(\'{graph_id}\')" title="Fullscreen">&#x26F6;</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.zoomIn(\'{graph_id}\')" title="Zoom in">+</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.zoomOut(\'{graph_id}\')" title="Zoom out">&minus;</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.fit(\'{graph_id}\')" title="Fit to view">Fit</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.fullscreen(\'{graph_id}\')" title="Fullscreen">&#x26F6;</button>\n'
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <button class="ov-btn" onclick="ontoview.exportPNG(\'{graph_id}\')" title="Export PNG">PNG</button>\n'
-            f'      <button class="ov-btn" onclick="ontoview.exportSVG(\'{graph_id}\')" title="Export SVG">SVG</button>\n'
-            f'      <button class="ov-btn" onclick="ontoview.downloadTTL(\'{graph_id}\')" title="Download TTL">TTL</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.exportPNG(\'{graph_id}\')" title="Export PNG">PNG</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.exportSVG(\'{graph_id}\')" title="Export SVG">SVG</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.downloadTTL(\'{graph_id}\')" title="Download TTL">TTL</button>\n'
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <button class="ov-btn" onclick="ontoview.toggleColors(\'{graph_id}\')" title="Color settings">Colors</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.toggleColors(\'{graph_id}\')" title="Color settings">Colors</button>\n'
             f'      {editor_btn}'
             f'    </div>\n'
             f'  </div>\n'
@@ -107,9 +107,9 @@ def render_ontoview(source, language, class_name, options, md, **kwargs):
             f'      </div>\n'
             f'    </div>\n'
             f'    <div class="ov-editor-actions">\n'
-            f'      <button class="ov-btn ov-btn-primary" onclick="ontoview.validate(\'{graph_id}\')">Validate</button>\n'
-            f'      <button class="ov-btn" onclick="ontoview.updateGraph(\'{graph_id}\')">Update Graph</button>\n'
-            f'      <button class="ov-btn" onclick="ontoview.resetEditor(\'{graph_id}\')">Reset</button>\n'
+            f'      <button class="ov-btn ov-btn-primary" onclick="ontoink.validate(\'{graph_id}\')">Validate</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.updateGraph(\'{graph_id}\')">Update Graph</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.resetEditor(\'{graph_id}\')">Reset</button>\n'
             f'    </div>\n'
             f'  </div>\n'
             f'</div>\n'
@@ -119,7 +119,7 @@ def render_ontoview(source, language, class_name, options, md, **kwargs):
         tb = traceback.format_exc()
         return (
             f'<div class="ov-error">'
-            f'<strong>Error rendering ontoview:</strong><br>'
+            f'<strong>Error rendering ontoink:</strong><br>'
             f'<code>{e}</code>'
             f'<pre style="font-size:11px;overflow:auto;max-height:200px;">{tb}</pre>'
             f'</div>'

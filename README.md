@@ -1,15 +1,15 @@
-# ontoview
+# ontoink
 
 **Interactive ontology visualization, SHACL validation, and live TTL editing for MkDocs.**
 
-[![CI](https://github.com/ISE-FIZKarlsruhe/ontoview/actions/workflows/ci.yml/badge.svg)](https://github.com/ISE-FIZKarlsruhe/ontoview/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/ontoview)](https://pypi.org/project/ontoview/)
-[![Python](https://img.shields.io/pypi/pyversions/ontoview)](https://pypi.org/project/ontoview/)
+[![CI](https://github.com/ISE-FIZKarlsruhe/ontoink/actions/workflows/ci.yml/badge.svg)](https://github.com/ISE-FIZKarlsruhe/ontoink/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/ontoink)](https://pypi.org/project/ontoink/)
+[![Python](https://img.shields.io/pypi/pyversions/ontoink)](https://pypi.org/project/ontoink/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-ontoview is a MkDocs plugin that transforms RDF/Turtle files into interactive, publication-ready ontology diagrams with SHACL constraint visualization. Write a simple code block in your markdown, and ontoview generates a fully interactive graph.
+ontoink is a MkDocs plugin that transforms RDF/Turtle files into interactive, publication-ready ontology diagrams with SHACL constraint visualization. Write a simple code block in your markdown, and ontoink generates a fully interactive graph.
 
-**[Live Demo](https://ise-fizkarlsruhe.github.io/ontoview/)**
+**[Live Demo](https://ise-fizkarlsruhe.github.io/ontoink/)**
 
 ## Features
 
@@ -75,13 +75,13 @@ ontoview is a MkDocs plugin that transforms RDF/Turtle files into interactive, p
 ## Installation
 
 ```bash
-pip install ontoview
+pip install ontoink
 ```
 
 Or install from source:
 
 ```bash
-pip install git+https://github.com/ISE-FIZKarlsruhe/ontoview.git
+pip install git+https://github.com/ISE-FIZKarlsruhe/ontoink.git
 ```
 
 ## Usage
@@ -91,17 +91,17 @@ pip install git+https://github.com/ISE-FIZKarlsruhe/ontoview.git
 ```yaml
 plugins:
   - search
-  - ontoview
+  - ontoink
 
 markdown_extensions:
   - pymdownx.superfences:
       preserve_tabs: true
 ```
 
-### 2. Write ontoview blocks in markdown
+### 2. Write ontoink blocks in markdown
 
 ````markdown
-```ontoview
+```ontoink
 source: path/to/instance-data.ttl
 shape: path/to/shacl-shape.ttl
 ```
@@ -127,7 +127,7 @@ mkdocs serve
 ### Full example
 
 ````markdown
-```ontoview
+```ontoink
 source: shapes/foaf-person/shape-data.ttl
 shape: shapes/foaf-person/shape.ttl
 height: 600px
@@ -146,8 +146,8 @@ namespaces: true
 ## Development
 
 ```bash
-git clone https://github.com/ISE-FIZKarlsruhe/ontoview.git
-cd ontoview
+git clone https://github.com/ISE-FIZKarlsruhe/ontoink.git
+cd ontoink
 pip install -e ".[dev]"
 pytest -v
 ```

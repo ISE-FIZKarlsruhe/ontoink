@@ -1,4 +1,4 @@
-# ontoview Demo
+# ontoink Demo
 
 Interactive ontology visualization and SHACL validation plugin for MkDocs.
 
@@ -20,20 +20,20 @@ Interactive ontology visualization and SHACL validation plugin for MkDocs.
 ## Quick Start
 
 ```bash
-pip install ontoview
+pip install ontoink
 ```
 
 Add to `mkdocs.yml`:
 
 ```yaml
 plugins:
-  - ontoview
+  - ontoink
 ```
 
 Use in markdown:
 
 ````
-```ontoview
+```ontoink
 source: path/to/data.ttl
 shape: path/to/shape.ttl
 ```
