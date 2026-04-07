@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Role Realization - ontoview Demo</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Role Realization";
+        var mkdocs_page_input_path = "examples\\role-realization.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> ontoview Demo
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Examples</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../role-bearer/">Role Bearer</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../textual-entity/">Textual Entity</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Role Realization</a>
+    <ul class="current">
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">ontoview Demo</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Examples</li>
+      <li class="breadcrumb-item active">Role Realization</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="role-realization-shape">Role Realization Shape</h1>
+<p>A role (BFO_0000023) must be realized in at least one process via <code>bfo:realized_in</code>.</p>
+<div id="ontoview-graph-1" class="ontoview-container" data-ontoview-graph="eyJub2RlcyI6IFt7ImRhdGEiOiB7ImlkIjogImh0dHA6Ly9leGFtcGxlLm9yZy9wdWJsaXNoZXJfcm9sZV8xIiwgImxhYmVsIjogImV4OnB1Ymxpc2hlcl9yb2xlXzEiLCAidHlwZSI6ICJJbmRpdmlkdWFsIiwgImNvbG9yIjogIiNFNkU2RTYiLCAic2hhcGUiOiAiZWxsaXBzZSIsICJpcmkiOiAiaHR0cDovL2V4YW1wbGUub3JnL3B1Ymxpc2hlcl9yb2xlXzEiLCAic291cmNlIjogIiIsICJuYW1lc3BhY2UiOiAiZXgifX0sIHsiZGF0YSI6IHsiaWQiOiAiaHR0cDovL2V4YW1wbGUub3JnL3B1Ymxpc2hpbmdfcHJvY2Vzc18xIiwgImxhYmVsIjogIkRhdGFzZXQgcHVibGlzaGluZyBwcm9jZXNzIiwgInR5cGUiOiAiSW5kaXZpZHVhbCIsICJjb2xvciI6ICIjRTZFNkU2IiwgInNoYXBlIjogImVsbGlwc2UiLCAiaXJpIjogImh0dHA6Ly9leGFtcGxlLm9yZy9wdWJsaXNoaW5nX3Byb2Nlc3NfMSIsICJzb3VyY2UiOiAiIiwgIm5hbWVzcGFjZSI6ICJleCJ9fSwgeyJkYXRhIjogeyJpZCI6ICJodHRwOi8vcHVybC5vYm9saWJyYXJ5Lm9yZy9vYm8vQkZPXzAwMDAwMTUiLCAibGFiZWwiOiAibnMxOkJGT18wMDAwMDE1IiwgInR5cGUiOiAiQ2xhc3MiLCAiY29sb3IiOiAiI0Y1NTZDQiIsICJzaGFwZSI6ICJyZWN0YW5nbGUiLCAiaXJpIjogImh0dHA6Ly9wdXJsLm9ib2xpYnJhcnkub3JnL29iby9CRk9fMDAwMDAxNSIsICJzb3VyY2UiOiAiQkZPIiwgIm5hbWVzcGFjZSI6ICIifX0sIHsiZGF0YSI6IHsiaWQiOiAiaHR0cHM6Ly9uZmRpLmZpei1rYXJsc3J1aGUuZGUvb250b2xvZ3kvTkZESV8wMDAwMTkzIiwgImxhYmVsIjogIm5zMjpORkRJXzAwMDAxOTMiLCAidHlwZSI6ICJDbGFzcyIsICJjb2xvciI6ICIjNzc3N0JCIiwgInNoYXBlIjogInJlY3RhbmdsZSIsICJpcmkiOiAiaHR0cHM6Ly9uZmRpLmZpei1rYXJsc3J1aGUuZGUvb250b2xvZ3kvTkZESV8wMDAwMTkzIiwgInNvdXJjZSI6ICJuZmRpY29yZSIsICJuYW1lc3BhY2UiOiAiIn19LCB7ImRhdGEiOiB7ImlkIjogImh0dHA6Ly9wdXJsLm9ib2xpYnJhcnkub3JnL29iby9CRk9fMDAwMDAyMyIsICJsYWJlbCI6ICJuczE6QkZPXzAwMDAwMjMiLCAidHlwZSI6ICJDbGFzcyIsICJjb2xvciI6ICIjRjU1NkNCIiwgInNoYXBlIjogInJlY3RhbmdsZSIsICJpcmkiOiAiaHR0cDovL3B1cmwub2JvbGlicmFyeS5vcmcvb2JvL0JGT18wMDAwMDIzIiwgInNvdXJjZSI6ICJCRk8iLCAibmFtZXNwYWNlIjogIiJ9fSwgeyJkYXRhIjogeyJpZCI6ICJsaXRfNzkzNzUxIiwgImxhYmVsIjogIkRhdGFzZXQgcHVibGlzaGluZyBwcm9jZXNzIiwgInR5cGUiOiAiTGl0ZXJhbCIsICJjb2xvciI6ICIjOTNEMDUzIiwgInNoYXBlIjogImVsbGlwc2UiLCAiaXJpIjogIiIsICJzb3VyY2UiOiAiIiwgIm5hbWVzcGFjZSI6ICIifX1dLCAiZWRnZXMiOiBbeyJkYXRhIjogeyJpZCI6ICJlXzAiLCAic291cmNlIjogImh0dHA6Ly9leGFtcGxlLm9yZy9wdWJsaXNoZXJfcm9sZV8xIiwgInRhcmdldCI6ICJodHRwOi8vZXhhbXBsZS5vcmcvcHVibGlzaGluZ19wcm9jZXNzXzEiLCAibGFiZWwiOiAibnMxOkJGT18wMDAwMDU0IFsxLi4qXSIsICJpcmkiOiAiaHR0cDovL3B1cmwub2JvbGlicmFyeS5vcmcvb2JvL0JGT18wMDAwMDU0IiwgImVkZ2VUeXBlIjogInNoYWNsLWNvbnN0cmFpbnQiLCAibGluZVN0eWxlIjogImRhc2hlZCIsICJsaW5lQ29sb3IiOiAiIzA4OTFiMiIsICJhcnJvd1NoYXBlIjogInRyaWFuZ2xlIiwgImVkZ2VXaWR0aCI6IDMsICJjYXJkaW5hbGl0eSI6ICJbMS4uKl0iLCAibWVzc2FnZSI6ICJBICdyb2xlJyAoQkZPXzAwMDAwMjMpIG11c3QgYWx3YXlzIGJlICdyZWFsaXplZCBpbicgKEJGT18wMDAwMDU0KSBzb21lIHByb2Nlc3MuIn19LCB7ImRhdGEiOiB7ImlkIjogImVfMSIsICJzb3VyY2UiOiAiaHR0cDovL2V4YW1wbGUub3JnL3B1Ymxpc2hpbmdfcHJvY2Vzc18xIiwgInRhcmdldCI6ICJodHRwOi8vcHVybC5vYm9saWJyYXJ5Lm9yZy9vYm8vQkZPXzAwMDAwMTUiLCAibGFiZWwiOiAicmRmOnR5cGUiLCAiaXJpIjogImh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyN0eXBlIiwgImVkZ2VUeXBlIjogInJkZi10eXBlIiwgImxpbmVTdHlsZSI6ICJkYXNoZWQiLCAibGluZUNvbG9yIjogIiM5Y2EzYWYiLCAiYXJyb3dTaGFwZSI6ICJ0cmlhbmdsZSIsICJlZGdlV2lkdGgiOiAxfX0sIHsiZGF0YSI6IHsiaWQiOiAiZV8yIiwgInNvdXJjZSI6ICJodHRwOi8vZXhhbXBsZS5vcmcvcHVibGlzaGVyX3JvbGVfMSIsICJ0YXJnZXQiOiAiaHR0cHM6Ly9uZmRpLmZpei1rYXJsc3J1aGUuZGUvb250b2xvZ3kvTkZESV8wMDAwMTkzIiwgImxhYmVsIjogInJkZjp0eXBlIiwgImlyaSI6ICJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjdHlwZSIsICJlZGdlVHlwZSI6ICJyZGYtdHlwZSIsICJsaW5lU3R5bGUiOiAiZGFzaGVkIiwgImxpbmVDb2xvciI6ICIjOWNhM2FmIiwgImFycm93U2hhcGUiOiAidHJpYW5nbGUiLCAiZWRnZVdpZHRoIjogMX19LCB7ImRhdGEiOiB7ImlkIjogImVfMyIsICJzb3VyY2UiOiAiaHR0cDovL2V4YW1wbGUub3JnL3B1Ymxpc2hlcl9yb2xlXzEiLCAidGFyZ2V0IjogImh0dHA6Ly9wdXJsLm9ib2xpYnJhcnkub3JnL29iby9CRk9fMDAwMDAyMyIsICJsYWJlbCI6ICJyZGY6dHlwZSIsICJpcmkiOiAiaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zI3R5cGUiLCAiZWRnZVR5cGUiOiAicmRmLXR5cGUiLCAibGluZVN0eWxlIjogImRhc2hlZCIsICJsaW5lQ29sb3IiOiAiIzljYTNhZiIsICJhcnJvd1NoYXBlIjogInRyaWFuZ2xlIiwgImVkZ2VXaWR0aCI6IDF9fSwgeyJkYXRhIjogeyJpZCI6ICJlXzQiLCAic291cmNlIjogImh0dHA6Ly9leGFtcGxlLm9yZy9wdWJsaXNoaW5nX3Byb2Nlc3NfMSIsICJ0YXJnZXQiOiAibGl0Xzc5Mzc1MSIsICJsYWJlbCI6ICJyZGZzOmxhYmVsIiwgImlyaSI6ICJodHRwOi8vd3d3LnczLm9yZy8yMDAwLzAxL3JkZi1zY2hlbWEjbGFiZWwiLCAiZWRnZVR5cGUiOiAiZGF0YS1wcm9wZXJ0eSIsICJsaW5lU3R5bGUiOiAic29saWQiLCAibGluZUNvbG9yIjogIiMxNmEzNGEiLCAiYXJyb3dTaGFwZSI6ICJ0cmlhbmdsZSIsICJlZGdlV2lkdGgiOiAxLjV9fV0sICJzaGFjbCI6IFt7InRhcmdldENsYXNzIjogImh0dHA6Ly9wdXJsLm9ib2xpYnJhcnkub3JnL29iby9CRk9fMDAwMDAyMyIsICJwYXRoIjogImh0dHA6Ly9wdXJsLm9ib2xpYnJhcnkub3JnL29iby9CRk9fMDAwMDA1NCIsICJwYXRoTGFiZWwiOiAibnMxOkJGT18wMDAwMDU0IiwgIm1pbkNvdW50IjogMSwgIm1heENvdW50IjogbnVsbCwgIm1lc3NhZ2UiOiAiQSAncm9sZScgKEJGT18wMDAwMDIzKSBtdXN0IGFsd2F5cyBiZSAncmVhbGl6ZWQgaW4nIChCRk9fMDAwMDA1NCkgc29tZSBwcm9jZXNzLiIsICJzaGFwZUlyaSI6ICJodHRwczovL25mZGkuZml6LWthcmxzcnVoZS5kZS9vbnRvbG9neS9Sb2xlUmVhbGl6YXRpb25TaGFwZSJ9XSwgIm5hbWVzcGFjZXMiOiB7ImJyaWNrIjogImh0dHBzOi8vYnJpY2tzY2hlbWEub3JnL3NjaGVtYS9CcmljayMiLCAiY3N2dyI6ICJodHRwOi8vd3d3LnczLm9yZy9ucy9jc3Z3IyIsICJkYyI6ICJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIsICJkY2F0IjogImh0dHA6Ly93d3cudzMub3JnL25zL2RjYXQjIiwgImRjbWl0eXBlIjogImh0dHA6Ly9wdXJsLm9yZy9kYy9kY21pdHlwZS8iLCAiZGN0ZXJtcyI6ICJodHRwOi8vcHVybC5vcmcvZGMvdGVybXMvIiwgImRjYW0iOiAiaHR0cDovL3B1cmwub3JnL2RjL2RjYW0vIiwgImRvYXAiOiAiaHR0cDovL3VzZWZ1bGluYy5jb20vbnMvZG9hcCMiLCAiZm9hZiI6ICJodHRwOi8veG1sbnMuY29tL2ZvYWYvMC4xLyIsICJnZW8iOiAiaHR0cDovL3d3dy5vcGVuZ2lzLm5ldC9vbnQvZ2Vvc3BhcnFsIyIsICJvZHJsIjogImh0dHA6Ly93d3cudzMub3JnL25zL29kcmwvMi8iLCAib3JnIjogImh0dHA6Ly93d3cudzMub3JnL25zL29yZyMiLCAicHJvZiI6ICJodHRwOi8vd3d3LnczLm9yZy9ucy9keC9wcm9mLyIsICJwcm92IjogImh0dHA6Ly93d3cudzMub3JnL25zL3Byb3YjIiwgInFiIjogImh0dHA6Ly9wdXJsLm9yZy9saW5rZWQtZGF0YS9jdWJlIyIsICJzY2hlbWEiOiAiaHR0cHM6Ly9zY2hlbWEub3JnLyIsICJzaCI6ICJodHRwOi8vd3d3LnczLm9yZy9ucy9zaGFjbCMiLCAic2tvcyI6ICJodHRwOi8vd3d3LnczLm9yZy8yMDA0LzAyL3Nrb3MvY29yZSMiLCAic29zYSI6ICJodHRwOi8vd3d3LnczLm9yZy9ucy9zb3NhLyIsICJzc24iOiAiaHR0cDovL3d3dy53My5vcmcvbnMvc3NuLyIsICJ0aW1lIjogImh0dHA6Ly93d3cudzMub3JnLzIwMDYvdGltZSMiLCAidmFubiI6ICJodHRwOi8vcHVybC5vcmcvdm9jYWIvdmFubi8iLCAidm9pZCI6ICJodHRwOi8vcmRmcy5vcmcvbnMvdm9pZCMiLCAid2dzIjogImh0dHBzOi8vd3d3LnczLm9yZy8yMDAzLzAxL2dlby93Z3M4NF9wb3MjIiwgImV4IjogImh0dHA6Ly9leGFtcGxlLm9yZy8ifSwgIm5vZGVTdHlsZXMiOiB7IkNsYXNzIjogWyJyZWN0YW5nbGUiLCAiI0ZERkRDOCJdLCAiSW5kaXZpZHVhbCI6IFsiZWxsaXBzZSIsICIjRTZFNkU2Il0sICJMaXRlcmFsIjogWyJlbGxpcHNlIiwgIiM5M0QwNTMiXSwgIkRhdGF0eXBlIjogWyJkaWFtb25kIiwgIiM5M0QwNTMiXSwgIlNIQUNMIFNoYXBlIjogWyJyb3VuZC1yZWN0YW5nbGUiLCAiI0E1RjNGQyJdfSwgImVkZ2VTdHlsZXMiOiB7Im9iamVjdC1wcm9wZXJ0eSI6IHsibGluZVN0eWxlIjogInNvbGlkIiwgImNvbG9yIjogIiMyNTYzZWIiLCAiYXJyb3ciOiAidHJpYW5nbGUiLCAid2lkdGgiOiAyfSwgImRhdGEtcHJvcGVydHkiOiB7ImxpbmVTdHlsZSI6ICJzb2xpZCIsICJjb2xvciI6ICIjMTZhMzRhIiwgImFycm93IjogInRyaWFuZ2xlIiwgIndpZHRoIjogMS41fSwgInJkZi10eXBlIjogeyJsaW5lU3R5bGUiOiAiZGFzaGVkIiwgImNvbG9yIjogIiM5Y2EzYWYiLCAiYXJyb3ciOiAidHJpYW5nbGUiLCAid2lkdGgiOiAxfSwgInN1YmNsYXNzIjogeyJsaW5lU3R5bGUiOiAic29saWQiLCAiY29sb3IiOiAiIzM3NDE1MSIsICJhcnJvdyI6ICJ0cmlhbmdsZSIsICJ3aWR0aCI6IDJ9LCAic2hhY2wtY29uc3RyYWludCI6IHsibGluZVN0eWxlIjogImRhc2hlZCIsICJjb2xvciI6ICIjMDg5MWIyIiwgImFycm93IjogInRyaWFuZ2xlIiwgIndpZHRoIjogM319LCAicmF3VHRsIjogIkBwcmVmaXggcmRmOiAgIDxodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjPiAuXG5AcHJlZml4IHJkZnM6ICA8aHR0cDovL3d3dy53My5vcmcvMjAwMC8wMS9yZGYtc2NoZW1hIz4gLlxuQHByZWZpeCBvd2w6ICAgPGh0dHA6Ly93d3cudzMub3JnLzIwMDIvMDcvb3dsIz4gLlxuQHByZWZpeCBleDogICAgPGh0dHA6Ly9leGFtcGxlLm9yZy8+IC5cblxuI1xuIyAgRXhhbXBsZTogQSBwdWJsaXNoZXIgcm9sZSByZWFsaXplZCBpbiBhIHB1Ymxpc2hpbmcgcHJvY2Vzcy5cbiNcblxuZXg6cHVibGlzaGVyX3JvbGVfMVxuICAgIGEgPGh0dHA6Ly9wdXJsLm9ib2xpYnJhcnkub3JnL29iby9CRk9fMDAwMDAyMz4gOyAgICAgICAgICAgICAgICAjIFJvbGVcbiAgICBhIDxodHRwczovL25mZGkuZml6LWthcmxzcnVoZS5kZS9vbnRvbG9neS9ORkRJXzAwMDAxOTM+IDsgICAgICAgIyBwdWJsaXNoZXIgcm9sZVxuICAgIDxodHRwOi8vcHVybC5vYm9saWJyYXJ5Lm9yZy9vYm8vQkZPXzAwMDAwNTQ+IGV4OnB1Ymxpc2hpbmdfcHJvY2Vzc18xIC4gICMgcmVhbGl6ZWRfaW5cblxuZXg6cHVibGlzaGluZ19wcm9jZXNzXzFcbiAgICBhIDxodHRwOi8vcHVybC5vYm9saWJyYXJ5Lm9yZy9vYm8vQkZPXzAwMDAwMTU+IDsgICAgICAgICAgICAgICAgIyBQcm9jZXNzXG4gICAgcmRmczpsYWJlbCBcIkRhdGFzZXQgcHVibGlzaGluZyBwcm9jZXNzXCIgLlxuIiwgInNoYXBlVHRsIjogIkBwcmVmaXggcmRmOiAgIDxodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjPiAuXG5AcHJlZml4IHNoOiAgICA8aHR0cDovL3d3dy53My5vcmcvbnMvc2hhY2wjPiAuXG5AcHJlZml4IHhzZDogICA8aHR0cDovL3d3dy53My5vcmcvMjAwMS9YTUxTY2hlbWEjPiAuXG5AcHJlZml4IHJkZnM6ICA8aHR0cDovL3d3dy53My5vcmcvMjAwMC8wMS9yZGYtc2NoZW1hIz4gLlxuQHByZWZpeCBvd2w6ICAgPGh0dHA6Ly93d3cudzMub3JnLzIwMDIvMDcvb3dsIz4gLlxuQHByZWZpeCBuZmRpY29yZTogPGh0dHBzOi8vbmZkaS5maXota2FybHNydWhlLmRlL29udG9sb2d5Lz4gLlxuXG4jXG4jICBBIFwicm9sZVwiIChCRk9fMDAwMDAyMykgbXVzdCBhbHdheXMgYmUgXCJyZWFsaXplZCBpblwiIChCRk9fMDAwMDA1NCkgc29tZSBwcm9jZXNzLlxuIyAgVGhpcyBpcyBhIHdlYWtlciBjb25zdHJhaW50IHRoYW4gUm9sZUJlYXJlclNoYXBlIOKAlCBpdCBvbmx5IHJlcXVpcmVzIHJlYWxpemF0aW9uLFxuIyAgbm90IGEgYmVhcmVyLlxuI1xuXG5uZmRpY29yZTpSb2xlUmVhbGl6YXRpb25TaGFwZVxuICAgIGEgc2g6Tm9kZVNoYXBlIDtcbiAgICBzaDp0YXJnZXRDbGFzcyA8aHR0cDovL3B1cmwub2JvbGlicmFyeS5vcmcvb2JvL0JGT18wMDAwMDIzPiA7ICAgICMgUm9sZVxuICAgIHNoOnByb3BlcnR5IFtcbiAgICAgICAgc2g6cGF0aCA8aHR0cDovL3B1cmwub2JvbGlicmFyeS5vcmcvb2JvL0JGT18wMDAwMDU0PiA7ICAgICAgICMgcmVhbGl6ZWRfaW5cbiAgICAgICAgc2g6bWluQ291bnQgMSA7XG4gICAgICAgIHNoOm1lc3NhZ2UgXCJBICdyb2xlJyAoQkZPXzAwMDAwMjMpIG11c3QgYWx3YXlzIGJlICdyZWFsaXplZCBpbicgKEJGT18wMDAwMDU0KSBzb21lIHByb2Nlc3MuXCJcbiAgICBdIDtcbiAgICAuXG4iLCAidmFsaWRhdGlvbiI6IHsiY29uZm9ybXMiOiB0cnVlLCAidmlvbGF0aW9ucyI6IFtdLCAicmVwb3J0IjogIlZhbGlkYXRpb24gUmVwb3J0XG5Db25mb3JtczogVHJ1ZVxuIn19" data-show-legend="true" data-show-ns="true">
+  <div class="ov-toolbar">
+    <div class="ov-toolbar-group">
+      <button class="ov-btn" onclick="ontoview.zoomIn('ontoview-graph-1')" title="Zoom in">+</button>
+      <button class="ov-btn" onclick="ontoview.zoomOut('ontoview-graph-1')" title="Zoom out">&minus;</button>
+      <button class="ov-btn" onclick="ontoview.fit('ontoview-graph-1')" title="Fit to view">Fit</button>
+      <button class="ov-btn" onclick="ontoview.fullscreen('ontoview-graph-1')" title="Fullscreen">&#x26F6;</button>
+    </div>
+    <div class="ov-toolbar-group">
+      <button class="ov-btn" onclick="ontoview.exportPNG('ontoview-graph-1')" title="Export PNG">PNG</button>
+      <button class="ov-btn" onclick="ontoview.exportSVG('ontoview-graph-1')" title="Export SVG">SVG</button>
+    </div>
+    <div class="ov-toolbar-group">
+      <button class="ov-btn ov-btn-accent" onclick="ontoview.toggleEditor('ontoview-graph-1')" title="Edit TTL & Validate">Edit &amp; Validate</button>
+    </div>
+  </div>
+  <div class="ov-canvas" style="width:100%;height:500px;"></div>
+  <div class="ov-legend"></div>
+  <div class="ov-editor-panel" style="display:none;">
+    <div class="ov-editor-split">
+      <div class="ov-editor-left">
+        <div class="ov-editor-header">TTL Editor</div>
+        <textarea class="ov-editor-textarea"></textarea>
+      </div>
+      <div class="ov-editor-right">
+        <div class="ov-editor-header">Validation Results</div>
+        <div class="ov-validation-output"></div>
+      </div>
+    </div>
+    <div class="ov-editor-actions">
+      <button class="ov-btn ov-btn-primary" onclick="ontoview.validate('ontoview-graph-1')">Validate</button>
+      <button class="ov-btn" onclick="ontoview.updateGraph('ontoview-graph-1')">Update Graph</button>
+      <button class="ov-btn" onclick="ontoview.resetEditor('ontoview-graph-1')">Reset</button>
+    </div>
+  </div>
+</div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../textual-entity/" class="btn btn-neutral float-left" title="Textual Entity"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../textual-entity/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-svg@0.4.0/cytoscape-svg.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/turtle/turtle.min.js"></script>
+<style>
+/* ontoview — Interactive ontology visualization & validation */
+
+:root {
+  --ov-font: 'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+  --ov-border: #d1d5db;
+  --ov-bg: #fafafa;
+  --ov-bg-toolbar: #f3f4f6;
+  --ov-accent: #0891b2;
+  --ov-pass: #16a34a;
+  --ov-fail: #dc2626;
+  --ov-radius: 8px;
+}
+
+/* ── Container ──────────────────────────────────────────────────── */
+
+.ontoview-container {
+  position: relative;
+  border: 1px solid var(--ov-border);
+  border-radius: var(--ov-radius);
+  margin: 1.5em 0;
+  background: var(--ov-bg);
+  overflow: hidden;
+  font-family: var(--ov-font);
+}
+.ontoview-container:fullscreen { background: #fff; }
+.ontoview-container:fullscreen .ov-canvas { height: calc(100vh - 60px) !important; }
+
+.ov-canvas { background: #fff; }
+
+/* ── Toolbar ────────────────────────────────────────────────────── */
+
+.ov-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  background: var(--ov-bg-toolbar);
+  border-radius: var(--ov-radius) var(--ov-radius) 0 0;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ov-toolbar-group {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.ov-toolbar-group:not(:last-child)::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 20px;
+  background: #d1d5db;
+  margin-left: 6px;
+}
+
+.ov-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--ov-border);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--ov-font);
+  color: #374151;
+  transition: background .12s, border-color .12s;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.ov-btn:hover { background: #e5e7eb; border-color: #9ca3af; }
+.ov-btn:active { background: #d1d5db; }
+
+.ov-btn-primary {
+  background: var(--ov-accent);
+  color: #fff;
+  border-color: var(--ov-accent);
+}
+.ov-btn-primary:hover { background: #0e7490; }
+
+.ov-btn-accent {
+  border-color: var(--ov-accent);
+  color: var(--ov-accent);
+  font-weight: 600;
+}
+.ov-btn-accent:hover { background: #ecfeff; }
+
+/* ── Popup ──────────────────────────────────────────────────────── */
+
+.ov-popup {
+  position: absolute;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid var(--ov-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.12), 0 1px 4px rgba(0,0,0,.08);
+  padding: 14px 18px;
+  max-width: 400px;
+  min-width: 220px;
+  font-size: 13px;
+  color: #1f2937;
+  animation: ov-popup-in .15s ease-out;
+}
+@keyframes ov-popup-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+.ov-popup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ov-popup-label { font-weight: 600; font-size: 14px; flex: 1; word-break: break-word; }
+.ov-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  border: 1px solid rgba(0,0,0,.1);
+}
+.ov-popup-close {
+  background: none; border: none; font-size: 18px; cursor: pointer;
+  color: #9ca3af; padding: 0 2px; line-height: 1;
+}
+.ov-popup-close:hover { color: #374151; }
+
+.ov-popup-iri {
+  margin: 4px 0 6px;
+  padding: 5px 8px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 11px;
+  word-break: break-all;
+  border: 1px solid #e5e7eb;
+}
+.ov-popup-iri a { color: #2563eb; text-decoration: none; }
+.ov-popup-iri a:hover { text-decoration: underline; }
+.ov-popup-meta { font-size: 12px; color: #6b7280; margin: 2px 0 6px; }
+
+.ov-popup-section { margin: 8px 0 4px; font-size: 12px; }
+.ov-popup-edges { margin: 4px 0 0 16px; padding: 0; font-size: 12px; color: #4b5563; }
+.ov-popup-edges li { margin: 2px 0; }
+
+.ov-popup-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ov-chip {
+  padding: 3px 10px; border: 1px solid var(--ov-border); border-radius: 6px;
+  background: #f9fafb; cursor: pointer; font-size: 12px; font-family: var(--ov-font);
+  color: #374151; transition: background .12s; white-space: nowrap;
+}
+.ov-chip:hover { background: #e5e7eb; }
+
+/* ── Legend ──────────────────────────────────────────────────────── */
+
+.ov-legend {
+  padding: 8px 14px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 var(--ov-radius) var(--ov-radius);
+}
+.ov-legend-title { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 6px; }
+.ov-legend-grid { display: flex; gap: 20px; flex-wrap: wrap; }
+.ov-legend-section { font-size: 12px; color: #4b5563; min-width: 120px; }
+.ov-legend-section strong { display: block; margin-bottom: 4px; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; }
+
+.ov-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  font-size: 12px;
+}
+.ov-legend-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid rgba(0,0,0,.15);
+  color: #555;
+  flex-shrink: 0;
+}
+.ov-legend-line {
+  display: inline-block;
+  width: 24px;
+  border-top: 2px solid;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  line-height: 0;
+  padding-top: 1px;
+}
+.ov-legend-line.dashed { border-style: dashed; }
+.ov-legend-line.shacl { border-width: 3px; border-style: dashed; }
+
+.ov-legend-ns { max-width: 400px; }
+.ov-ns-item { font-size: 11px; }
+.ov-ns-item code {
+  background: #e5e7eb;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ov-ns-uri { color: #6b7280; word-break: break-all; }
+
+/* ── Editor Panel ───────────────────────────────────────────────── */
+
+.ov-editor-panel {
+  border-top: 2px solid var(--ov-accent);
+  background: #f9fafb;
+}
+.ov-editor-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: 300px;
+}
+.ov-editor-left {
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+}
+.ov-editor-right {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.ov-editor-header {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.ov-editor-textarea {
+  width: 100%;
+  height: 300px;
+  border: none;
+  resize: none;
+  font-family: 'Fira Code','JetBrains Mono','Cascadia Code',monospace;
+  font-size: 13px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #1f2937;
+  line-height: 1.5;
+}
+.ov-editor-textarea:focus { outline: none; }
+
+/* CodeMirror overrides */
+.ov-editor-left .CodeMirror {
+  height: 300px;
+  font-family: 'Fira Code','JetBrains Mono','Cascadia Code',monospace;
+  font-size: 13px;
+  border: none;
+}
+
+.ov-editor-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid #e5e7eb;
+  background: #f3f4f6;
+}
+
+/* ── Validation Output ──────────────────────────────────────────── */
+
+.ov-validation-output {
+  padding: 12px;
+  font-size: 13px;
+  overflow: auto;
+  max-height: 280px;
+}
+.ov-val-pass {
+  color: var(--ov-pass);
+  font-weight: 600;
+  padding: 8px 12px;
+  background: #f0fdf4;
+  border-radius: 6px;
+  border: 1px solid #bbf7d0;
+}
+.ov-val-fail {
+  color: var(--ov-fail);
+  font-weight: 600;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+  margin-bottom: 8px;
+}
+.ov-val-info {
+  color: #6b7280;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-style: italic;
+}
+.ov-val-icon { font-size: 16px; margin-right: 4px; }
+.ov-val-list {
+  margin: 4px 0 0 8px;
+  padding: 0 0 0 16px;
+  color: #374151;
+  font-weight: 400;
+  font-size: 12px;
+}
+.ov-val-list li {
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+/* ── Error ──────────────────────────────────────────────────────── */
+
+.ov-error {
+  color: var(--ov-fail);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 16px;
+  border-radius: var(--ov-radius);
+  margin: 1em 0;
+  font-family: var(--ov-font);
+  font-size: 13px;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .ov-editor-split { grid-template-columns: 1fr; }
+  .ov-editor-left { border-right: none; border-bottom: 1px solid #e5e7eb; }
+  .ov-legend-grid { flex-direction: column; gap: 8px; }
+}
+
+</style>
+<script>
+/**
+ * ontoview.js — Interactive ontology visualization with formal notation,
+ * inline TTL editing, and SHACL validation.
+ */
+var ontoview = (function () {
+  "use strict";
+
+  var instances = {};   // graphId → { cy, data, editor, originalTtl }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function esc(s) {
+    if (!s) return "";
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function copyText(text, btn) {
+    navigator.clipboard.writeText(text).catch(function(){});
+    var orig = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(function(){ btn.textContent = orig; }, 1200);
+  }
+
+  function removePopup(container) {
+    var old = container.querySelector(".ov-popup");
+    if (old) old.remove();
+  }
+
+  // ── Popup ────────────────────────────────────────────────────────────────
+
+  function buildPopup(d, cy) {
+    var badgeColors = { Class:"#FDFDC8", Individual:"#E6E6E6", Literal:"#93D053", "SHACL Shape":"#A5F3FC", Datatype:"#93D053" };
+    var html =
+      '<div class="ov-popup-head">' +
+        '<span class="ov-popup-label">' + esc(d.label) + '</span>' +
+        '<span class="ov-badge" style="background:' + (badgeColors[d.type]||"#eee") + '">' + esc(d.type) + '</span>' +
+        '<button class="ov-popup-close" title="Close">&times;</button>' +
+      '</div>';
+    if (d.iri) {
+      html += '<div class="ov-popup-iri"><a href="' + esc(d.iri) + '" target="_blank" rel="noopener">' + esc(d.iri) + '</a></div>';
+    }
+    if (d.source) {
+      html += '<div class="ov-popup-meta">Ontology: <strong>' + esc(d.source) + '</strong></div>';
+    }
+
+    // Connected edges
+    var node = cy.getElementById(d.id);
+    var conEdges = node.connectedEdges();
+    if (conEdges.length > 0) {
+      html += '<div class="ov-popup-section"><strong>Connections:</strong><ul class="ov-popup-edges">';
+      conEdges.forEach(function(e) {
+        var ed = e.data();
+        var other = ed.source === d.id ? ed.target : ed.source;
+        var otherNode = cy.getElementById(other);
+        var otherLabel = otherNode.data("label") || other;
+        var dir = ed.source === d.id ? "\u2192" : "\u2190";
+        html += '<li>' + dir + ' <em>' + esc(ed.label) + '</em> ' + esc(otherLabel) + '</li>';
+      });
+      html += '</ul></div>';
+    }
+
+    // SHACL constraints on this node
+    var shacl = instances[node.cy().container().closest(".ontoview-container").id]?.data?.shacl || [];
+    var relevant = shacl.filter(function(c) { return c.targetClass === d.iri; });
+    if (relevant.length > 0) {
+      html += '<div class="ov-popup-section"><strong>SHACL Constraints:</strong><ul class="ov-popup-edges">';
+      relevant.forEach(function(c) {
+        var card = c.minCount != null ? "[" + c.minCount + ".." + (c.maxCount != null ? c.maxCount : "*") + "]" : "";
+        html += '<li>' + esc(c.pathLabel || c.path || "") + ' ' + card;
+        if (c.message) html += '<br><small>' + esc(c.message) + '</small>';
+        html += '</li>';
+      });
+      html += '</ul></div>';
+    }
+
+    html += '<div class="ov-popup-actions">';
+    html += '<button class="ov-chip" data-action="copy-label">Copy Label</button>';
+    if (d.iri) html += '<button class="ov-chip" data-action="copy-iri">Copy IRI</button>';
+    html += '</div>';
+    return html;
+  }
+
+  // ── Legend ───────────────────────────────────────────────────────────────
+
+  function buildLegend(container, data) {
+    var el = container.querySelector(".ov-legend");
+    if (!el) return;
+    if (container.getAttribute("data-show-legend") === "false") { el.style.display = "none"; return; }
+
+    var nodeStyles = data.nodeStyles || {};
+    var edgeStyles = data.edgeStyles || {};
+    var usedTypes = {};
+    var usedEdgeTypes = {};
+    data.nodes.forEach(function(n) { usedTypes[n.data.type] = n.data.color; });
+    data.edges.forEach(function(e) { usedEdgeTypes[e.data.edgeType] = true; });
+
+    var html = '<div class="ov-legend-title">Legend</div><div class="ov-legend-grid">';
+
+    // Node types
+    html += '<div class="ov-legend-section"><strong>Nodes</strong>';
+    Object.keys(usedTypes).forEach(function(t) {
+      var shapeMap = { Class: "\u25A0", Individual: "\u25CF", Literal: "\u25CB", Datatype: "\u25C6", "SHACL Shape": "\u25A2" };
+      html += '<div class="ov-legend-item"><span class="ov-legend-swatch" style="background:' + usedTypes[t] + '">' + (shapeMap[t]||"\u25A0") + '</span>' + esc(t) + '</div>';
+    });
+    html += '</div>';
+
+    // Edge types
+    var edgeLabels = {
+      "object-property": { label: "Object Property", style: "solid", color: "#2563eb" },
+      "data-property": { label: "Data Property", style: "dashed-green", color: "#16a34a" },
+      "rdf-type": { label: "rdf:type", style: "dashed", color: "#9ca3af" },
+      "subclass": { label: "rdfs:subClassOf", style: "solid", color: "#374151" },
+      "shacl-constraint": { label: "SHACL Constraint", style: "dashed-bold", color: "#0891b2" },
+    };
+    html += '<div class="ov-legend-section"><strong>Edges</strong>';
+    Object.keys(usedEdgeTypes).forEach(function(t) {
+      var info = edgeLabels[t] || { label: t, color: "#999" };
+      var cls = "ov-legend-line";
+      if (t === "rdf-type" || t === "data-property") cls += " dashed";
+      if (t === "shacl-constraint") cls += " shacl";
+      html += '<div class="ov-legend-item"><span class="' + cls + '" style="border-color:' + info.color + ';color:' + info.color + ';">\u2192</span>' + esc(info.label) + '</div>';
+    });
+    html += '</div>';
+
+    // Namespace boxes
+    if (container.getAttribute("data-show-ns") !== "false" && data.namespaces) {
+      var ns = data.namespaces;
+      var keys = Object.keys(ns);
+      if (keys.length > 0) {
+        html += '<div class="ov-legend-section ov-legend-ns"><strong>Namespaces</strong>';
+        keys.forEach(function(prefix) {
+          html += '<div class="ov-legend-item ov-ns-item"><code>' + esc(prefix) + ':</code> <span class="ov-ns-uri">' + esc(ns[prefix]) + '</span></div>';
+        });
+        html += '</div>';
+      }
+    }
+
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  // ── Init Graph ──────────────────────────────────────────────────────────
+
+  function initGraph(containerId) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var b64 = container.getAttribute("data-ontoview-graph");
+    if (!b64) return;
+
+    var data;
+    try { data = JSON.parse(atob(b64)); } catch(e) { console.error("ontoview: decode error", e); return; }
+
+    var canvas = container.querySelector(".ov-canvas");
+    if (!canvas) return;
+
+    var cy = cytoscape({
+      container: canvas,
+      elements: { nodes: data.nodes, edges: data.edges },
+      style: [
+        // ── Nodes ──
+        { selector: "node", style: {
+          "label": "data(label)", "background-color": "data(color)", "shape": "data(shape)",
+          "text-valign": "center", "text-halign": "center",
+          "width": "label", "height": "label", "padding": "14px",
+          "font-size": "12px", "font-family": "'Inter','Segoe UI',system-ui,sans-serif",
+          "text-wrap": "wrap", "text-max-width": "160px",
+          "border-width": 1, "border-color": "#aaa", "border-opacity": 0.6, "color": "#222",
+        }},
+        { selector: 'node[type="Class"]', style: {
+          "font-weight": "600", "border-width": 2, "border-color": "#666", "shape": "rectangle",
+        }},
+        { selector: 'node[type="Individual"]', style: {
+          "shape": "ellipse", "border-style": "solid",
+        }},
+        { selector: 'node[type="Literal"]', style: {
+          "shape": "ellipse", "font-style": "italic", "font-size": "11px",
+          "border-style": "dashed", "border-color": "#6a9",
+        }},
+        { selector: 'node[type="Datatype"]', style: { "shape": "diamond" }},
+        { selector: 'node[type="SHACL Shape"]', style: { "shape": "round-rectangle", "border-color": "#0891b2" }},
+        { selector: "node:selected", style: { "border-width": 3, "border-color": "#0891b2" }},
+
+        // ── Edges: object property (blue) ──
+        { selector: "edge[edgeType='object-property']", style: {
+          "label": "data(label)", "curve-style": "bezier",
+          "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
+          "source-arrow-shape": "circle", "source-arrow-fill": "filled",
+          "line-color": "#2563eb", "target-arrow-color": "#2563eb", "source-arrow-color": "#2563eb",
+          "width": 2, "font-size": "10px", "text-rotation": "autorotate", "text-margin-y": -10,
+          "color": "#2563eb", "text-background-color": "#fff", "text-background-opacity": 0.9, "text-background-padding": "2px",
+          "font-family": "'Inter','Segoe UI',system-ui,sans-serif",
+        }},
+        // ── Edges: data property (green) ──
+        { selector: "edge[edgeType='data-property']", style: {
+          "label": "data(label)", "curve-style": "bezier",
+          "target-arrow-shape": "triangle", "target-arrow-fill": "hollow",
+          "source-arrow-shape": "circle", "source-arrow-fill": "hollow",
+          "line-color": "#16a34a", "target-arrow-color": "#16a34a", "source-arrow-color": "#16a34a",
+          "width": 1.5, "font-size": "10px", "text-rotation": "autorotate", "text-margin-y": -10,
+          "color": "#16a34a", "text-background-color": "#fff", "text-background-opacity": 0.9, "text-background-padding": "2px",
+          "font-family": "'Inter','Segoe UI',system-ui,sans-serif",
+        }},
+        // ── Edges: rdf:type (grey dashed) ──
+        { selector: "edge[edgeType='rdf-type']", style: {
+          "label": "data(label)", "curve-style": "bezier",
+          "target-arrow-shape": "triangle", "target-arrow-fill": "hollow",
+          "line-style": "dashed", "line-color": "#9ca3af", "target-arrow-color": "#9ca3af",
+          "width": 1, "font-size": "9px", "text-rotation": "autorotate", "text-margin-y": -10,
+          "color": "#888", "text-background-color": "#fff", "text-background-opacity": 0.9, "text-background-padding": "2px",
+          "font-family": "'Inter','Segoe UI',system-ui,sans-serif",
+        }},
+        // ── Edges: subClassOf (black solid) ──
+        { selector: "edge[edgeType='subclass']", style: {
+          "label": "data(label)", "curve-style": "bezier",
+          "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
+          "line-color": "#374151", "target-arrow-color": "#374151",
+          "width": 2, "font-size": "9px", "text-rotation": "autorotate", "text-margin-y": -10,
+          "color": "#555", "text-background-color": "#fff", "text-background-opacity": 0.9, "text-background-padding": "2px",
+          "font-family": "'Inter','Segoe UI',system-ui,sans-serif",
+        }},
+        // ── Edges: SHACL constraint (cyan dashed bold) ──
+        { selector: "edge[edgeType='shacl-constraint']", style: {
+          "label": "data(label)", "curve-style": "bezier",
+          "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
+          "line-style": "dashed", "line-color": "#0891b2", "target-arrow-color": "#0891b2",
+          "width": 3, "font-size": "11px", "font-weight": "bold",
+          "text-rotation": "autorotate", "text-margin-y": -12,
+          "color": "#0891b2", "text-background-color": "#fff", "text-background-opacity": 0.95, "text-background-padding": "3px",
+          "font-family": "'Inter','Segoe UI',system-ui,sans-serif",
+        }},
+      ],
+      layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, edgeSep: 20, animate: false, fit: true, padding: 30 },
+      wheelSensitivity: 0.3, minZoom: 0.15, maxZoom: 5,
+    });
+
+    instances[containerId] = { cy: cy, data: data, editor: null, originalTtl: data.rawTtl || "" };
+
+    // ── Click popup ──
+    cy.on("tap", "node", function(evt) {
+      removePopup(container);
+      var d = evt.target.data();
+      var pos = evt.renderedPosition;
+      var popup = document.createElement("div");
+      popup.className = "ov-popup";
+      popup.innerHTML = buildPopup(d, cy);
+
+      var canvasR = canvas.getBoundingClientRect();
+      var contR = container.getBoundingClientRect();
+      popup.style.left = (canvasR.left - contR.left + pos.x + 15) + "px";
+      popup.style.top = (canvasR.top - contR.top + pos.y - 15) + "px";
+      container.appendChild(popup);
+
+      requestAnimationFrame(function() {
+        var pr = popup.getBoundingClientRect();
+        if (pr.right > contR.right - 10) popup.style.left = (parseFloat(popup.style.left) - pr.width - 30) + "px";
+        if (pr.bottom > contR.bottom - 10) popup.style.top = (parseFloat(popup.style.top) - pr.height) + "px";
+      });
+
+      popup.querySelector(".ov-popup-close").addEventListener("click", function() { popup.remove(); });
+      popup.querySelectorAll(".ov-chip").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          var action = btn.getAttribute("data-action");
+          copyText(action === "copy-iri" ? d.iri : d.label, btn);
+        });
+      });
+    });
+    cy.on("tap", function(evt) { if (evt.target === cy) removePopup(container); });
+
+    // ── Legend ──
+    buildLegend(container, data);
+
+    // ── Init editor textarea ──
+    var textarea = container.querySelector(".ov-editor-textarea");
+    if (textarea && data.rawTtl) {
+      textarea.value = data.rawTtl;
+    }
+
+    // ── Init validation output with build-time results ──
+    if (data.validation) {
+      var outEl = container.querySelector(".ov-validation-output");
+      if (outEl) renderValidation(outEl, data.validation);
+    }
+  }
+
+  // ── Editor ──────────────────────────────────────────────────────────────
+
+  function toggleEditor(id) {
+    var container = document.getElementById(id);
+    var panel = container.querySelector(".ov-editor-panel");
+    var inst = instances[id];
+    if (!panel) return;
+
+    var visible = panel.style.display !== "none";
+    panel.style.display = visible ? "none" : "block";
+
+    // Init CodeMirror on first open
+    if (!visible && !inst.editor && typeof CodeMirror !== "undefined") {
+      var textarea = container.querySelector(".ov-editor-textarea");
+      inst.editor = CodeMirror.fromTextArea(textarea, {
+        mode: "turtle",
+        lineNumbers: true,
+        lineWrapping: true,
+        theme: "default",
+        viewportMargin: Infinity,
+      });
+      inst.editor.setSize(null, "300px");
+    }
+  }
+
+  function getEditorValue(id) {
+    var inst = instances[id];
+    if (!inst) return "";
+    if (inst.editor) return inst.editor.getValue();
+    var container = document.getElementById(id);
+    var textarea = container.querySelector(".ov-editor-textarea");
+    return textarea ? textarea.value : "";
+  }
+
+  // ── Lightweight JS SHACL Validator ─────────────────────────────────────
+  // Handles the most common patterns: sh:minCount, sh:maxCount
+  // by parsing TTL minimally and checking constraints.
+
+  function validate(id) {
+    var inst = instances[id];
+    if (!inst) return;
+    var container = document.getElementById(id);
+    var outEl = container.querySelector(".ov-validation-output");
+    if (!outEl) return;
+
+    var ttl = getEditorValue(id);
+    var shaclConstraints = inst.data.shacl || [];
+
+    if (shaclConstraints.length === 0) {
+      renderValidation(outEl, { conforms: null, violations: [], report: "No SHACL shapes defined." });
+      return;
+    }
+
+    // Minimal TTL parser: extract (subject, predicate, object) triples
+    var triples = parseTtlMinimal(ttl);
+
+    // Find instances of target classes
+    var violations = [];
+    shaclConstraints.forEach(function(c) {
+      if (!c.targetClass || !c.path) return;
+
+      // Find all subjects that are rdf:type targetClass
+      var targetInstances = [];
+      triples.forEach(function(t) {
+        if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" && t.o === c.targetClass) {
+          targetInstances.push(t.s);
+        }
+      });
+      // Also check subclass instances
+      if (targetInstances.length === 0) {
+        triples.forEach(function(t) {
+          if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") {
+            // Check if this type is a subclass of targetClass
+            triples.forEach(function(t2) {
+              if (t2.s === t.o && t2.p === "http://www.w3.org/2000/01/rdf-schema#subClassOf" && t2.o === c.targetClass) {
+                targetInstances.push(t.s);
+              }
+            });
+          }
+        });
+      }
+
+      targetInstances.forEach(function(inst) {
+        var count = 0;
+        triples.forEach(function(t) {
+          if (t.s === inst && t.p === c.path) count++;
+        });
+        if (c.minCount != null && count < c.minCount) {
+          violations.push({
+            focusNode: inst,
+            path: c.path,
+            message: c.message || ("Expected at least " + c.minCount + " value(s) for " + (c.pathLabel||c.path) + ", found " + count),
+            severity: "Violation",
+          });
+        }
+        if (c.maxCount != null && count > c.maxCount) {
+          violations.push({
+            focusNode: inst,
+            path: c.path,
+            message: c.message || ("Expected at most " + c.maxCount + " value(s) for " + (c.pathLabel||c.path) + ", found " + count),
+            severity: "Violation",
+          });
+        }
+      });
+    });
+
+    renderValidation(outEl, {
+      conforms: violations.length === 0,
+      violations: violations,
+      report: violations.length === 0 ? "All constraints satisfied." : violations.length + " violation(s) found.",
+    });
+  }
+
+  function renderValidation(el, result) {
+    if (result.conforms === null) {
+      el.innerHTML = '<div class="ov-val-info">' + esc(result.report || "No validation performed.") + '</div>';
+      return;
+    }
+    var html = "";
+    if (result.conforms) {
+      html = '<div class="ov-val-pass"><span class="ov-val-icon">&#x2714;</span> Conforms &mdash; all constraints satisfied.</div>';
+    } else {
+      html = '<div class="ov-val-fail"><span class="ov-val-icon">&#x2718;</span> ' + esc(result.report || "Violations found.") + '</div>';
+      html += '<ul class="ov-val-list">';
+      (result.violations || []).forEach(function(v) {
+        var focusLabel = v.focusNode ? v.focusNode.split("/").pop().split("#").pop() : "?";
+        html += '<li><strong>' + esc(focusLabel) + '</strong>: ' + esc(v.message || "Constraint violated") + '</li>';
+      });
+      html += '</ul>';
+    }
+    el.innerHTML = html;
+  }
+
+  // ── Minimal TTL Parser ─────────────────────────────────────────────────
+  // Extracts prefixes and basic s-p-o triples from Turtle syntax.
+  // Not a full parser — handles the common patterns in shape data.
+
+  function parseTtlMinimal(ttl) {
+    var prefixes = {};
+    var triples = [];
+
+    // Extract @prefix declarations
+    var prefixRe = /@prefix\s+(\w*)\s*:\s*<([^>]+)>\s*\./g;
+    var m;
+    while ((m = prefixRe.exec(ttl)) !== null) {
+      prefixes[m[1]] = m[2];
+    }
+
+    // Resolve a prefixed name or <IRI> to full IRI
+    function resolve(term) {
+      term = term.trim();
+      if (term.startsWith("<") && term.endsWith(">")) return term.slice(1, -1);
+      if (term === "a") return "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+      var colonIdx = term.indexOf(":");
+      if (colonIdx >= 0) {
+        var prefix = term.substring(0, colonIdx);
+        var local = term.substring(colonIdx + 1);
+        if (prefixes[prefix] !== undefined) return prefixes[prefix] + local;
+      }
+      return term;
+    }
+
+    // Strip comments
+    var lines = ttl.split("\n").map(function(l) {
+      var inAngle = false;
+      for (var i = 0; i < l.length; i++) {
+        if (l[i] === "<") inAngle = true;
+        if (l[i] === ">") inAngle = false;
+        if (l[i] === "#" && !inAngle) return l.substring(0, i);
+      }
+      return l;
+    });
+    var clean = lines.join("\n");
+
+    // Remove prefix lines
+    clean = clean.replace(/@prefix[^.]*\.\s*/g, "");
+    clean = clean.replace(/@base[^.]*\.\s*/g, "");
+
+    // Split into statements (by .)
+    var statements = clean.split(/\.\s*(?=\S|$)/);
+    statements.forEach(function(stmt) {
+      stmt = stmt.trim();
+      if (!stmt) return;
+
+      // Split subject from predicate-object list
+      var tokens = tokenize(stmt);
+      if (tokens.length < 3) return;
+
+      var subject = resolve(tokens[0]);
+      var i = 1;
+      while (i < tokens.length - 1) {
+        var predicate = resolve(tokens[i]);
+        i++;
+        // Collect objects until we hit ; or end
+        while (i < tokens.length) {
+          var obj = tokens[i];
+          i++;
+          if (obj === ";") break;
+          if (obj === ",") continue;
+          triples.push({ s: subject, p: predicate, o: resolve(obj) });
+          // Check if next token is , or ;
+          if (i < tokens.length && tokens[i] === ",") { i++; continue; }
+          if (i < tokens.length && tokens[i] === ";") { i++; break; }
+        }
+      }
+    });
+
+    return triples;
+  }
+
+  function tokenize(text) {
+    var tokens = [];
+    var i = 0;
+    while (i < text.length) {
+      // Skip whitespace
+      while (i < text.length && /\s/.test(text[i])) i++;
+      if (i >= text.length) break;
+
+      if (text[i] === "<") {
+        var end = text.indexOf(">", i);
+        if (end < 0) end = text.length - 1;
+        tokens.push(text.substring(i, end + 1));
+        i = end + 1;
+      } else if (text[i] === '"') {
+        var j = i + 1;
+        while (j < text.length && text[j] !== '"') { if (text[j] === "\\") j++; j++; }
+        j++; // closing quote
+        // Skip language tag or datatype
+        while (j < text.length && (text[j] === "@" || text[j] === "^")) {
+          if (text[j] === "@") { j++; while (j < text.length && /[a-zA-Z-]/.test(text[j])) j++; }
+          if (text[j] === "^" && text[j+1] === "^") { j += 2; if (text[j] === "<") { j = text.indexOf(">", j) + 1; } else { while (j < text.length && /\S/.test(text[j]) && text[j] !== ";" && text[j] !== ",") j++; } }
+        }
+        tokens.push(text.substring(i, j));
+        i = j;
+      } else if (text[i] === ";" || text[i] === ",") {
+        tokens.push(text[i]);
+        i++;
+      } else {
+        var start = i;
+        while (i < text.length && !/[\s;,]/.test(text[i])) i++;
+        tokens.push(text.substring(start, i));
+      }
+    }
+    return tokens;
+  }
+
+  // ── Update Graph ───────────────────────────────────────────────────────
+
+  function updateGraph(id) {
+    var inst = instances[id];
+    if (!inst) return;
+    var ttl = getEditorValue(id);
+    var triples = parseTtlMinimal(ttl);
+
+    // Rebuild nodes and edges from parsed triples
+    var nodes = {};
+    var edges = [];
+    var classes = {};
+
+    // First pass: find classes
+    triples.forEach(function(t) {
+      if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") {
+        classes[t.o] = true;
+      }
+      if (t.p === "http://www.w3.org/2000/01/rdf-schema#subClassOf") {
+        classes[t.s] = true;
+        classes[t.o] = true;
+      }
+    });
+
+    triples.forEach(function(t) {
+      [t.s, t.o].forEach(function(uri) {
+        if (!nodes[uri] && !uri.startsWith('"')) {
+          var isClass = classes[uri] || false;
+          nodes[uri] = { data: {
+            id: uri, label: uri.split("/").pop().split("#").pop(),
+            type: isClass ? "Class" : "Individual",
+            color: isClass ? "#FDFDC8" : "#E6E6E6",
+            shape: isClass ? "rectangle" : "ellipse",
+            iri: uri, source: "", namespace: "",
+          }};
+        }
+      });
+
+      var edgeType = "object-property";
+      if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") edgeType = "rdf-type";
+      if (t.p === "http://www.w3.org/2000/01/rdf-schema#subClassOf") edgeType = "subclass";
+
+      if (nodes[t.s] && nodes[t.o]) {
+        edges.push({ data: {
+          id: "e_" + edges.length, source: t.s, target: t.o,
+          label: t.p.split("/").pop().split("#").pop(),
+          iri: t.p, edgeType: edgeType,
+        }});
+      }
+    });
+
+    var cy = inst.cy;
+    cy.elements().remove();
+    cy.add(Object.values(nodes).concat(edges));
+    cy.layout({ name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 }).run();
+  }
+
+  function resetEditor(id) {
+    var inst = instances[id];
+    if (!inst) return;
+    if (inst.editor) inst.editor.setValue(inst.originalTtl);
+    else {
+      var container = document.getElementById(id);
+      var ta = container.querySelector(".ov-editor-textarea");
+      if (ta) ta.value = inst.originalTtl;
+    }
+    // Reset graph
+    var cy = inst.cy;
+    cy.elements().remove();
+    cy.add(inst.data.nodes.concat(inst.data.edges));
+    cy.layout({ name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 }).run();
+    // Reset validation
+    var container = document.getElementById(id);
+    var outEl = container.querySelector(".ov-validation-output");
+    if (outEl && inst.data.validation) renderValidation(outEl, inst.data.validation);
+  }
+
+  // ── Toolbar ─────────────────────────────────────────────────────────────
+
+  function zoomIn(id)  { var cy = instances[id]?.cy; if (cy) cy.zoom({ level: cy.zoom() * 1.25, renderedPosition: { x: cy.width()/2, y: cy.height()/2 }}); }
+  function zoomOut(id) { var cy = instances[id]?.cy; if (cy) cy.zoom({ level: cy.zoom() / 1.25, renderedPosition: { x: cy.width()/2, y: cy.height()/2 }}); }
+  function fit(id)     { var cy = instances[id]?.cy; if (cy) cy.fit(null, 30); }
+
+  function fullscreen(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (document.fullscreenElement === el) document.exitFullscreen();
+    else el.requestFullscreen().catch(function(){});
+  }
+
+  function exportPNG(id) {
+    var cy = instances[id]?.cy;
+    if (!cy) return;
+    var a = document.createElement("a");
+    a.href = cy.png({ scale: 3, bg: "#ffffff", full: true });
+    a.download = id + ".png";
+    a.click();
+  }
+
+  function exportSVG(id) {
+    var cy = instances[id]?.cy;
+    if (!cy) return;
+    try {
+      var svgStr = cy.svg({ scale: 1, full: true, bg: "#ffffff" });
+      var blob = new Blob([svgStr], { type: "image/svg+xml" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = id + ".svg";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch(e) {
+      console.warn("SVG export requires cytoscape-svg extension:", e);
+      alert("SVG export not available. Try PNG instead.");
+    }
+  }
+
+  // ── Auto-init ──────────────────────────────────────────────────────────
+
+  document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll(".ontoview-container").forEach(function(el) { initGraph(el.id); });
+  });
+
+  return {
+    zoomIn: zoomIn, zoomOut: zoomOut, fit: fit, fullscreen: fullscreen,
+    exportPNG: exportPNG, exportSVG: exportSVG,
+    toggleEditor: toggleEditor, validate: validate,
+    updateGraph: updateGraph, resetEditor: resetEditor,
+  };
+})();
+
+</script>
+</body>
+</html>

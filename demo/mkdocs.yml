@@ -1,0 +1,20 @@
+site_name: ontoview Demo
+theme: readthedocs
+nav:
+  - Home: index.md
+  - Examples:
+    - Role Bearer: examples/role-bearer.md
+    - Textual Entity: examples/textual-entity.md
+    - Role Realization: examples/role-realization.md
+
+plugins:
+  - search
+  - ontoview
+
+markdown_extensions:
+  - pymdownx.superfences:
+      preserve_tabs: true
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

@@ -1,0 +1,2 @@
+[mkdocs.plugins]
+ontoview = ontoview.plugin:OntoviewPlugin

@@ -1,0 +1,18 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix ex:    <http://example.org/> .
+
+ex:contributor_role_1
+    a <http://purl.obolibrary.org/obo/BFO_0000023> ;
+    a <https://nfdi.fiz-karlsruhe.de/ontology/NFDI_0000118> ;
+    <http://purl.obolibrary.org/obo/RO_0000081> ex:researcher_1 ;
+    <http://purl.obolibrary.org/obo/BFO_0000054> ex:curation_process_1 .
+
+ex:researcher_1
+    a <https://nfdi.fiz-karlsruhe.de/ontology/NFDI_0000001> ;
+    rdfs:label "Dr. Example Researcher" .
+
+ex:curation_process_1
+    a <http://purl.obolibrary.org/obo/BFO_0000015> ;
+    rdfs:label "Data curation process" .
