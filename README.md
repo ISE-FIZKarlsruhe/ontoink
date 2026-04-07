@@ -14,20 +14,20 @@ ontoview is a MkDocs plugin that transforms RDF/Turtle files into interactive, p
 ## Features
 
 ### Interactive Graph Visualization
-- Formal ontology notation with distinct shapes per type
+- Formal ontology notation with distinct shapes per element type
 - Hierarchical layout (dagre) optimized for ontology patterns
 - Pan, zoom, fullscreen support
-- Color-coded by ontology source (BFO, IAO, nfdicore, RO, PMD, QUDT, etc.)
+- Color-coded by ontology source (BFO, IAO, FOAF, Schema.org, etc.)
 
 ### Visual Notation
 
-| Element | Shape | Color |
-|---------|-------|-------|
-| Class | Yellow rectangle | By ontology source |
-| Individual | Grey circle | `#E6E6E6` |
-| Literal | Green ellipse | `#93D053` |
+| Element | Shape | Default Color |
+|---------|-------|---------------|
+| Class | Rectangle (solid border) | By ontology source |
+| Individual | Ellipse | `#E6E6E6` |
+| Literal | Ellipse (dashed border) | `#93D053` |
 | Object Property | Blue solid line, filled arrow | `#2563eb` |
-| Data Property | Green solid line, hollow arrow | `#16a34a` |
+| Data Property | Green line, hollow arrow | `#16a34a` |
 | rdf:type | Grey dashed line | `#9ca3af` |
 | rdfs:subClassOf | Black solid line | `#374151` |
 | SHACL Constraint | Cyan dashed bold line | `#0891b2` |
@@ -51,9 +51,26 @@ ontoview is a MkDocs plugin that transforms RDF/Turtle files into interactive, p
 - Update the graph live from edited TTL
 - Reset to original data
 
-### Publication-Ready Export
-- PNG export (high-DPI, 3x scale, white background)
-- SVG export (vector graphics for papers and presentations)
+### Export Preview + Publication-Ready Output
+- **PNG export** — clicking PNG/SVG opens a preview dialog showing the final image
+- Toggle options: include/exclude legend and namespace prefixes
+- High-DPI (3x scale) with white background
+- Legend rendered in a clean rounded box with proper shape icons and edge arrows
+- Namespace prefixes shown as compact tags below the legend
+- **SVG export** — vector graphics for papers and presentations
+- **TTL download** — download the current (possibly edited) TTL data
+
+### Color Customization
+- **Colors** button in the toolbar opens a color settings panel
+- Change colors per node type (Class, Individual, Literal)
+- Change colors per namespace (all BFO nodes, all FOAF nodes, etc.)
+- Changes apply live to the graph and are reflected in exports
+
+### Smart Namespace Legend
+- Only active prefixes (used in the graph) shown by default
+- "Show all" toggle reveals all declared prefixes
+- Unused prefixes shown dimmed
+- Prefixes displayed as compact styled tags, separated from the main legend
 
 ## Installation
 
@@ -105,14 +122,14 @@ mkdocs serve
 | `height` | `500px` | Height of the graph canvas |
 | `editor` | `true` | Show the "Edit & Validate" button |
 | `legend` | `true` | Show the legend panel |
-| `namespaces` | `true` | Show namespace boxes in the legend |
+| `namespaces` | `true` | Show namespace prefixes |
 
 ### Full example
 
 ````markdown
 ```ontoview
-source: shapes/role-bearer/shape-data.ttl
-shape: shapes/role-bearer/shape.ttl
+source: shapes/foaf-person/shape-data.ttl
+shape: shapes/foaf-person/shape.ttl
 height: 600px
 editor: true
 legend: true
@@ -175,4 +192,5 @@ MIT License. See [LICENSE](LICENSE).
 ## Acknowledgments
 
 - Developed in the context of [NFDI](https://www.nfdi.de/) and [NFDI-MatWerk](https://nfdi-matwerk.de/)
-- Inspired by [Graffoo](https://essepuntato.it/graffoo/) visual notation and [PMD Core Ontology](https://github.com/materialdigital/core-ontology) patterns
+- Visual notation inspired by ontology diagramming best practices and formal OWL notation
+- Interactive visualization powered by [Cytoscape.js](https://js.cytoscape.org/)

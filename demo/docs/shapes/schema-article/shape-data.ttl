@@ -1,0 +1,24 @@
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+@prefix ex:     <http://example.org/> .
+
+ex:article_1
+    a schema:ScholarlyArticle ;
+    schema:name "A Study on Knowledge Graphs" ;
+    schema:author ex:researcher_1 ;
+    schema:datePublished "2025-03-15" ;
+    schema:isPartOf ex:journal_1 .
+
+ex:researcher_1
+    a schema:Person ;
+    schema:name "Dr. Jane Doe" ;
+    schema:affiliation ex:university_1 .
+
+ex:university_1
+    a schema:Organization ;
+    schema:name "Example University" .
+
+ex:journal_1
+    a schema:Periodical ;
+    schema:name "Journal of Semantic Web Research" .

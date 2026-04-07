@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ontoview"
-version = "0.1.0"
+version = "0.2.0"
 description = "Interactive ontology visualization, SHACL validation, and live TTL editing plugin for MkDocs"
 readme = "README.md"
 license = {text = "MIT"}

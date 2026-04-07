@@ -7,18 +7,17 @@ Interactive ontology visualization and SHACL validation plugin for MkDocs.
 - Interactive graph visualization with formal ontology notation
 - Click any node to see IRI, type, connections, and SHACL constraints
 - Inline TTL editor with live validation
-- Publication-ready SVG/PNG export
-- Color-coded by ontology source (BFO, IAO, nfdicore, etc.)
+- Publication-ready PNG and SVG export (with legend included)
+- Download TTL data directly
+- Color-coded by ontology source (BFO, IAO, FOAF, Schema.org, etc.)
+- Namespace legend with toggle to show/hide unused prefixes
 
 ## Examples
 
-- [Role Bearer](examples/role-bearer.md) — A role must have a bearer and be realized in a process
-- [Textual Entity](examples/textual-entity.md) — A textual entity must be about something
-- [Role Realization](examples/role-realization.md) — A role must be realized in a process
+- [FOAF Person](examples/foaf-person.md) — every Person must have a name
+- [Schema.org Article](examples/schema-article.md) — scholarly articles need author, title, date
 
 ## Quick Start
-
-Install:
 
 ```bash
 pip install ontoview

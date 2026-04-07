@@ -53,11 +53,9 @@
               </ul>
               <p class="caption"><span class="caption-text">Examples</span></p>
               <ul>
-                  <li class="toctree-l1"><a class="reference internal" href="examples/role-bearer/">Role Bearer</a>
+                  <li class="toctree-l1"><a class="reference internal" href="examples/foaf-person/">FOAF Person</a>
                   </li>
-                  <li class="toctree-l1"><a class="reference internal" href="examples/textual-entity/">Textual Entity</a>
-                  </li>
-                  <li class="toctree-l1"><a class="reference internal" href="examples/role-realization/">Role Realization</a>
+                  <li class="toctree-l1"><a class="reference internal" href="examples/schema-article/">Schema.org Article</a>
                   </li>
               </ul>
       </div>
@@ -90,17 +88,17 @@
 <li>Interactive graph visualization with formal ontology notation</li>
 <li>Click any node to see IRI, type, connections, and SHACL constraints</li>
 <li>Inline TTL editor with live validation</li>
-<li>Publication-ready SVG/PNG export</li>
-<li>Color-coded by ontology source (BFO, IAO, nfdicore, etc.)</li>
+<li>Publication-ready PNG and SVG export (with legend included)</li>
+<li>Download TTL data directly</li>
+<li>Color-coded by ontology source (BFO, IAO, FOAF, Schema.org, etc.)</li>
+<li>Namespace legend with toggle to show/hide unused prefixes</li>
 </ul>
 <h2 id="examples">Examples</h2>
 <ul>
-<li><a href="examples/role-bearer/">Role Bearer</a> — A role must have a bearer and be realized in a process</li>
-<li><a href="examples/textual-entity/">Textual Entity</a> — A textual entity must be about something</li>
-<li><a href="examples/role-realization/">Role Realization</a> — A role must be realized in a process</li>
+<li><a href="examples/foaf-person/">FOAF Person</a> — every Person must have a name</li>
+<li><a href="examples/schema-article/">Schema.org Article</a> — scholarly articles need author, title, date</li>
 </ul>
 <h2 id="quick-start">Quick Start</h2>
-<p>Install:</p>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>ontoview
 </code></pre></div>
 <p>Add to <code>mkdocs.yml</code>:</p>
@@ -117,7 +115,7 @@ shape: path/to/shape.ttl
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="examples/role-bearer/" class="btn btn-neutral float-right" title="Role Bearer">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="examples/foaf-person/" class="btn btn-neutral float-right" title="FOAF Person">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -141,7 +139,7 @@ shape: path/to/shape.ttl
     
     
     
-      <span><a href="examples/role-bearer/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="examples/foaf-person/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>
@@ -161,5 +159,5 @@ shape: path/to/shape.ttl
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2026-04-07 09:18:04.336958+00:00
+Build Date UTC : 2026-04-07 11:11:32.515984+00:00
 -->

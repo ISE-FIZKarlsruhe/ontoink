@@ -381,11 +381,14 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
                         }
                     })
 
+    active_ns = _used_namespaces(nodes, edges, namespaces)
+
     return {
         "nodes": list(nodes.values()),
         "edges": edges,
         "shacl": shacl_data,
         "namespaces": namespaces,
+        "activeNamespaces": active_ns,
         "nodeStyles": NODE_STYLES,
         "edgeStyles": {k: {"lineStyle": v[0], "color": v[1], "arrow": v[2], "width": v[3]} for k, v in EDGE_STYLES.items()},
         "rawTtl": raw_ttl,
@@ -402,3 +405,24 @@ def _ns_for_uri(uri_str: str, namespaces: Dict[str, str]) -> str:
             best = prefix
             best_len = len(ns_uri)
     return best
+
+
+def _used_namespaces(nodes: Dict, edges: List, namespaces: Dict[str, str]) -> Dict[str, str]:
+    """Return only the namespace prefixes actually used by nodes/edges in the graph."""
+    used_uris: Set[str] = set()
+    for n in nodes.values():
+        iri = n["data"].get("iri", "")
+        if iri:
+            used_uris.add(iri)
+    for e in edges:
+        iri = e["data"].get("iri", "")
+        if iri:
+            used_uris.add(iri)
+
+    active: Dict[str, str] = {}
+    for prefix, ns_uri in namespaces.items():
+        for uri in used_uris:
+            if uri.startswith(ns_uri):
+                active[prefix] = ns_uri
+                break
+    return active

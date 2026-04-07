@@ -1,0 +1,18 @@
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix foaf:  <http://xmlns.com/foaf/0.1/> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/PersonShape>
+    a sh:NodeShape ;
+    sh:targetClass foaf:Person ;
+    sh:property [
+        sh:path foaf:name ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Every foaf:Person must have at least one foaf:name." ;
+    ] ;
+    sh:property [
+        sh:path foaf:mbox ;
+        sh:maxCount 1 ;
+        sh:message "A foaf:Person should have at most one foaf:mbox." ;
+    ] .
