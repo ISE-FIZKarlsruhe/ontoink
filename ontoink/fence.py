@@ -86,7 +86,7 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'      <button class="ov-btn" onclick="ontoink.downloadTTL(\'{graph_id}\')" title="Download TTL">TTL</button>\n'
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <button class="ov-btn" onclick="ontoink.toggleColors(\'{graph_id}\')" title="Color settings">Colors</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.toggleColors(\'{graph_id}\')" title="Edit layout, colors and shapes">Edit Layout</button>\n'
             f'      {editor_btn}'
             f'    </div>\n'
             f'  </div>\n'

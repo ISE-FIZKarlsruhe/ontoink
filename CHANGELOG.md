@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0] - 2026-04-08
+
+### Added
+- Edge click popup — click any edge to see label, type, IRI, source/target, cardinality, and copy buttons
+- Edit Layout panel (renamed from "Colors") with node shape selector, edge line style, edge arrow shape, and color pickers
+- Full documentation site with Material for MkDocs: getting started guide, all 5 examples, contributing guide, citation info, changelog
+
+### Fixed
+- PNG/SVG export now captures the exact viewport (zoom, pan, node positions) instead of re-fitting
+- Export overlay positioning: legend and prefix boxes drawn at their actual on-screen positions
+- Export overlay sizing: box dimensions and font sizes now match the DOM overlays
+
+### Changed
+- Toolbar button renamed from "Colors" to "Edit Layout"
+
 ## [0.1.0] - 2026-04-07
 
 ### Added

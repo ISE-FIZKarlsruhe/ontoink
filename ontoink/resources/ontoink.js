@@ -72,16 +72,20 @@ var ontoink = (function () {
     "shacl-constraint":{ l:"SHACL Constraint", c:"#0891b2", dash:true,  fill:true,  bold:true },
   };
 
-  function drawLegendBox(ctx, data, x, y, s) {
+  function drawLegendBox(ctx, data, x, y, s, domW, domH) {
+    // s = pixel scale (e.g. 3 for hi-DPI), domW/domH = actual overlay size in CSS px
     var font = function(w, sz) { return w+" "+(sz*s)+"px Inter,Segoe UI,system-ui,sans-serif"; };
-    var pad = 12*s, row = 20*s, iconSz = 14*s, gap = 8*s, r = 8*s;
 
     var usedTypes = {}, usedEdge = {};
     data.nodes.forEach(function(n) { usedTypes[n.data.type] = n.data.color; });
     data.edges.forEach(function(e) { usedEdge[e.data.edgeType] = true; });
     var nodeKeys = Object.keys(usedTypes), edgeKeys = Object.keys(usedEdge);
     var maxRows = Math.max(nodeKeys.length, edgeKeys.length);
-    var boxW = 300*s, boxH = pad*2 + row*(maxRows+2);
+
+    var boxW = domW ? domW*s : 300*s;
+    // Match CSS: .ov-overlay-head font 12px, .ov-oentry font 11px, .ov-overlay-col-title 9px
+    var pad = 12*s, row = 22*s, iconSz = 16*s, gap = 8*s, r = 10*s;
+    var boxH = domH ? domH*s : pad*2 + row*(maxRows+2);
 
     // Background
     drawRoundRect(ctx, x, y, boxW, boxH, r);
@@ -89,13 +93,14 @@ var ontoink = (function () {
     ctx.strokeStyle = "#d1d5db"; ctx.lineWidth = 1.5*s; ctx.stroke();
 
     var ty = y + pad;
+    // CSS: .ov-overlay-head font-size: 12px, font-weight: 700
     ctx.font = font("700",12); ctx.fillStyle = "#1f2937";
     ctx.fillText("Legend", x+pad, ty+12*s); ty += row+2*s;
 
     var col1 = x+pad, col2 = x + boxW/2 + 4*s;
 
-    // Nodes column
-    ctx.font = font("700",8.5); ctx.fillStyle = "#9ca3af";
+    // Nodes column — CSS: .ov-overlay-col-title 9px, .ov-oentry 11px
+    ctx.font = font("700",9); ctx.fillStyle = "#9ca3af";
     ctx.fillText("NODES", col1, ty+9*s);
     var ny = ty + row*0.8;
     nodeKeys.forEach(function(t) {
@@ -115,13 +120,13 @@ var ontoink = (function () {
         ctx.fillStyle = c; ctx.fillRect(ix, iy, iconSz, iconSz*0.65);
         ctx.strokeStyle = "#888"; ctx.lineWidth = 1*s; ctx.strokeRect(ix, iy, iconSz, iconSz*0.65);
       }
-      ctx.font = font("400",10); ctx.fillStyle = "#374151";
-      ctx.fillText(t, ix+iconSz+gap, ny+10*s);
+      ctx.font = font("400",11); ctx.fillStyle = "#374151";
+      ctx.fillText(t, ix+iconSz+gap, ny+11*s);
       ny += row*0.85;
     });
 
     // Edges column
-    ctx.font = font("700",8.5); ctx.fillStyle = "#9ca3af";
+    ctx.font = font("700",9); ctx.fillStyle = "#9ca3af";
     ctx.fillText("EDGES", col2, ty+9*s);
     var ey = ty + row*0.8;
     edgeKeys.forEach(function(t) {
@@ -132,37 +137,39 @@ var ontoink = (function () {
       ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(lx+len,ly); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = d.fill ? d.c : "#fff"; ctx.strokeStyle = d.c; ctx.lineWidth = 1*s;
       ctx.beginPath(); ctx.moveTo(lx+len,ly); ctx.lineTo(lx+len-5*s,ly-3.5*s); ctx.lineTo(lx+len-5*s,ly+3.5*s); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.font = font("400",10); ctx.fillStyle = "#374151";
-      ctx.fillText(d.l, lx+len+gap+2*s, ey+10*s);
+      ctx.font = font("400",11); ctx.fillStyle = "#374151";
+      ctx.fillText(d.l, lx+len+gap+2*s, ey+11*s);
       ey += row*0.85;
     });
 
     return boxH;
   }
 
-  function drawNsBox(ctx, data, x, y, s) {
+  function drawNsBox(ctx, data, x, y, s, domW, domH) {
     var font = function(w, sz) { return w+" "+(sz*s)+"px Inter,Segoe UI,system-ui,sans-serif"; };
-    var pad = 10*s, row = 16*s, r = 8*s;
     var ns = data.activeNamespaces || {};
     var keys = Object.keys(ns).sort();
     if (!keys.length) return 0;
 
-    var boxW = 300*s, boxH = pad*2 + row*(keys.length+1);
+    // Match CSS: .ov-overlay-head 12px, .ov-ns-tag 10px, .ov-ns-tag b bold
+    var pad = 10*s, row = 18*s, r = 10*s;
+    var boxW = domW ? domW*s : 300*s;
+    var boxH = domH ? domH*s : pad*2 + row*(keys.length+1);
 
     drawRoundRect(ctx, x, y, boxW, boxH, r);
     ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.fill();
     ctx.strokeStyle = "#d1d5db"; ctx.lineWidth = 1.5*s; ctx.stroke();
 
     var ty = y + pad;
-    ctx.font = font("700",10); ctx.fillStyle = "#1f2937";
-    ctx.fillText("Prefixes", x+pad, ty+10*s); ty += row+2*s;
+    ctx.font = font("700",12); ctx.fillStyle = "#1f2937";
+    ctx.fillText("Prefixes", x+pad, ty+12*s); ty += row+2*s;
 
     keys.forEach(function(p) {
-      ctx.font = font("600",9); ctx.fillStyle = "#3730a3";
-      ctx.fillText(p+":", x+pad, ty+9*s);
+      ctx.font = font("600",10); ctx.fillStyle = "#3730a3";
+      ctx.fillText(p+":", x+pad, ty+10*s);
       var pw = ctx.measureText(p+": ").width;
-      ctx.font = font("400",8.5); ctx.fillStyle = "#6b7280";
-      ctx.fillText(ns[p], x+pad+pw, ty+9*s);
+      ctx.font = font("400",10); ctx.fillStyle = "#6b7280";
+      ctx.fillText(ns[p], x+pad+pw, ty+10*s);
       ty += row*0.85;
     });
 
@@ -189,6 +196,24 @@ var ontoink = (function () {
       rel.forEach(function(c) { var cd = c.minCount!=null?"["+c.minCount+".."+(c.maxCount!=null?c.maxCount:"*")+"]":""; html+='<li>'+esc(c.pathLabel||c.path||"")+' '+cd+(c.message?'<br><small>'+esc(c.message)+'</small>':'')+'</li>'; });
       html += '</ul></div>';
     }
+    html += '<div class="ov-popup-actions"><button class="ov-chip" data-action="copy-label">Copy Label</button>';
+    if (d.iri) html += '<button class="ov-chip" data-action="copy-iri">Copy IRI</button>';
+    return html + '</div>';
+  }
+
+  function buildEdgePopup(d, cy) {
+    var edgeTypeLabels = { "object-property":"Object Property", "data-property":"Data Property", "rdf-type":"rdf:type", "subclass":"rdfs:subClassOf", "shacl-constraint":"SHACL Constraint" };
+    var edgeTypeColors = { "object-property":"#dbeafe", "data-property":"#dcfce7", "rdf-type":"#f3f4f6", "subclass":"#e5e7eb", "shacl-constraint":"#cffafe" };
+    var typeLabel = edgeTypeLabels[d.edgeType] || d.edgeType || "Edge";
+    var typeBg = edgeTypeColors[d.edgeType] || "#eee";
+    var html = '<div class="ov-popup-head"><span class="ov-popup-label">' + esc(d.label) + '</span><span class="ov-badge" style="background:' + typeBg + '">' + esc(typeLabel) + '</span><button class="ov-popup-close">&times;</button></div>';
+    if (d.iri) html += '<div class="ov-popup-iri"><a href="' + esc(d.iri) + '" target="_blank">' + esc(d.iri) + '</a></div>';
+    var srcNode = cy.getElementById(d.source), tgtNode = cy.getElementById(d.target);
+    var srcLabel = srcNode.data("label") || d.source, tgtLabel = tgtNode.data("label") || d.target;
+    html += '<div class="ov-popup-section"><strong>Connection:</strong></div>';
+    html += '<div style="font-size:12px;color:#4b5563;margin:4px 0 0 8px;">' + esc(srcLabel) + ' <span style="color:#9ca3af;">\u2192</span> ' + esc(tgtLabel) + '</div>';
+    if (d.cardinality) html += '<div class="ov-popup-meta">Cardinality: <strong>' + esc(d.cardinality) + '</strong></div>';
+    if (d.message) html += '<div class="ov-popup-meta">Message: ' + esc(d.message) + '</div>';
     html += '<div class="ov-popup-actions"><button class="ov-chip" data-action="copy-label">Copy Label</button>';
     if (d.iri) html += '<button class="ov-chip" data-action="copy-iri">Copy IRI</button>';
     return html + '</div>';
@@ -313,6 +338,21 @@ var ontoink = (function () {
       popup.querySelector(".ov-popup-close").addEventListener("click",function(){popup.remove();});
       popup.querySelectorAll(".ov-chip").forEach(function(b){b.addEventListener("click",function(){copyText(b.dataset.action==="copy-iri"?d.iri:d.label,b);});});
     });
+    cy.on("tap", "edge", function(evt) {
+      removePopup(container);
+      var d=evt.target.data(), midpoint=evt.target.midpoint();
+      var renderedMid = { x: (midpoint.x - cy.pan().x) * cy.zoom() + cy.pan().x, y: (midpoint.y - cy.pan().y) * cy.zoom() + cy.pan().y };
+      // Use rendered position via zoom/pan transform
+      var zoom = cy.zoom(), pan = cy.pan();
+      var rx = midpoint.x * zoom + pan.x, ry = midpoint.y * zoom + pan.y;
+      var popup=document.createElement("div"); popup.className="ov-popup"; popup.innerHTML=buildEdgePopup(d,cy);
+      var cR=canvas.getBoundingClientRect(), pR=container.getBoundingClientRect();
+      popup.style.left=(cR.left-pR.left+rx+15)+"px"; popup.style.top=(cR.top-pR.top+ry-15)+"px";
+      container.appendChild(popup);
+      requestAnimationFrame(function(){var r=popup.getBoundingClientRect();if(r.right>pR.right-10)popup.style.left=(parseFloat(popup.style.left)-r.width-30)+"px";if(r.bottom>pR.bottom-10)popup.style.top=(parseFloat(popup.style.top)-r.height)+"px";});
+      popup.querySelector(".ov-popup-close").addEventListener("click",function(){popup.remove();});
+      popup.querySelectorAll(".ov-chip").forEach(function(b){b.addEventListener("click",function(){copyText(b.dataset.action==="copy-iri"?d.iri:d.label,b);});});
+    });
     cy.on("tap", function(e) { if(e.target===cy) removePopup(container); });
 
     buildLegendOverlay(container, data);
@@ -414,23 +454,78 @@ var ontoink = (function () {
 
   // ── Color Customization ────────────────────────────────────────────────
 
+  var NODE_SHAPES = ["rectangle","ellipse","round-rectangle","diamond","hexagon","octagon","triangle","barrel","rhomboid","star","tag","vee"];
+  var EDGE_LINE_STYLES = ["solid","dashed","dotted"];
+  var EDGE_ARROW_SHAPES = ["triangle","triangle-tee","circle-triangle","triangle-backcurve","vee","tee","circle","diamond","chevron","none"];
+
   function toggleColors(id){
     var c=document.getElementById(id),ex=c.querySelector(".ov-color-panel");if(ex){ex.remove();return;}
     var inst=instances[id];if(!inst)return;
-    var sources={},types={};
-    inst.cy.nodes().forEach(function(n){var d=n.data();if(d.source)sources[d.source]=d.color;types[d.type]=d.color;});
+    var sources={},types={},typeShapes={};
+    inst.cy.nodes().forEach(function(n){var d=n.data();if(d.source)sources[d.source]=d.color;types[d.type]=d.color;typeShapes[d.type]=n.style("shape");});
+
+    // Collect edge type styles
+    var edgeStyles={};
+    var edgeTypeLabels={"object-property":"Object Property","data-property":"Data Property","rdf-type":"rdf:type","subclass":"rdfs:subClassOf","shacl-constraint":"SHACL Constraint"};
+    inst.cy.edges().forEach(function(e){
+      var et=e.data("edgeType");
+      if(et&&!edgeStyles[et])edgeStyles[et]={color:e.style("line-color"),lineStyle:e.style("line-style"),arrowShape:e.style("target-arrow-shape")};
+    });
+
     var panel=document.createElement("div");panel.className="ov-color-panel";
-    var h='<div class="ov-color-panel-head"><strong>Colors</strong><button class="ov-popup-close" onclick="this.closest(\'.ov-color-panel\').remove()">&times;</button></div>';
+    var h='<div class="ov-color-panel-head"><strong>Edit Layout</strong><button class="ov-popup-close" onclick="this.closest(\'.ov-color-panel\').remove()">&times;</button></div>';
+
+    // Node Types section: color + shape
     h+='<div class="ov-color-section"><div class="ov-color-section-title">Node Types</div>';
-    Object.keys(types).forEach(function(t){h+='<div class="ov-color-row"><input type="color" value="'+types[t]+'" data-kind="type" data-key="'+esc(t)+'" class="ov-color-input"><span>'+esc(t)+'</span></div>';});
+    Object.keys(types).forEach(function(t){
+      var curShape=typeShapes[t]||"rectangle";
+      h+='<div class="ov-color-row"><input type="color" value="'+types[t]+'" data-kind="type" data-key="'+esc(t)+'" class="ov-color-input">';
+      h+='<select class="ov-shape-select" data-kind="node-shape" data-key="'+esc(t)+'">';
+      NODE_SHAPES.forEach(function(s){h+='<option value="'+s+'"'+(s===curShape?' selected':'')+'>'+s+'</option>';});
+      h+='</select>';
+      h+='<span>'+esc(t)+'</span></div>';
+    });
     h+='</div>';
+
+    // Edge Types section: color + line style + arrow shape
+    var edgeKeys=Object.keys(edgeStyles);
+    if(edgeKeys.length){
+      h+='<div class="ov-color-section"><div class="ov-color-section-title">Edge Types</div>';
+      edgeKeys.forEach(function(et){
+        var es=edgeStyles[et], lbl=edgeTypeLabels[et]||et;
+        h+='<div class="ov-color-row"><input type="color" value="'+es.color+'" data-kind="edge-color" data-key="'+esc(et)+'" class="ov-color-input">';
+        h+='<select class="ov-shape-select" data-kind="edge-line" data-key="'+esc(et)+'">';
+        EDGE_LINE_STYLES.forEach(function(s){h+='<option value="'+s+'"'+(s===es.lineStyle?' selected':'')+'>'+s+'</option>';});
+        h+='</select>';
+        h+='<select class="ov-shape-select" data-kind="edge-arrow" data-key="'+esc(et)+'">';
+        EDGE_ARROW_SHAPES.forEach(function(s){h+='<option value="'+s+'"'+(s===es.arrowShape?' selected':'')+'>'+s+'</option>';});
+        h+='</select>';
+        h+='<span>'+esc(lbl)+'</span></div>';
+      });
+      h+='</div>';
+    }
+
+    // Namespaces section
     if(Object.keys(sources).length){h+='<div class="ov-color-section"><div class="ov-color-section-title">Namespaces</div>';
       Object.keys(sources).sort().forEach(function(s){h+='<div class="ov-color-row"><input type="color" value="'+sources[s]+'" data-kind="source" data-key="'+esc(s)+'" class="ov-color-input"><span>'+esc(s)+'</span></div>';});
       h+='</div>';}
+
     panel.innerHTML=h;c.appendChild(panel);
+
+    // Color inputs
     panel.querySelectorAll(".ov-color-input").forEach(function(inp){inp.addEventListener("input",function(){
       var kind=inp.dataset.kind,key=inp.dataset.key,col=inp.value;
-      inst.cy.nodes().forEach(function(n){var d=n.data();if(kind==="type"&&d.type===key)n.data("color",col);if(kind==="source"&&d.source===key&&d.type==="Class")n.data("color",col);});
+      if(kind==="type") inst.cy.nodes().forEach(function(n){if(n.data("type")===key)n.data("color",col);});
+      if(kind==="source") inst.cy.nodes().forEach(function(n){if(n.data("source")===key&&n.data("type")==="Class")n.data("color",col);});
+      if(kind==="edge-color") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key){e.style({"line-color":col,"target-arrow-color":col,"source-arrow-color":col});}});
+    });});
+
+    // Shape selects
+    panel.querySelectorAll(".ov-shape-select").forEach(function(sel){sel.addEventListener("change",function(){
+      var kind=sel.dataset.kind,key=sel.dataset.key,val=sel.value;
+      if(kind==="node-shape") inst.cy.nodes().forEach(function(n){if(n.data("type")===key){n.data("shape",val);n.style("shape",val);}});
+      if(kind==="edge-line") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("line-style",val);});
+      if(kind==="edge-arrow") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("target-arrow-shape",val);});
     });});
   }
 
@@ -446,42 +541,34 @@ var ontoink = (function () {
   function exportPNG(id){
     var inst=instances[id];if(!inst)return;
     var c=document.getElementById(id);
+    var canvasWrap=c.querySelector(".ov-canvas-wrap");
     var legendEl=c.querySelector(".ov-legend-overlay");
     var nsEl=c.querySelector(".ov-ns-overlay");
     var showLegend = legendEl && legendEl.style.display !== "none";
     var showNs = nsEl && nsEl.style.display !== "none";
     var scale=3;
-    var graphUrl=inst.cy.png({scale:scale,bg:"#ffffff",full:true});
+    var graphUrl=inst.cy.png({scale:scale,bg:"#ffffff",full:false});
 
     var graphImg=new Image();
     graphImg.onload=function(){
-      // Measure legend and ns box heights
-      var legendH = 0, nsH = 0, pad = 16*scale, boxGap = 8*scale;
-      var tempC = document.createElement("canvas"); tempC.width = graphImg.width; tempC.height = 1;
-      var tempCtx = tempC.getContext("2d");
-      if (showLegend) legendH = drawLegendBox(tempCtx, inst.data, 0, 0, scale);
-      if (showNs) nsH = drawNsBox(tempCtx, inst.data, 0, 0, scale);
-
-      var extraH = 0;
-      if (showLegend || showNs) extraH = pad + (showLegend ? legendH + boxGap : 0) + (showNs ? nsH : 0) + pad;
-
       var finalCanvas=document.createElement("canvas");
       finalCanvas.width=graphImg.width;
-      finalCanvas.height=graphImg.height + extraH;
+      finalCanvas.height=graphImg.height;
       var ctx=finalCanvas.getContext("2d");
       ctx.fillStyle="#fff";ctx.fillRect(0,0,finalCanvas.width,finalCanvas.height);
       ctx.drawImage(graphImg,0,0);
 
-      // Draw legend and ns below the graph, side by side if they fit, stacked otherwise
-      var bx = pad, by = graphImg.height + pad;
+      // Draw legend and ns at their actual overlay positions and sizes
+      var wrapRect=canvasWrap.getBoundingClientRect();
       if (showLegend) {
-        drawLegendBox(ctx, inst.data, bx, by, scale);
+        var lRect=legendEl.getBoundingClientRect();
+        var lx=(lRect.left-wrapRect.left)*scale, ly=(lRect.top-wrapRect.top)*scale;
+        drawLegendBox(ctx, inst.data, lx, ly, scale, lRect.width, lRect.height);
       }
       if (showNs) {
-        // Place ns box to the right of legend if both fit, otherwise below
-        var nsX = showLegend ? bx + 310*scale : bx;
-        var nsY = (showLegend && nsX + 310*scale < graphImg.width) ? by : by + (showLegend ? legendH + boxGap : 0);
-        drawNsBox(ctx, inst.data, nsX, nsY, scale);
+        var nRect=nsEl.getBoundingClientRect();
+        var nx=(nRect.left-wrapRect.left)*scale, ny=(nRect.top-wrapRect.top)*scale;
+        drawNsBox(ctx, inst.data, nx, ny, scale, nRect.width, nRect.height);
       }
 
       var a=document.createElement("a");a.href=finalCanvas.toDataURL("image/png");a.download=id+".png";a.click();
@@ -492,94 +579,86 @@ var ontoink = (function () {
   function exportSVG(id){
     var inst=instances[id];if(!inst)return;
     var cy=inst.cy;
-    // For SVG: render the graph, then append a legend group below
+    var c=document.getElementById(id);
+    var canvasWrap=c.querySelector(".ov-canvas-wrap");
+    var legendEl=c.querySelector(".ov-legend-overlay");
+    var nsEl=c.querySelector(".ov-ns-overlay");
+    var showLegend = legendEl && legendEl.style.display !== "none";
+    var showNs = nsEl && nsEl.style.display !== "none";
     try{
-      var svgStr=cy.svg({scale:1,full:true,bg:"#fff"});
-      // Parse SVG, get dimensions, add legend below
+      var svgStr=cy.svg({scale:1,full:false,bg:"#fff"});
       var parser=new DOMParser();
       var doc=parser.parseFromString(svgStr,"image/svg+xml");
       var svgEl=doc.querySelector("svg");
       var origW=parseFloat(svgEl.getAttribute("width"))||800;
       var origH=parseFloat(svgEl.getAttribute("height"))||600;
 
-      // Build legend as SVG group
       var usedTypes={},usedEdge={};
       inst.data.nodes.forEach(function(n){usedTypes[n.data.type]=n.data.color;});
       inst.data.edges.forEach(function(e){usedEdge[e.data.edgeType]=true;});
       var nodeKeys=Object.keys(usedTypes),edgeKeys=Object.keys(usedEdge);
       var ns=inst.data.activeNamespaces||{};var nsKeys=Object.keys(ns).sort();
+      var pad=12, row=18;
 
-      var legendY=origH+10, pad=12, row=18, legendH=pad*2+row*(Math.max(nodeKeys.length,edgeKeys.length)+2);
-      var nsExtraH = nsKeys.length ? row*(nsKeys.length+2)+8 : 0;
-      var totalH = origH + legendH + nsExtraH + 30;
-      svgEl.setAttribute("height", totalH);
-      // Also update viewBox if present, or remove clip
-      var vb = svgEl.getAttribute("viewBox");
-      if (vb) {
-        var parts = vb.split(/[\s,]+/);
-        parts[3] = totalH;
-        svgEl.setAttribute("viewBox", parts.join(" "));
+      var wrapRect=canvasWrap.getBoundingClientRect();
+
+      // Legend at its actual overlay position
+      if(showLegend){
+        var lRect=legendEl.getBoundingClientRect();
+        var lx=lRect.left-wrapRect.left, ly=lRect.top-wrapRect.top;
+        var legendH=pad*2+row*(Math.max(nodeKeys.length,edgeKeys.length)+2);
+
+        var g=doc.createElementNS("http://www.w3.org/2000/svg","g");
+        g.setAttribute("transform","translate("+lx+","+ly+")");
+
+        var rect=doc.createElementNS("http://www.w3.org/2000/svg","rect");
+        rect.setAttribute("x","0");rect.setAttribute("y","0");rect.setAttribute("width",Math.min(origW-pad*2,320));rect.setAttribute("height",legendH);
+        rect.setAttribute("rx","8");rect.setAttribute("fill","rgba(255,255,255,0.95)");rect.setAttribute("stroke","#d1d5db");rect.setAttribute("stroke-width","1.5");
+        g.appendChild(rect);
+
+        var title=doc.createElementNS("http://www.w3.org/2000/svg","text");
+        title.setAttribute("x",pad);title.setAttribute("y",pad+12);title.setAttribute("font-family","Inter,Segoe UI,sans-serif");title.setAttribute("font-size","12");title.setAttribute("font-weight","700");title.setAttribute("fill","#1f2937");
+        title.textContent="Legend";g.appendChild(title);
+
+        var ty=pad+row+6;
+        var hdr=doc.createElementNS("http://www.w3.org/2000/svg","text");
+        hdr.setAttribute("x",pad);hdr.setAttribute("y",ty+9);hdr.setAttribute("font-family","Inter,sans-serif");hdr.setAttribute("font-size","8.5");hdr.setAttribute("font-weight","700");hdr.setAttribute("fill","#9ca3af");
+        hdr.textContent="NODES";g.appendChild(hdr);ty+=row*0.8;
+
+        nodeKeys.forEach(function(t){
+          var clr=usedTypes[t];
+          if(t==="Class"){var r2=doc.createElementNS("http://www.w3.org/2000/svg","rect");r2.setAttribute("x",pad);r2.setAttribute("y",ty);r2.setAttribute("width","14");r2.setAttribute("height","9");r2.setAttribute("rx","1");r2.setAttribute("fill",clr);r2.setAttribute("stroke","#555");r2.setAttribute("stroke-width","1.5");g.appendChild(r2);}
+          else if(t==="Individual"){var ci=doc.createElementNS("http://www.w3.org/2000/svg","circle");ci.setAttribute("cx",pad+7);ci.setAttribute("cy",ty+4.5);ci.setAttribute("r","5");ci.setAttribute("fill",clr);ci.setAttribute("stroke","#999");g.appendChild(ci);}
+          else if(t==="Literal"){var el2=doc.createElementNS("http://www.w3.org/2000/svg","ellipse");el2.setAttribute("cx",pad+7);el2.setAttribute("cy",ty+4.5);el2.setAttribute("rx","7");el2.setAttribute("ry","4");el2.setAttribute("fill",clr);el2.setAttribute("stroke","#6a9");el2.setAttribute("stroke-dasharray","2,1");g.appendChild(el2);}
+          var lbl=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl.setAttribute("x",pad+22);lbl.setAttribute("y",ty+9);lbl.setAttribute("font-family","Inter,sans-serif");lbl.setAttribute("font-size","10");lbl.setAttribute("fill","#374151");lbl.textContent=t;g.appendChild(lbl);
+          ty+=row*0.85;
+        });
+
+        var col2=160;ty=pad+row+6;
+        var hdr2=doc.createElementNS("http://www.w3.org/2000/svg","text");hdr2.setAttribute("x",col2);hdr2.setAttribute("y",ty+9);hdr2.setAttribute("font-family","Inter,sans-serif");hdr2.setAttribute("font-size","8.5");hdr2.setAttribute("font-weight","700");hdr2.setAttribute("fill","#9ca3af");hdr2.textContent="EDGES";g.appendChild(hdr2);ty+=row*0.8;
+
+        edgeKeys.forEach(function(t){
+          var d=EDGE_DEFS_EXPORT[t]||{l:t,c:"#999",dash:false,fill:true,bold:false};
+          var line=doc.createElementNS("http://www.w3.org/2000/svg","line");
+          line.setAttribute("x1",col2);line.setAttribute("y1",ty+7);line.setAttribute("x2",col2+24);line.setAttribute("y2",ty+7);
+          line.setAttribute("stroke",d.c);line.setAttribute("stroke-width",d.bold?"2.5":"1.5");
+          if(d.dash)line.setAttribute("stroke-dasharray","4,2");g.appendChild(line);
+          var arrow=doc.createElementNS("http://www.w3.org/2000/svg","polygon");
+          arrow.setAttribute("points",(col2+24)+","+(ty+7)+" "+(col2+19)+","+(ty+3.5)+" "+(col2+19)+","+(ty+10.5));
+          arrow.setAttribute("fill",d.fill?d.c:"none");arrow.setAttribute("stroke",d.c);arrow.setAttribute("stroke-width","0.8");g.appendChild(arrow);
+          var lbl2=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl2.setAttribute("x",col2+32);lbl2.setAttribute("y",ty+10);lbl2.setAttribute("font-family","Inter,sans-serif");lbl2.setAttribute("font-size","10");lbl2.setAttribute("fill","#374151");lbl2.textContent=d.l;g.appendChild(lbl2);
+          ty+=row*0.85;
+        });
+        svgEl.appendChild(g);
       }
 
-      var g=doc.createElementNS("http://www.w3.org/2000/svg","g");
-      g.setAttribute("transform","translate("+pad+","+legendY+")");
-
-      // Legend box background
-      var rect=doc.createElementNS("http://www.w3.org/2000/svg","rect");
-      rect.setAttribute("x","0");rect.setAttribute("y","0");rect.setAttribute("width",Math.min(origW-pad*2,320));rect.setAttribute("height",legendH);
-      rect.setAttribute("rx","8");rect.setAttribute("fill","rgba(255,255,255,0.95)");rect.setAttribute("stroke","#d1d5db");rect.setAttribute("stroke-width","1.5");
-      g.appendChild(rect);
-
-      // Title
-      var title=doc.createElementNS("http://www.w3.org/2000/svg","text");
-      title.setAttribute("x",pad);title.setAttribute("y",pad+12);title.setAttribute("font-family","Inter,Segoe UI,sans-serif");title.setAttribute("font-size","12");title.setAttribute("font-weight","700");title.setAttribute("fill","#1f2937");
-      title.textContent="Legend";g.appendChild(title);
-
-      // Node entries
-      var ty=pad+row+6;
-      var hdr=doc.createElementNS("http://www.w3.org/2000/svg","text");
-      hdr.setAttribute("x",pad);hdr.setAttribute("y",ty+9);hdr.setAttribute("font-family","Inter,sans-serif");hdr.setAttribute("font-size","8.5");hdr.setAttribute("font-weight","700");hdr.setAttribute("fill","#9ca3af");
-      hdr.textContent="NODES";g.appendChild(hdr);ty+=row*0.8;
-
-      nodeKeys.forEach(function(t){
-        var c=usedTypes[t];
-        if(t==="Class"){var r2=doc.createElementNS("http://www.w3.org/2000/svg","rect");r2.setAttribute("x",pad);r2.setAttribute("y",ty);r2.setAttribute("width","14");r2.setAttribute("height","9");r2.setAttribute("rx","1");r2.setAttribute("fill",c);r2.setAttribute("stroke","#555");r2.setAttribute("stroke-width","1.5");g.appendChild(r2);}
-        else if(t==="Individual"){var ci=doc.createElementNS("http://www.w3.org/2000/svg","circle");ci.setAttribute("cx",pad+7);ci.setAttribute("cy",ty+4.5);ci.setAttribute("r","5");ci.setAttribute("fill",c);ci.setAttribute("stroke","#999");g.appendChild(ci);}
-        else if(t==="Literal"){var el2=doc.createElementNS("http://www.w3.org/2000/svg","ellipse");el2.setAttribute("cx",pad+7);el2.setAttribute("cy",ty+4.5);el2.setAttribute("rx","7");el2.setAttribute("ry","4");el2.setAttribute("fill",c);el2.setAttribute("stroke","#6a9");el2.setAttribute("stroke-dasharray","2,1");g.appendChild(el2);}
-        var lbl=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl.setAttribute("x",pad+22);lbl.setAttribute("y",ty+9);lbl.setAttribute("font-family","Inter,sans-serif");lbl.setAttribute("font-size","10");lbl.setAttribute("fill","#374151");lbl.textContent=t;g.appendChild(lbl);
-        ty+=row*0.85;
-      });
-
-      // Edge entries
-      var col2=160;ty=pad+row+6;
-      var hdr2=doc.createElementNS("http://www.w3.org/2000/svg","text");hdr2.setAttribute("x",col2);hdr2.setAttribute("y",ty+9);hdr2.setAttribute("font-family","Inter,sans-serif");hdr2.setAttribute("font-size","8.5");hdr2.setAttribute("font-weight","700");hdr2.setAttribute("fill","#9ca3af");hdr2.textContent="EDGES";g.appendChild(hdr2);ty+=row*0.8;
-
-      edgeKeys.forEach(function(t){
-        var d=EDGE_DEFS_EXPORT[t]||{l:t,c:"#999",dash:false,fill:true,bold:false};
-        var line=doc.createElementNS("http://www.w3.org/2000/svg","line");
-        line.setAttribute("x1",col2);line.setAttribute("y1",ty+7);line.setAttribute("x2",col2+24);line.setAttribute("y2",ty+7);
-        line.setAttribute("stroke",d.c);line.setAttribute("stroke-width",d.bold?"2.5":"1.5");
-        if(d.dash)line.setAttribute("stroke-dasharray","4,2");g.appendChild(line);
-        var arrow=doc.createElementNS("http://www.w3.org/2000/svg","polygon");
-        arrow.setAttribute("points",(col2+24)+","+(ty+7)+" "+(col2+19)+","+(ty+3.5)+" "+(col2+19)+","+(ty+10.5));
-        arrow.setAttribute("fill",d.fill?d.c:"none");arrow.setAttribute("stroke",d.c);arrow.setAttribute("stroke-width","0.8");g.appendChild(arrow);
-        var lbl2=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl2.setAttribute("x",col2+32);lbl2.setAttribute("y",ty+10);lbl2.setAttribute("font-family","Inter,sans-serif");lbl2.setAttribute("font-size","10");lbl2.setAttribute("fill","#374151");lbl2.textContent=d.l;g.appendChild(lbl2);
-        ty+=row*0.85;
-      });
-
-      // Extend background rect if present
-      var bgRect = svgEl.querySelector("rect");
-      if (bgRect && bgRect.getAttribute("fill") === "#fff") {
-        bgRect.setAttribute("height", totalH);
-      }
-
-      svgEl.appendChild(g);
-
-      // Namespace group
-      if(nsKeys.length){
-        var g2=doc.createElementNS("http://www.w3.org/2000/svg","g");
-        g2.setAttribute("transform","translate("+pad+","+(legendY+legendH+8)+")");
+      // Namespace group at its actual overlay position
+      if(showNs&&nsKeys.length){
+        var nRect=nsEl.getBoundingClientRect();
+        var nx=nRect.left-wrapRect.left, ny=nRect.top-wrapRect.top;
         var nsH=pad*2+row*(nsKeys.length+1);
+        var g2=doc.createElementNS("http://www.w3.org/2000/svg","g");
+        g2.setAttribute("transform","translate("+nx+","+ny+")");
         var r3=doc.createElementNS("http://www.w3.org/2000/svg","rect");r3.setAttribute("x","0");r3.setAttribute("y","0");r3.setAttribute("width",Math.min(origW-pad*2,320));r3.setAttribute("height",nsH);r3.setAttribute("rx","8");r3.setAttribute("fill","rgba(255,255,255,0.95)");r3.setAttribute("stroke","#d1d5db");r3.setAttribute("stroke-width","1.5");g2.appendChild(r3);
         var t3=doc.createElementNS("http://www.w3.org/2000/svg","text");t3.setAttribute("x",pad);t3.setAttribute("y",pad+10);t3.setAttribute("font-family","Inter,sans-serif");t3.setAttribute("font-size","10");t3.setAttribute("font-weight","700");t3.setAttribute("fill","#1f2937");t3.textContent="Prefixes";g2.appendChild(t3);
         var ny2=pad+row+2;

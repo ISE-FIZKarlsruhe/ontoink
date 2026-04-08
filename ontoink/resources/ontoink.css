@@ -160,7 +160,7 @@
 .ov-color-panel {
   position: absolute; top: 42px; right: 8px; z-index: 900;
   background: #fff; border: 1px solid var(--ov-border); border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 0; min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 0; min-width: 260px; max-height: 70vh; overflow-y: auto;
   animation: ov-popup-in .15s ease-out;
 }
 .ov-color-panel-head {
@@ -184,6 +184,12 @@
 }
 .ov-color-input::-webkit-color-swatch-wrapper { padding: 2px; }
 .ov-color-input::-webkit-color-swatch { border: none; border-radius: 2px; }
+.ov-shape-select {
+  font-size: 11px; font-family: var(--ov-font); color: #374151;
+  border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px;
+  background: #fff; cursor: pointer; max-width: 100px;
+}
+.ov-shape-select:focus { outline: 1px solid var(--ov-accent); }
 
 /* ── Editor Panel ──────────────────────────────────────────────── */
 
