@@ -3,6 +3,7 @@ site/
 dist/
 build/
 *.egg-info/
+*.pptx
 
 # Python
 __pycache__/

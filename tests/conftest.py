@@ -20,3 +20,8 @@ def sample_shape():
 @pytest.fixture
 def invalid_data():
     return str(FIXTURES / "invalid-data.ttl")
+
+
+@pytest.fixture
+def reasoning_data():
+    return str(FIXTURES / "reasoning-data.ttl")

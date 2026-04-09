@@ -47,6 +47,10 @@ theme:
 
 nav:
   - Home: index.md
+  - Playground: playground.md
+  - SHACL Editor: shacl-editor.md
+  - SPARQL Explorer: sparql-explorer.md
+  - OntoSniff: ontosniff.md
   - Getting Started: getting-started.md
   - Examples:
     - FOAF Person: examples/foaf-person.md
@@ -54,6 +58,7 @@ nav:
     - BFO Role Bearer: examples/role-bearer.md
     - BFO Role Realization: examples/role-realization.md
     - IAO Textual Entity: examples/textual-entity.md
+    - OWL Reasoning: examples/reasoning-demo.md
   - Changelog: changelog.md
   - Contributing: contributing.md
   - Cite: cite.md

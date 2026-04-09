@@ -12,6 +12,24 @@ var ontoink = (function () {
   function esc(s) { return s ? s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;") : ""; }
   function copyText(t, btn) { navigator.clipboard.writeText(t).catch(function(){}); var o=btn.textContent; btn.textContent="Copied!"; setTimeout(function(){btn.textContent=o;},1200); }
   function removePopup(c) { var o=c.querySelector(".ov-popup"); if(o) o.remove(); }
+  function makePopupDraggable(popup) {
+    var ox, oy, sx, sy, dragging = false;
+    var head = popup.querySelector(".ov-popup-head");
+    if (!head) return;
+    head.style.cursor = "grab";
+    head.addEventListener("mousedown", function(e) {
+      if (e.target.tagName === "BUTTON") return;
+      dragging = true; head.style.cursor = "grabbing";
+      ox = parseFloat(popup.style.left)||0; oy = parseFloat(popup.style.top)||0;
+      sx = e.clientX; sy = e.clientY; e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!dragging) return;
+      popup.style.left = (ox + e.clientX - sx) + "px";
+      popup.style.top = (oy + e.clientY - sy) + "px";
+    });
+    document.addEventListener("mouseup", function() { if (dragging) { dragging = false; head.style.cursor = "grab"; } });
+  }
 
   // ── Drag support for overlay boxes ──────────────────────────────────────
 
@@ -185,19 +203,22 @@ var ontoink = (function () {
     if (d.source) html += '<div class="ov-popup-meta">Ontology: <strong>' + esc(d.source) + '</strong></div>';
     var node = cy.getElementById(d.id), edges = node.connectedEdges();
     if (edges.length) {
-      html += '<div class="ov-popup-section"><strong>Connections:</strong><ul class="ov-popup-edges">';
+      html += '<div class="ov-popup-section ov-popup-toggle" data-section="conn"><strong>Connections</strong> <span class="ov-popup-count">' + edges.length + '</span> <span class="ov-toggle-arrow">\u25B6</span></div>';
+      html += '<ul class="ov-popup-edges ov-collapsible" data-section="conn" style="display:none;">';
       edges.forEach(function(e) { var ed=e.data(), oth=ed.source===d.id?ed.target:ed.source; html+='<li>'+(ed.source===d.id?"\u2192":"\u2190")+' <em>'+esc(ed.label)+'</em> '+esc(cy.getElementById(oth).data("label")||oth)+'</li>'; });
-      html += '</ul></div>';
+      html += '</ul>';
     }
     var shacl = instances[node.cy().container().closest(".ontoink-container").id]?.data?.shacl || [];
     var rel = shacl.filter(function(c){return c.targetClass===d.iri;});
     if (rel.length) {
-      html += '<div class="ov-popup-section"><strong>SHACL Constraints:</strong><ul class="ov-popup-edges">';
+      html += '<div class="ov-popup-section ov-popup-toggle" data-section="shacl"><strong>SHACL Constraints</strong> <span class="ov-popup-count">' + rel.length + '</span> <span class="ov-toggle-arrow">\u25B6</span></div>';
+      html += '<ul class="ov-popup-edges ov-collapsible" data-section="shacl" style="display:none;">';
       rel.forEach(function(c) { var cd = c.minCount!=null?"["+c.minCount+".."+(c.maxCount!=null?c.maxCount:"*")+"]":""; html+='<li>'+esc(c.pathLabel||c.path||"")+' '+cd+(c.message?'<br><small>'+esc(c.message)+'</small>':'')+'</li>'; });
-      html += '</ul></div>';
+      html += '</ul>';
     }
     html += '<div class="ov-popup-actions"><button class="ov-chip" data-action="copy-label">Copy Label</button>';
     if (d.iri) html += '<button class="ov-chip" data-action="copy-iri">Copy IRI</button>';
+    if (d.iri) html += '<button class="ov-chip ov-deref-btn" data-iri="' + esc(d.iri) + '">More\u2026</button>';
     return html + '</div>';
   }
 
@@ -216,7 +237,129 @@ var ontoink = (function () {
     if (d.message) html += '<div class="ov-popup-meta">Message: ' + esc(d.message) + '</div>';
     html += '<div class="ov-popup-actions"><button class="ov-chip" data-action="copy-label">Copy Label</button>';
     if (d.iri) html += '<button class="ov-chip" data-action="copy-iri">Copy IRI</button>';
+    if (d.iri) html += '<button class="ov-chip ov-deref-btn" data-iri="' + esc(d.iri) + '">More\u2026</button>';
     return html + '</div>';
+  }
+
+  // ── IRI dereferencing ──────────────────────────────────────────────────
+  function derefIri(iri, btn) {
+    var popup = btn.closest(".ov-popup");
+    var existing = popup.querySelector(".ov-deref-result");
+    if (existing) { existing.remove(); return; }
+
+    // Step 1: Look up in the LOCAL graph data first (no network needed)
+    var containerId = popup.closest(".ontoink-container")?.id;
+    var inst = containerId ? instances[containerId] : null;
+    var info = {};
+
+    if (inst) {
+      var ttl = inst.originalTtl || "";
+      if (ttl) {
+        var parsed = parseTtlMinimal(ttl);
+        var RL = "http://www.w3.org/2000/01/rdf-schema#label";
+        var RC = "http://www.w3.org/2000/01/rdf-schema#comment";
+        var RT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+        var SC = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
+        var DOM = "http://www.w3.org/2000/01/rdf-schema#domain";
+        var RNG = "http://www.w3.org/2000/01/rdf-schema#range";
+        parsed.triples.forEach(function(t) {
+          if (t.s === iri) {
+            if (t.p === RL) info["Label"] = litVal(t.o);
+            if (t.p === RC) info["Comment"] = litVal(t.o).substring(0, 200);
+            if (t.p === RT) info["Type"] = uriLabel(t.o, parsed.prefixes);
+            if (t.p === SC) info["Subclass of"] = uriLabel(t.o, parsed.prefixes);
+            if (t.p === DOM) info["Domain"] = uriLabel(t.o, parsed.prefixes);
+            if (t.p === RNG) info["Range"] = uriLabel(t.o, parsed.prefixes);
+          }
+          // Reverse: who links to this IRI
+          if (t.o === iri && t.p === SC) {
+            var k = "Superclass of";
+            info[k] = (info[k] ? info[k] + ", " : "") + uriLabel(t.s, parsed.prefixes);
+          }
+        });
+      }
+      // Also check cytoscape data
+      var cy = inst.cy;
+      var node = cy.getElementById(iri);
+      if (node.length) {
+        if (!info["Type"]) info["Type"] = node.data("type") || "";
+        if (node.data("source")) info["Ontology"] = node.data("source");
+        info["Degree"] = node.degree() + " connections";
+      }
+    }
+
+    // If we found local data, show it immediately
+    if (Object.keys(info).length) {
+      btn.textContent = "More\u2026";
+      var el = document.createElement("div"); el.className = "ov-deref-result";
+      var h = "";
+      for (var k in info) h += '<div class="ov-popup-meta"><strong>' + esc(k) + ':</strong> ' + esc(info[k]) + '</div>';
+      h += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
+      el.innerHTML = h;
+      popup.querySelector(".ov-popup-actions").before(el);
+      return;
+    }
+
+    // Step 2: Try well-known ontology APIs
+    btn.textContent = "Loading\u2026";
+    var apiUrl = null;
+    if (iri.indexOf("purl.obolibrary.org/obo/") >= 0) {
+      apiUrl = "https://www.ebi.ac.uk/ols4/api/terms?iri=" + encodeURIComponent(iri);
+    } else if (iri.indexOf("wikidata.org/entity/") >= 0) {
+      var qid = iri.split("/").pop();
+      apiUrl = "https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + qid + "&format=json&origin=*&props=labels|descriptions";
+    }
+
+    var fetchPromise = apiUrl
+      ? fetch(apiUrl).then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      : fetch(iri, { headers: { "Accept": "application/ld+json" }, mode: "cors" })
+          .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+
+    fetchPromise.then(function(data) {
+      var info2 = {};
+      // OLS API response
+      if (data._embedded && data._embedded.terms && data._embedded.terms[0]) {
+        var term = data._embedded.terms[0];
+        if (term.label) info2["Label"] = term.label;
+        if (term.description && term.description[0]) info2["Description"] = term.description[0].substring(0, 200);
+        if (term.ontology_name) info2["Ontology"] = term.ontology_name.toUpperCase();
+      }
+      // Wikidata response
+      else if (data.entities) {
+        var eid = Object.keys(data.entities)[0];
+        var ent = data.entities[eid];
+        if (ent.labels && ent.labels.en) info2["Label"] = ent.labels.en.value;
+        if (ent.descriptions && ent.descriptions.en) info2["Description"] = ent.descriptions.en.value;
+      }
+      // JSON-LD response
+      else {
+        var d = Array.isArray(data) ? data[0] : data;
+        if (d) {
+          var lbl = d["rdfs:label"] || d["http://www.w3.org/2000/01/rdf-schema#label"] || d["schema:name"] || d["label"] || "";
+          if (typeof lbl === "object") lbl = lbl["@value"] || "";
+          if (lbl) info2["Label"] = String(lbl);
+          var cmt = d["rdfs:comment"] || d["http://www.w3.org/2000/01/rdf-schema#comment"] || d["description"] || "";
+          if (typeof cmt === "object") cmt = cmt["@value"] || "";
+          if (cmt) info2["Description"] = String(cmt).substring(0, 200);
+        }
+      }
+      btn.textContent = "More\u2026";
+      var el2 = document.createElement("div"); el2.className = "ov-deref-result";
+      if (Object.keys(info2).length) {
+        var h2 = "";
+        for (var k2 in info2) h2 += '<div class="ov-popup-meta"><strong>' + esc(k2) + ':</strong> ' + esc(info2[k2]) + '</div>';
+        h2 += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
+        el2.innerHTML = h2;
+      } else {
+        el2.innerHTML = '<div class="ov-popup-meta" style="color:#9ca3af;">No structured data found. <a href="' + esc(iri) + '" target="_blank" style="color:#2563eb;">Open in browser \u2197</a></div>';
+      }
+      popup.querySelector(".ov-popup-actions").before(el2);
+    }).catch(function() {
+      btn.textContent = "More\u2026";
+      var el3 = document.createElement("div"); el3.className = "ov-deref-result";
+      el3.innerHTML = '<div class="ov-popup-meta" style="color:#9ca3af;">Could not dereference. <a href="' + esc(iri) + '" target="_blank" style="color:#2563eb;">Open in browser \u2197</a></div>';
+      popup.querySelector(".ov-popup-actions").before(el3);
+    });
   }
 
   // ── Legend overlay (inside canvas) ──────────────────────────────────────
@@ -320,6 +463,8 @@ var ontoink = (function () {
         { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+        { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
       ],
       layout: { name:"dagre", rankDir:"BT", nodeSep:60, rankSep:80, edgeSep:20, animate:false, fit:true, padding:30 },
       wheelSensitivity: 0.3, minZoom: 0.15, maxZoom: 5,
@@ -327,6 +472,28 @@ var ontoink = (function () {
 
     instances[containerId] = { cy:cy, data:data, editor:null, originalTtl:data.rawTtl||"" };
 
+    function wirePopup(popup, d) {
+      popup.querySelector(".ov-popup-close").addEventListener("click",function(){popup.remove();});
+      popup.querySelectorAll(".ov-chip").forEach(function(b){
+        b.addEventListener("click",function(){
+          if(b.classList.contains("ov-deref-btn")) { derefIri(b.dataset.iri, b); return; }
+          copyText(b.dataset.action==="copy-iri"?d.iri:d.label,b);
+        });
+      });
+      // Collapsible sections — match toggle to list by data-section attribute
+      popup.querySelectorAll(".ov-popup-toggle").forEach(function(tog){
+        tog.addEventListener("click",function(){
+          var sec=tog.dataset.section;
+          var tgt=popup.querySelector('.ov-collapsible[data-section="'+sec+'"]');
+          if(!tgt)return;
+          var open=tgt.style.display!=="none";
+          tgt.style.display=open?"none":"block";
+          var arrow=tog.querySelector(".ov-toggle-arrow");
+          if(arrow)arrow.textContent=open?"\u25B6":"\u25BC";
+        });
+      });
+      makePopupDraggable(popup);
+    }
     cy.on("tap", "node", function(evt) {
       removePopup(container);
       var d=evt.target.data(), pos=evt.renderedPosition;
@@ -335,14 +502,11 @@ var ontoink = (function () {
       popup.style.left=(cR.left-pR.left+pos.x+15)+"px"; popup.style.top=(cR.top-pR.top+pos.y-15)+"px";
       container.appendChild(popup);
       requestAnimationFrame(function(){var r=popup.getBoundingClientRect();if(r.right>pR.right-10)popup.style.left=(parseFloat(popup.style.left)-r.width-30)+"px";if(r.bottom>pR.bottom-10)popup.style.top=(parseFloat(popup.style.top)-r.height)+"px";});
-      popup.querySelector(".ov-popup-close").addEventListener("click",function(){popup.remove();});
-      popup.querySelectorAll(".ov-chip").forEach(function(b){b.addEventListener("click",function(){copyText(b.dataset.action==="copy-iri"?d.iri:d.label,b);});});
+      wirePopup(popup, d);
     });
     cy.on("tap", "edge", function(evt) {
       removePopup(container);
       var d=evt.target.data(), midpoint=evt.target.midpoint();
-      var renderedMid = { x: (midpoint.x - cy.pan().x) * cy.zoom() + cy.pan().x, y: (midpoint.y - cy.pan().y) * cy.zoom() + cy.pan().y };
-      // Use rendered position via zoom/pan transform
       var zoom = cy.zoom(), pan = cy.pan();
       var rx = midpoint.x * zoom + pan.x, ry = midpoint.y * zoom + pan.y;
       var popup=document.createElement("div"); popup.className="ov-popup"; popup.innerHTML=buildEdgePopup(d,cy);
@@ -350,13 +514,14 @@ var ontoink = (function () {
       popup.style.left=(cR.left-pR.left+rx+15)+"px"; popup.style.top=(cR.top-pR.top+ry-15)+"px";
       container.appendChild(popup);
       requestAnimationFrame(function(){var r=popup.getBoundingClientRect();if(r.right>pR.right-10)popup.style.left=(parseFloat(popup.style.left)-r.width-30)+"px";if(r.bottom>pR.bottom-10)popup.style.top=(parseFloat(popup.style.top)-r.height)+"px";});
-      popup.querySelector(".ov-popup-close").addEventListener("click",function(){popup.remove();});
-      popup.querySelectorAll(".ov-chip").forEach(function(b){b.addEventListener("click",function(){copyText(b.dataset.action==="copy-iri"?d.iri:d.label,b);});});
+      wirePopup(popup, d);
     });
     cy.on("tap", function(e) { if(e.target===cy) removePopup(container); });
 
     buildLegendOverlay(container, data);
     buildNsOverlay(container, data);
+    initMinimap(containerId, cy);
+    autoFocusLargeGraph(instances[containerId], containerId);
 
     var ta = container.querySelector(".ov-editor-textarea");
     if (ta && data.rawTtl) ta.value = data.rawTtl;
@@ -510,6 +675,17 @@ var ontoink = (function () {
       Object.keys(sources).sort().forEach(function(s){h+='<div class="ov-color-row"><input type="color" value="'+sources[s]+'" data-kind="source" data-key="'+esc(s)+'" class="ov-color-input"><span>'+esc(s)+'</span></div>';});
       h+='</div>';}
 
+    // Prefix editing section
+    var activeNs = inst.data.activeNamespaces || {};
+    var activeKeys = Object.keys(activeNs).sort();
+    if(activeKeys.length){
+      h+='<div class="ov-color-section"><div class="ov-color-section-title">Prefixes (edit visibility)</div>';
+      activeKeys.forEach(function(p){
+        h+='<div class="ov-color-row"><label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" checked data-prefix="'+esc(p)+'" class="ov-prefix-toggle"><b style="color:#3730a3;">'+esc(p)+':</b> <span style="color:#6b7280;font-size:10px;overflow:hidden;text-overflow:ellipsis;">'+esc(activeNs[p])+'</span></label></div>';
+      });
+      h+='</div>';
+    }
+
     panel.innerHTML=h;c.appendChild(panel);
 
     // Color inputs
@@ -527,6 +703,18 @@ var ontoink = (function () {
       if(kind==="edge-line") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("line-style",val);});
       if(kind==="edge-arrow") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("target-arrow-shape",val);});
     });});
+
+    // Prefix toggle checkboxes
+    panel.querySelectorAll(".ov-prefix-toggle").forEach(function(cb){cb.addEventListener("change",function(){
+      var prefix=cb.dataset.prefix;
+      var nsOverlay=c.querySelector(".ov-ns-overlay");
+      if(!nsOverlay)return;
+      var tags=nsOverlay.querySelectorAll(".ov-ns-tag");
+      tags.forEach(function(tag){
+        var b=tag.querySelector("b");
+        if(b&&b.textContent.trim()===prefix+":") tag.style.display=cb.checked?"":"none";
+      });
+    });});
   }
 
   // ── Toolbar ─────────────────────────────────────────────────────────────
@@ -536,39 +724,74 @@ var ontoink = (function () {
   function fit(id){var cy=instances[id]?.cy;if(cy)cy.fit(null,30);}
   function fullscreen(id){var el=document.getElementById(id);if(document.fullscreenElement===el)document.exitFullscreen();else el.requestFullscreen().catch(function(){});}
 
-  // ── Export (draws legend/prefixes at their overlay positions) ───────────
+  // ── Export ─────────────────────────────────────────────────────────────
+
+  // Read current node colors from cytoscape (reflects Edit Layout changes)
+  function getLiveColors(inst) {
+    var types = {}, sources = {};
+    inst.cy.nodes().forEach(function(n) {
+      var d = n.data();
+      types[d.type] = n.style("background-color");
+      if (d.source) sources[d.source] = n.style("background-color");
+    });
+    return { types: types, sources: sources };
+  }
 
   function exportPNG(id){
     var inst=instances[id];if(!inst)return;
+    var cy=inst.cy;
     var c=document.getElementById(id);
-    var canvasWrap=c.querySelector(".ov-canvas-wrap");
+    var scale=2;
+
+    // Hide minimap during export
+    var minimap=c.querySelector(".ov-minimap"); if(minimap)minimap.style.visibility="hidden";
+
+    // full:true = tight crop, no whitespace, no minimap
+    var graphUrl=cy.png({scale:scale,bg:"#ffffff",full:true});
+    if(minimap)minimap.style.visibility="";
+
+    // Build export data with live colors for legend
+    var live = getLiveColors(inst);
+    var exportData = JSON.parse(JSON.stringify(inst.data));
+    exportData.nodes.forEach(function(n) {
+      if (live.types[n.data.type]) n.data.color = live.types[n.data.type];
+    });
+
     var legendEl=c.querySelector(".ov-legend-overlay");
     var nsEl=c.querySelector(".ov-ns-overlay");
     var showLegend = legendEl && legendEl.style.display !== "none";
     var showNs = nsEl && nsEl.style.display !== "none";
-    var scale=3;
-    var graphUrl=inst.cy.png({scale:scale,bg:"#ffffff",full:false});
 
     var graphImg=new Image();
     graphImg.onload=function(){
+      var pad=12*scale, gap=10*scale;
+      // Measure overlay heights
+      var tc=document.createElement("canvas");tc.width=1;tc.height=1;
+      var lH=showLegend?drawLegendBox(tc.getContext("2d"),exportData,0,0,scale):0;
+      var nH=showNs?drawNsBox(tc.getContext("2d"),exportData,0,0,scale):0;
+      var lW=showLegend?legendEl.offsetWidth*scale:0;
+      var nW=showNs?nsEl.offsetWidth*scale:0;
+      var sideBySide=showLegend&&showNs&&(lW+gap+nW+pad*2<=graphImg.width);
+      var overlayH=0;
+      if(showLegend||showNs){
+        overlayH=pad+(sideBySide?Math.max(lH,nH):(showLegend?lH+gap:0)+(showNs?nH:0))+pad;
+      }
+
       var finalCanvas=document.createElement("canvas");
       finalCanvas.width=graphImg.width;
-      finalCanvas.height=graphImg.height;
+      finalCanvas.height=graphImg.height+overlayH;
       var ctx=finalCanvas.getContext("2d");
       ctx.fillStyle="#fff";ctx.fillRect(0,0,finalCanvas.width,finalCanvas.height);
       ctx.drawImage(graphImg,0,0);
 
-      // Draw legend and ns at their actual overlay positions and sizes
-      var wrapRect=canvasWrap.getBoundingClientRect();
-      if (showLegend) {
-        var lRect=legendEl.getBoundingClientRect();
-        var lx=(lRect.left-wrapRect.left)*scale, ly=(lRect.top-wrapRect.top)*scale;
-        drawLegendBox(ctx, inst.data, lx, ly, scale, lRect.width, lRect.height);
-      }
-      if (showNs) {
-        var nRect=nsEl.getBoundingClientRect();
-        var nx=(nRect.left-wrapRect.left)*scale, ny=(nRect.top-wrapRect.top)*scale;
-        drawNsBox(ctx, inst.data, nx, ny, scale, nRect.width, nRect.height);
+      if(showLegend||showNs){
+        var by=graphImg.height+pad;
+        if(showLegend)drawLegendBox(ctx,exportData,pad,by,scale,legendEl.offsetWidth,legendEl.offsetHeight);
+        if(showNs){
+          var nsX=sideBySide?pad+lW+gap:pad;
+          var nsY=sideBySide?by:by+(showLegend?lH+gap:0);
+          drawNsBox(ctx,exportData,nsX,nsY,scale,nsEl.offsetWidth,nsEl.offsetHeight);
+        }
       }
 
       var a=document.createElement("a");a.href=finalCanvas.toDataURL("image/png");a.download=id+".png";a.click();
@@ -580,63 +803,73 @@ var ontoink = (function () {
     var inst=instances[id];if(!inst)return;
     var cy=inst.cy;
     var c=document.getElementById(id);
-    var canvasWrap=c.querySelector(".ov-canvas-wrap");
     var legendEl=c.querySelector(".ov-legend-overlay");
     var nsEl=c.querySelector(".ov-ns-overlay");
     var showLegend = legendEl && legendEl.style.display !== "none";
     var showNs = nsEl && nsEl.style.display !== "none";
+
     try{
-      var svgStr=cy.svg({scale:1,full:false,bg:"#fff"});
+      // full:true = tight crop, no minimap, no whitespace
+      var svgStr=cy.svg({scale:1,full:true,bg:"#fff"});
       var parser=new DOMParser();
       var doc=parser.parseFromString(svgStr,"image/svg+xml");
       var svgEl=doc.querySelector("svg");
       var origW=parseFloat(svgEl.getAttribute("width"))||800;
       var origH=parseFloat(svgEl.getAttribute("height"))||600;
 
+      var live = getLiveColors(inst);
       var usedTypes={},usedEdge={};
-      inst.data.nodes.forEach(function(n){usedTypes[n.data.type]=n.data.color;});
+      inst.data.nodes.forEach(function(n){usedTypes[n.data.type]=live.types[n.data.type]||n.data.color;});
       inst.data.edges.forEach(function(e){usedEdge[e.data.edgeType]=true;});
       var nodeKeys=Object.keys(usedTypes),edgeKeys=Object.keys(usedEdge);
       var ns=inst.data.activeNamespaces||{};var nsKeys=Object.keys(ns).sort();
       var pad=12, row=18;
 
-      var wrapRect=canvasWrap.getBoundingClientRect();
+      // Measure legend/ns sizes
+      var lW=showLegend?legendEl.offsetWidth:0;
+      var nW=(showNs&&nsKeys.length)?nsEl.offsetWidth:0;
+      var legendH=pad*2+row*(Math.max(nodeKeys.length,edgeKeys.length)+2);
+      var nsH=nsKeys.length?pad*2+row*(nsKeys.length+1):0;
+      var sideBySide=showLegend&&showNs&&nsKeys.length&&(lW+8+nW+pad*2<=origW);
+      var overlayH=0;
+      if(showLegend||(showNs&&nsKeys.length)){
+        overlayH=pad+(sideBySide?Math.max(legendH,nsH):(showLegend?legendH+8:0)+(nsKeys.length?nsH:0))+pad;
+      }
+      var totalH=origH+overlayH;
 
-      // Legend at its actual overlay position
+      svgEl.setAttribute("height",totalH);
+      var vb=svgEl.getAttribute("viewBox");
+      if(vb){var parts=vb.split(/[\s,]+/);parts[3]=totalH;svgEl.setAttribute("viewBox",parts.join(" "));}
+      var bgRect=svgEl.querySelector("rect");
+      if(bgRect&&bgRect.getAttribute("fill")==="#fff")bgRect.setAttribute("height",totalH);
+
+      var by=origH+pad;
+
+      // Legend below graph
       if(showLegend){
-        var lRect=legendEl.getBoundingClientRect();
-        var lx=lRect.left-wrapRect.left, ly=lRect.top-wrapRect.top;
-        var legendH=pad*2+row*(Math.max(nodeKeys.length,edgeKeys.length)+2);
-
         var g=doc.createElementNS("http://www.w3.org/2000/svg","g");
-        g.setAttribute("transform","translate("+lx+","+ly+")");
-
+        g.setAttribute("transform","translate("+pad+","+by+")");
         var rect=doc.createElementNS("http://www.w3.org/2000/svg","rect");
-        rect.setAttribute("x","0");rect.setAttribute("y","0");rect.setAttribute("width",Math.min(origW-pad*2,320));rect.setAttribute("height",legendH);
-        rect.setAttribute("rx","8");rect.setAttribute("fill","rgba(255,255,255,0.95)");rect.setAttribute("stroke","#d1d5db");rect.setAttribute("stroke-width","1.5");
+        rect.setAttribute("x","0");rect.setAttribute("y","0");rect.setAttribute("width",Math.min(lW,origW-pad*2));rect.setAttribute("height",legendH);
+        rect.setAttribute("rx","10");rect.setAttribute("fill","rgba(255,255,255,0.93)");rect.setAttribute("stroke","#d1d5db");rect.setAttribute("stroke-width","1");
         g.appendChild(rect);
-
         var title=doc.createElementNS("http://www.w3.org/2000/svg","text");
         title.setAttribute("x",pad);title.setAttribute("y",pad+12);title.setAttribute("font-family","Inter,Segoe UI,sans-serif");title.setAttribute("font-size","12");title.setAttribute("font-weight","700");title.setAttribute("fill","#1f2937");
         title.textContent="Legend";g.appendChild(title);
-
         var ty=pad+row+6;
         var hdr=doc.createElementNS("http://www.w3.org/2000/svg","text");
-        hdr.setAttribute("x",pad);hdr.setAttribute("y",ty+9);hdr.setAttribute("font-family","Inter,sans-serif");hdr.setAttribute("font-size","8.5");hdr.setAttribute("font-weight","700");hdr.setAttribute("fill","#9ca3af");
+        hdr.setAttribute("x",pad);hdr.setAttribute("y",ty+9);hdr.setAttribute("font-family","Inter,sans-serif");hdr.setAttribute("font-size","9");hdr.setAttribute("font-weight","700");hdr.setAttribute("fill","#9ca3af");
         hdr.textContent="NODES";g.appendChild(hdr);ty+=row*0.8;
-
         nodeKeys.forEach(function(t){
           var clr=usedTypes[t];
           if(t==="Class"){var r2=doc.createElementNS("http://www.w3.org/2000/svg","rect");r2.setAttribute("x",pad);r2.setAttribute("y",ty);r2.setAttribute("width","14");r2.setAttribute("height","9");r2.setAttribute("rx","1");r2.setAttribute("fill",clr);r2.setAttribute("stroke","#555");r2.setAttribute("stroke-width","1.5");g.appendChild(r2);}
           else if(t==="Individual"){var ci=doc.createElementNS("http://www.w3.org/2000/svg","circle");ci.setAttribute("cx",pad+7);ci.setAttribute("cy",ty+4.5);ci.setAttribute("r","5");ci.setAttribute("fill",clr);ci.setAttribute("stroke","#999");g.appendChild(ci);}
           else if(t==="Literal"){var el2=doc.createElementNS("http://www.w3.org/2000/svg","ellipse");el2.setAttribute("cx",pad+7);el2.setAttribute("cy",ty+4.5);el2.setAttribute("rx","7");el2.setAttribute("ry","4");el2.setAttribute("fill",clr);el2.setAttribute("stroke","#6a9");el2.setAttribute("stroke-dasharray","2,1");g.appendChild(el2);}
-          var lbl=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl.setAttribute("x",pad+22);lbl.setAttribute("y",ty+9);lbl.setAttribute("font-family","Inter,sans-serif");lbl.setAttribute("font-size","10");lbl.setAttribute("fill","#374151");lbl.textContent=t;g.appendChild(lbl);
+          var lbl=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl.setAttribute("x",pad+22);lbl.setAttribute("y",ty+9);lbl.setAttribute("font-family","Inter,sans-serif");lbl.setAttribute("font-size","11");lbl.setAttribute("fill","#374151");lbl.textContent=t;g.appendChild(lbl);
           ty+=row*0.85;
         });
-
-        var col2=160;ty=pad+row+6;
-        var hdr2=doc.createElementNS("http://www.w3.org/2000/svg","text");hdr2.setAttribute("x",col2);hdr2.setAttribute("y",ty+9);hdr2.setAttribute("font-family","Inter,sans-serif");hdr2.setAttribute("font-size","8.5");hdr2.setAttribute("font-weight","700");hdr2.setAttribute("fill","#9ca3af");hdr2.textContent="EDGES";g.appendChild(hdr2);ty+=row*0.8;
-
+        var col2=Math.min(lW,origW-pad*2)/2+4;ty=pad+row+6;
+        var hdr2=doc.createElementNS("http://www.w3.org/2000/svg","text");hdr2.setAttribute("x",col2);hdr2.setAttribute("y",ty+9);hdr2.setAttribute("font-family","Inter,sans-serif");hdr2.setAttribute("font-size","9");hdr2.setAttribute("font-weight","700");hdr2.setAttribute("fill","#9ca3af");hdr2.textContent="EDGES";g.appendChild(hdr2);ty+=row*0.8;
         edgeKeys.forEach(function(t){
           var d=EDGE_DEFS_EXPORT[t]||{l:t,c:"#999",dash:false,fill:true,bold:false};
           var line=doc.createElementNS("http://www.w3.org/2000/svg","line");
@@ -646,24 +879,23 @@ var ontoink = (function () {
           var arrow=doc.createElementNS("http://www.w3.org/2000/svg","polygon");
           arrow.setAttribute("points",(col2+24)+","+(ty+7)+" "+(col2+19)+","+(ty+3.5)+" "+(col2+19)+","+(ty+10.5));
           arrow.setAttribute("fill",d.fill?d.c:"none");arrow.setAttribute("stroke",d.c);arrow.setAttribute("stroke-width","0.8");g.appendChild(arrow);
-          var lbl2=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl2.setAttribute("x",col2+32);lbl2.setAttribute("y",ty+10);lbl2.setAttribute("font-family","Inter,sans-serif");lbl2.setAttribute("font-size","10");lbl2.setAttribute("fill","#374151");lbl2.textContent=d.l;g.appendChild(lbl2);
+          var lbl2=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl2.setAttribute("x",col2+32);lbl2.setAttribute("y",ty+10);lbl2.setAttribute("font-family","Inter,sans-serif");lbl2.setAttribute("font-size","11");lbl2.setAttribute("fill","#374151");lbl2.textContent=d.l;g.appendChild(lbl2);
           ty+=row*0.85;
         });
         svgEl.appendChild(g);
       }
 
-      // Namespace group at its actual overlay position
+      // Prefixes below or beside legend
       if(showNs&&nsKeys.length){
-        var nRect=nsEl.getBoundingClientRect();
-        var nx=nRect.left-wrapRect.left, ny=nRect.top-wrapRect.top;
-        var nsH=pad*2+row*(nsKeys.length+1);
+        var nsX=sideBySide?pad+lW+8:pad;
+        var nsY=sideBySide?by:by+(showLegend?legendH+8:0);
         var g2=doc.createElementNS("http://www.w3.org/2000/svg","g");
-        g2.setAttribute("transform","translate("+nx+","+ny+")");
-        var r3=doc.createElementNS("http://www.w3.org/2000/svg","rect");r3.setAttribute("x","0");r3.setAttribute("y","0");r3.setAttribute("width",Math.min(origW-pad*2,320));r3.setAttribute("height",nsH);r3.setAttribute("rx","8");r3.setAttribute("fill","rgba(255,255,255,0.95)");r3.setAttribute("stroke","#d1d5db");r3.setAttribute("stroke-width","1.5");g2.appendChild(r3);
-        var t3=doc.createElementNS("http://www.w3.org/2000/svg","text");t3.setAttribute("x",pad);t3.setAttribute("y",pad+10);t3.setAttribute("font-family","Inter,sans-serif");t3.setAttribute("font-size","10");t3.setAttribute("font-weight","700");t3.setAttribute("fill","#1f2937");t3.textContent="Prefixes";g2.appendChild(t3);
+        g2.setAttribute("transform","translate("+nsX+","+nsY+")");
+        var r3=doc.createElementNS("http://www.w3.org/2000/svg","rect");r3.setAttribute("x","0");r3.setAttribute("y","0");r3.setAttribute("width",Math.min(nW,origW-pad*2));r3.setAttribute("height",nsH);r3.setAttribute("rx","10");r3.setAttribute("fill","rgba(255,255,255,0.93)");r3.setAttribute("stroke","#d1d5db");r3.setAttribute("stroke-width","1");g2.appendChild(r3);
+        var t3=doc.createElementNS("http://www.w3.org/2000/svg","text");t3.setAttribute("x",pad);t3.setAttribute("y",pad+12);t3.setAttribute("font-family","Inter,sans-serif");t3.setAttribute("font-size","12");t3.setAttribute("font-weight","700");t3.setAttribute("fill","#1f2937");t3.textContent="Prefixes";g2.appendChild(t3);
         var ny2=pad+row+2;
         nsKeys.forEach(function(p){
-          var t4=doc.createElementNS("http://www.w3.org/2000/svg","text");t4.setAttribute("x",pad);t4.setAttribute("y",ny2+9);t4.setAttribute("font-family","Inter,sans-serif");t4.setAttribute("font-size","9");
+          var t4=doc.createElementNS("http://www.w3.org/2000/svg","text");t4.setAttribute("x",pad);t4.setAttribute("y",ny2+10);t4.setAttribute("font-family","Inter,sans-serif");t4.setAttribute("font-size","10");
           var ts1=doc.createElementNS("http://www.w3.org/2000/svg","tspan");ts1.setAttribute("font-weight","600");ts1.setAttribute("fill","#3730a3");ts1.textContent=p+": ";t4.appendChild(ts1);
           var ts2=doc.createElementNS("http://www.w3.org/2000/svg","tspan");ts2.setAttribute("fill","#6b7280");ts2.textContent=ns[p];t4.appendChild(ts2);
           g2.appendChild(t4);ny2+=row*0.85;
@@ -680,9 +912,957 @@ var ontoink = (function () {
 
   function toggleAllNs(id){var c=document.getElementById(id);if(!c)return;var a=c.querySelector(".ov-ns-all"),b=c.querySelector(".ov-ns-toggle");if(!a)return;var h=a.style.display==="none";a.style.display=h?"inline":"none";if(b)b.textContent=h?"Hide unused":"Show all";}
 
+  // ── Reasoning ──────────────────────────────────────────────────────────
+
+  function toggleReasoning(id) {
+    var c = document.getElementById(id), inst = instances[id];
+    if (!c || !inst) return;
+    var panel = c.querySelector(".ov-reasoning-panel");
+    if (!panel) return;
+    var visible = panel.style.display !== "none";
+    panel.style.display = visible ? "none" : "block";
+    if (!visible) renderInferred(c, inst);
+  }
+
+  function renderInferred(container, inst) {
+    var el = container.querySelector(".ov-reasoning-content");
+    if (!el) return;
+    var inferred = inst.data.inferred || [];
+    if (!inferred.length) {
+      el.innerHTML = '<div class="ov-val-info">No new triples were inferred by OWL-RL reasoning.</div>';
+      return;
+    }
+    var h = '<div style="font-size:12px;color:#374151;margin-bottom:8px;"><strong>' + inferred.length + '</strong> inferred triple(s)</div>';
+    h += '<table class="ov-inferred-table"><thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead><tbody>';
+    inferred.forEach(function(t) {
+      h += '<tr><td>' + esc(t.sLabel) + '</td><td>' + esc(t.pLabel) + '</td><td>' + esc(t.oLabel) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    el.innerHTML = h;
+  }
+
+  function toggleInferredOnGraph(id, show) {
+    var inst = instances[id];
+    if (!inst) return;
+    var cy = inst.cy;
+    var inferred = inst.data.inferred || [];
+    if (!inferred.length) return;
+
+    if (!show) {
+      // Remove inferred elements
+      cy.elements("[?inferred]").remove();
+      return;
+    }
+
+    // Add inferred triples as new nodes/edges with distinct styling
+    var pf = inst.data.activeNamespaces || {};
+    var existingIds = {};
+    cy.nodes().forEach(function(n) { existingIds[n.id()] = true; });
+
+    inferred.forEach(function(t, i) {
+      // Ensure subject node exists
+      if (!existingIds[t.s] && !cy.getElementById(t.s).length) {
+        cy.add({ group: "nodes", data: { id: t.s, label: t.sLabel, type: "Individual", color: "#E6E6E6", shape: "ellipse", iri: t.s, source: "", namespace: "", inferred: true }});
+        existingIds[t.s] = true;
+      }
+      if (!t.isLiteral) {
+        // Ensure object node exists
+        if (!existingIds[t.o] && !cy.getElementById(t.o).length) {
+          cy.add({ group: "nodes", data: { id: t.o, label: t.oLabel, type: "Individual", color: "#E6E6E6", shape: "ellipse", iri: t.o, source: "", namespace: "", inferred: true }});
+          existingIds[t.o] = true;
+        }
+        // Add edge
+        cy.add({ group: "edges", data: { id: "inf_e_" + i, source: t.s, target: t.o, label: t.pLabel, iri: t.p, edgeType: "inferred", inferred: true }});
+      }
+    });
+
+    // Run layout to incorporate new elements
+    cy.layout({ name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: true, animationDuration: 300, fit: true, padding: 30 }).run();
+  }
+
+  function validateWithReasoning(id) {
+    var inst = instances[id];
+    if (!inst) return;
+    var c = document.getElementById(id);
+    var outEl = c.querySelector(".ov-validation-output");
+    if (!outEl) return;
+    // Get current TTL and append inferred triples as additional TTL statements
+    var ttl = getEditorValue(id);
+    var inferred = inst.data.inferred || [];
+    if (!inferred.length) { validate(id); return; }
+    // Build extra triples in Turtle syntax
+    var extra = "\n# ── Inferred triples (OWL-RL) ──\n";
+    inferred.forEach(function(t) {
+      if (t.isLiteral) {
+        extra += "<" + t.s + "> <" + t.p + "> " + JSON.stringify(t.o) + " .\n";
+      } else {
+        extra += "<" + t.s + "> <" + t.p + "> <" + t.o + "> .\n";
+      }
+    });
+    var combined = ttl + extra;
+    var sc = inst.data.shacl || [];
+    if (!sc.length) { renderValidation(outEl, { conforms: null, violations: [], report: "No SHACL shapes defined." }); return; }
+    var parsed = parseTtlMinimal(combined), triples = parsed.triples, violations = [];
+    sc.forEach(function(cn) {
+      if (!cn.targetClass || !cn.path) return;
+      var ti = [];
+      triples.forEach(function(t) { if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" && t.o === cn.targetClass) ti.push(t.s); });
+      if (!ti.length) triples.forEach(function(t) { if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") triples.forEach(function(t2) { if (t2.s === t.o && t2.p === "http://www.w3.org/2000/01/rdf-schema#subClassOf" && t2.o === cn.targetClass) ti.push(t.s); }); });
+      ti.forEach(function(inst2) { var cnt = 0; triples.forEach(function(t) { if (t.s === inst2 && t.p === cn.path) cnt++; });
+        if (cn.minCount != null && cnt < cn.minCount) violations.push({ focusNode: inst2, path: cn.path, message: cn.message || ("Expected min " + cn.minCount + " for " + (cn.pathLabel || cn.path) + ", found " + cnt) });
+        if (cn.maxCount != null && cnt > cn.maxCount) violations.push({ focusNode: inst2, path: cn.path, message: cn.message || ("Expected max " + cn.maxCount + " for " + (cn.pathLabel || cn.path) + ", found " + cnt) });
+      });
+    });
+    renderValidation(outEl, { conforms: !violations.length, violations: violations, report: violations.length ? violations.length + " violation(s) found (with inferences)." : "All constraints satisfied (with inferences)." });
+    // Make editor panel visible so user sees result
+    var edPanel = c.querySelector(".ov-editor-panel");
+    if (edPanel && edPanel.style.display === "none") edPanel.style.display = "block";
+  }
+
+  // ── Playground: build graph from raw TTL in the browser ─────────────
+
+  function playground(containerId, ttl, shapeTtl) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var canvas = container.querySelector(".ov-canvas");
+    if (!canvas) return;
+
+    var p = parseTtlMinimal(ttl), tr = p.triples, pf = p.prefixes;
+    var labels = {}, nodes = {}, edges = [], classes = {};
+    var RT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    var SC = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
+    var RL = "http://www.w3.org/2000/01/rdf-schema#label";
+
+    tr.forEach(function(t) { if (t.p === RL && t.o[0] === '"') labels[t.s] = litVal(t.o); });
+    tr.forEach(function(t) { if (t.p === RT) classes[t.o] = true; if (t.p === SC) { classes[t.s] = true; classes[t.o] = true; } });
+
+    function en(u) {
+      if (nodes[u] || u[0] === '"') return;
+      var ic = classes[u] || false, s = detectSource(u);
+      nodes[u] = { data: { id: u, label: labels[u] || uriLabel(u, pf), type: ic ? "Class" : "Individual", color: ic ? s.color : "#E6E6E6", shape: ic ? "rectangle" : "ellipse", iri: u, source: s.name, namespace: "" } };
+    }
+
+    tr.forEach(function(t) {
+      if (t.p === RL) {
+        var li = "lit_" + Math.abs(hashStr(t.s + t.p + t.o)) % 999999;
+        if (!nodes[li]) nodes[li] = { data: { id: li, label: litVal(t.o), type: "Literal", color: "#93D053", shape: "ellipse", iri: "", source: "", namespace: "" } };
+        en(t.s); edges.push({ data: { id: "e_" + edges.length, source: t.s, target: li, label: uriLabel(t.p, pf), iri: t.p, edgeType: "data-property" } });
+        return;
+      }
+      en(t.s);
+      if (t.o[0] === '"') {
+        var li2 = "lit_" + Math.abs(hashStr(t.s + t.p + t.o)) % 999999;
+        if (!nodes[li2]) nodes[li2] = { data: { id: li2, label: litVal(t.o), type: "Literal", color: "#93D053", shape: "ellipse", iri: "", source: "", namespace: "" } };
+        edges.push({ data: { id: "e_" + edges.length, source: t.s, target: li2, label: uriLabel(t.p, pf), iri: t.p, edgeType: "data-property" } });
+      } else {
+        en(t.o);
+        var et = t.p === RT ? "rdf-type" : t.p === SC ? "subclass" : "object-property";
+        edges.push({ data: { id: "e_" + edges.length, source: t.s, target: t.o, label: uriLabel(t.p, pf), iri: t.p, edgeType: et } });
+      }
+    });
+
+    // Parse SHACL shapes if provided
+    var shacl = [];
+    if (shapeTtl) {
+      var sp = parseTtlMinimal(shapeTtl), str2 = sp.triples;
+      // Extract basic sh:property constraints
+      var SH = "http://www.w3.org/ns/shacl#";
+      // Find shapes with targetClass
+      var shapes = {};
+      str2.forEach(function(t) { if (t.p === SH + "targetClass") shapes[t.s] = { targetClass: t.o }; });
+      // Find property nodes linked to shapes
+      var propNodes = {};
+      str2.forEach(function(t) { if (t.p === SH + "property") { if (shapes[t.s]) propNodes[t.o] = shapes[t.s].targetClass; } });
+      // Extract constraints from property nodes
+      var propData = {};
+      str2.forEach(function(t) {
+        if (propNodes[t.s]) {
+          if (!propData[t.s]) propData[t.s] = { targetClass: propNodes[t.s] };
+          if (t.p === SH + "path") propData[t.s].path = t.o;
+          if (t.p === SH + "minCount") propData[t.s].minCount = parseInt(litVal(t.o));
+          if (t.p === SH + "maxCount") propData[t.s].maxCount = parseInt(litVal(t.o));
+          if (t.p === SH + "message") propData[t.s].message = litVal(t.o);
+        }
+      });
+      Object.values(propData).forEach(function(c) {
+        if (c.path && c.targetClass) {
+          c.pathLabel = uriLabel(c.path, Object.assign({}, pf, sp.prefixes));
+          shacl.push(c);
+        }
+      });
+    }
+
+    var nodeList = Object.values(nodes), data = {
+      nodes: nodeList, edges: edges, shacl: shacl,
+      namespaces: pf, activeNamespaces: pf,
+      rawTtl: ttl, shapeTtl: shapeTtl || "", inferred: []
+    };
+
+    // Remove any prior instance
+    if (instances[containerId] && instances[containerId].cy) instances[containerId].cy.destroy();
+
+    var cy = cytoscape({
+      container: canvas,
+      elements: { nodes: nodeList, edges: edges },
+      style: [
+        { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
+        { selector: 'node[type="Class"]', style: { "font-weight":"600","border-width":2,"border-color":"#666","shape":"rectangle" }},
+        { selector: 'node[type="Individual"]', style: { "shape":"ellipse" }},
+        { selector: 'node[type="Literal"]', style: { "shape":"ellipse","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#6a9" }},
+        { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+      ],
+      layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, edgeSep: 20, animate: false, fit: true, padding: 30 },
+      wheelSensitivity: 0.3, minZoom: 0.15, maxZoom: 5,
+    });
+
+    instances[containerId] = { cy: cy, data: data, editor: null, originalTtl: ttl };
+
+    // Wire tap events
+    function wirePlaygroundPopup(popup, d) {
+      popup.querySelector(".ov-popup-close").addEventListener("click", function() { popup.remove(); });
+      popup.querySelectorAll(".ov-chip").forEach(function(b) {
+        b.addEventListener("click", function() {
+          if (b.classList.contains("ov-deref-btn")) { derefIri(b.dataset.iri, b); return; }
+          copyText(b.dataset.action === "copy-iri" ? d.iri : d.label, b);
+        });
+      });
+      popup.querySelectorAll(".ov-popup-toggle").forEach(function(tog) {
+        tog.addEventListener("click", function() {
+          var sec = tog.dataset.section;
+          var tgt = popup.querySelector('.ov-collapsible[data-section="' + sec + '"]');
+          if (!tgt) return;
+          var open = tgt.style.display !== "none";
+          tgt.style.display = open ? "none" : "block";
+          var arrow = tog.querySelector(".ov-toggle-arrow");
+          if (arrow) arrow.textContent = open ? "\u25B6" : "\u25BC";
+        });
+      });
+      makePopupDraggable(popup);
+    }
+    cy.on("tap", "node", function(evt) {
+      removePopup(container);
+      var d = evt.target.data(), pos = evt.renderedPosition;
+      var popup = document.createElement("div"); popup.className = "ov-popup"; popup.innerHTML = buildPopup(d, cy);
+      var cR = canvas.getBoundingClientRect(), pR = container.getBoundingClientRect();
+      popup.style.left = (cR.left - pR.left + pos.x + 15) + "px"; popup.style.top = (cR.top - pR.top + pos.y - 15) + "px";
+      container.appendChild(popup);
+      requestAnimationFrame(function() { var r = popup.getBoundingClientRect(); if (r.right > pR.right - 10) popup.style.left = (parseFloat(popup.style.left) - r.width - 30) + "px"; if (r.bottom > pR.bottom - 10) popup.style.top = (parseFloat(popup.style.top) - r.height) + "px"; });
+      wirePlaygroundPopup(popup, d);
+    });
+    cy.on("tap", "edge", function(evt) {
+      removePopup(container);
+      var d = evt.target.data(), midpoint = evt.target.midpoint();
+      var zoom = cy.zoom(), pan = cy.pan();
+      var rx = midpoint.x * zoom + pan.x, ry = midpoint.y * zoom + pan.y;
+      var popup = document.createElement("div"); popup.className = "ov-popup"; popup.innerHTML = buildEdgePopup(d, cy);
+      var cR = canvas.getBoundingClientRect(), pR = container.getBoundingClientRect();
+      popup.style.left = (cR.left - pR.left + rx + 15) + "px"; popup.style.top = (cR.top - pR.top + ry - 15) + "px";
+      container.appendChild(popup);
+      requestAnimationFrame(function() { var r = popup.getBoundingClientRect(); if (r.right > pR.right - 10) popup.style.left = (parseFloat(popup.style.left) - r.width - 30) + "px"; if (r.bottom > pR.bottom - 10) popup.style.top = (parseFloat(popup.style.top) - r.height) + "px"; });
+      wirePlaygroundPopup(popup, d);
+    });
+    cy.on("tap", function(e) { if (e.target === cy) removePopup(container); });
+
+    buildLegendOverlay(container, data);
+    buildNsOverlay(container, data);
+  }
+
+  // ── Search & Highlight (fuzzy) ───────────────────────────────────────
+
+  function fuzzyMatch(str, query) {
+    str = str.toLowerCase(); query = query.toLowerCase();
+    if (str.indexOf(query) >= 0) return 2; // exact substring = high score
+    var qi = 0, score = 0;
+    for (var i = 0; i < str.length && qi < query.length; i++) {
+      if (str[i] === query[qi]) { score++; qi++; }
+    }
+    return qi === query.length ? score / query.length : 0;
+  }
+
+  var searchTimeout = null;
+  function search(id, query) {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(function() { doSearch(id, query); }, 150);
+  }
+  function doSearch(id, query) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy;
+    if (!query || !query.trim()) {
+      cy.elements().style("opacity", 1);
+      return;
+    }
+    var q = query.trim();
+    cy.nodes().forEach(function(n) {
+      var label = n.data("label") || "", iri = n.data("iri") || "", type = n.data("type") || "";
+      var score = Math.max(fuzzyMatch(label, q), fuzzyMatch(iri, q), fuzzyMatch(type, q));
+      n.style("opacity", score > 0 ? 1 : 0.12);
+    });
+    cy.edges().forEach(function(e) {
+      var label = e.data("label") || "", iri = e.data("iri") || "";
+      var score = Math.max(fuzzyMatch(label, q), fuzzyMatch(iri, q));
+      e.style("opacity", score > 0 ? 1 : 0.08);
+    });
+  }
+
+  // ── Layout Switcher ────────────────────────────────────────────────────
+
+  function changeLayout(id, layoutName) {
+    var inst = instances[id]; if (!inst) return;
+    var opts = { name: layoutName, animate: true, animationDuration: 400, fit: true, padding: 30 };
+    if (layoutName === "dagre") { opts.rankDir = "BT"; opts.nodeSep = 60; opts.rankSep = 80; opts.animate = false; }
+    if (layoutName === "cose") { opts.nodeRepulsion = function() { return 8000; }; opts.idealEdgeLength = function() { return 80; }; }
+    if (layoutName === "concentric") { opts.concentric = function(n) { return n.degree(); }; opts.levelWidth = function() { return 2; }; }
+    inst.cy.layout(opts).run();
+  }
+
+  // ── Neighborhood Focus ─────────────────────────────────────────────────
+
+  function focusNode(id, nodeId, hops) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy;
+    var root = cy.getElementById(nodeId);
+    if (!root.length) return;
+    var neighborhood = root.closedNeighborhood();
+    for (var i = 1; i < hops; i++) {
+      neighborhood = neighborhood.closedNeighborhood();
+    }
+    cy.elements().style("opacity", 0.08);
+    neighborhood.style("opacity", 1);
+    cy.animate({ fit: { eles: neighborhood, padding: 40 } }, { duration: 400 });
+  }
+
+  function resetFocus(id) {
+    var inst = instances[id]; if (!inst) return;
+    inst.cy.elements().style("opacity", 1);
+    inst.cy.fit(null, 30);
+  }
+
+  // Auto-focus for large graphs: if >30 nodes, start focused on most connected
+  function autoFocusLargeGraph(inst, containerId) {
+    var cy = inst.cy;
+    if (cy.nodes().length <= 30) return;
+    // Find the node with highest degree
+    var best = null, bestDeg = 0;
+    cy.nodes().forEach(function(n) {
+      var d = n.degree(); if (d > bestDeg) { bestDeg = d; best = n; }
+    });
+    if (best) {
+      var hood = best.closedNeighborhood().closedNeighborhood(); // 2-hop
+      cy.elements().style("opacity", 0.08);
+      hood.style("opacity", 1);
+      cy.fit(hood, 40);
+      // Show a hint overlay
+      var c = document.getElementById(containerId);
+      var hint = document.createElement("div");
+      hint.className = "ov-focus-hint";
+      hint.innerHTML = 'Focused on <strong>' + esc(best.data("label")) + '</strong> (most connected). <button class="ov-chip" onclick="ontoink.resetFocus(\'' + containerId + '\');this.parentElement.remove();">Show All</button>';
+      c.querySelector(".ov-canvas-wrap").appendChild(hint);
+    }
+  }
+
+  // ── Graph Statistics Panel ─────────────────────────────────────────────
+
+  // Known LOD namespaces for linker
+  var LOD_DATASETS = {
+    "http://dbpedia.org/": {name:"DBpedia", url:"https://dbpedia.org"},
+    "http://www.wikidata.org/": {name:"Wikidata", url:"https://www.wikidata.org"},
+    "http://schema.org/": {name:"Schema.org", url:"https://schema.org"},
+    "http://xmlns.com/foaf/": {name:"FOAF", url:"http://xmlns.com/foaf/spec/"},
+    "http://purl.org/dc/": {name:"Dublin Core", url:"https://www.dublincore.org"},
+    "http://www.w3.org/2004/02/skos/": {name:"SKOS", url:"https://www.w3.org/2009/08/skos-reference/skos.html"},
+    "http://www.w3.org/ns/prov": {name:"PROV-O", url:"https://www.w3.org/TR/prov-o/"},
+    "http://purl.obolibrary.org/obo/": {name:"OBO Foundry", url:"https://obofoundry.org"},
+    "https://nfdi.fiz-karlsruhe.de/": {name:"NFDIcore", url:"https://nfdi.fiz-karlsruhe.de"},
+    "http://qudt.org/": {name:"QUDT", url:"https://www.qudt.org"},
+    "http://www.w3.org/ns/shacl": {name:"SHACL", url:"https://www.w3.org/TR/shacl/"},
+  };
+
+  function toggleStats(id) {
+    var c = document.getElementById(id), inst = instances[id];
+    if (!c || !inst) return;
+    var panel = c.querySelector(".ov-stats-panel");
+    if (!panel) return;
+    if (panel.style.display !== "none") { panel.style.display = "none"; return; }
+    panel.style.display = "block";
+    var cy = inst.cy;
+    var metrics = inst.data.metrics || {};
+    var consistency = inst.data.consistency || {};
+
+    var nodeCount = cy.nodes().length, edgeCount = cy.edges().length;
+    var typeCounts = {}, edgeTypeCounts = {};
+    cy.nodes().forEach(function(n) { var t = n.data("type") || "Unknown"; typeCounts[t] = (typeCounts[t] || 0) + 1; });
+    cy.edges().forEach(function(e) { var t = e.data("edgeType") || "other"; edgeTypeCounts[t] = (edgeTypeCounts[t] || 0) + 1; });
+    var degrees = [];
+    cy.nodes().forEach(function(n) { degrees.push({ label: n.data("label") || n.id(), degree: n.degree() }); });
+    degrees.sort(function(a, b) { return b.degree - a.degree; });
+
+    var h = '<div class="ov-editor-header ov-panel-head">Graph Statistics &amp; Ontology Metrics<button class="ov-panel-close" onclick="this.closest(\'.ov-stats-panel\').style.display=\'none\'">&times;</button></div><div class="ov-stats-body">';
+
+    // Consistency badge
+    var conBg = consistency.status === "consistent" ? "#dcfce7" : consistency.status === "inconsistent" ? "#fef2f2" : "#f3f4f6";
+    var conColor = consistency.status === "consistent" ? "#16a34a" : consistency.status === "inconsistent" ? "#dc2626" : "#6b7280";
+    var conIcon = consistency.status === "consistent" ? "\u2714" : consistency.status === "inconsistent" ? "\u2718" : "?";
+    h += '<div class="ov-consistency-badge" style="background:' + conBg + ';color:' + conColor + ';"><span style="font-size:16px;">' + conIcon + '</span> ' + esc(consistency.message || "Unknown") + '</div>';
+
+    // Summary cards
+    h += '<div class="ov-stats-row">';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + nodeCount + '</div><div class="ov-stats-label">Nodes</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + edgeCount + '</div><div class="ov-stats-label">Edges</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.totalTriples || "?") + '</div><div class="ov-stats-label">Triples</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.maxHierarchyDepth || 0) + '</div><div class="ov-stats-label">Hierarchy Depth</div></div>';
+    h += '</div>';
+
+    // Ontology metrics
+    h += '<div class="ov-stats-row">';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.classCount || 0) + '</div><div class="ov-stats-label">Classes</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.individualCount || 0) + '</div><div class="ov-stats-label">Individuals</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.objectPropertyCount || 0) + '</div><div class="ov-stats-label">Object Props</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.dataPropertyCount || 0) + '</div><div class="ov-stats-label">Data Props</div></div>';
+    h += '</div>';
+
+    // Additional metrics
+    h += '<div class="ov-stats-row">';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.annotationPropertyCount || 0) + '</div><div class="ov-stats-label">Annotation Props</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.subclassAxioms || 0) + '</div><div class="ov-stats-label">SubClass Axioms</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.typeAssertions || 0) + '</div><div class="ov-stats-label">Type Assertions</div></div>';
+    h += '<div class="ov-stats-card"><div class="ov-stats-num">' + (metrics.blankNodeCount || 0) + '</div><div class="ov-stats-label">Blank Nodes</div></div>';
+    h += '</div>';
+
+    // Tables row
+    h += '<div class="ov-stats-cols">';
+
+    h += '<div class="ov-stats-section"><strong>Node Types</strong><table class="ov-stats-table">';
+    Object.keys(typeCounts).sort().forEach(function(t) {
+      h += '<tr><td>' + esc(t) + '</td><td class="ov-stats-val">' + typeCounts[t] + '</td></tr>';
+    });
+    h += '</table></div>';
+
+    h += '<div class="ov-stats-section"><strong>Edge Types</strong><table class="ov-stats-table">';
+    Object.keys(edgeTypeCounts).sort().forEach(function(t) {
+      h += '<tr><td>' + esc(t) + '</td><td class="ov-stats-val">' + edgeTypeCounts[t] + '</td></tr>';
+    });
+    h += '</table></div>';
+
+    h += '<div class="ov-stats-section"><strong>Most Connected</strong><table class="ov-stats-table">';
+    degrees.slice(0, 5).forEach(function(d, i) {
+      h += '<tr><td>' + (i + 1) + '. ' + esc(d.label) + '</td><td class="ov-stats-val">' + d.degree + '</td></tr>';
+    });
+    h += '</table></div>';
+
+    h += '</div>'; // end cols
+
+    // SHACL Coverage
+    if (metrics.shaclCoveredClasses !== undefined) {
+      var uncov = metrics.shaclUncoveredClasses || [];
+      h += '<div class="ov-stats-section"><strong>SHACL Coverage</strong> ';
+      h += '<span class="ov-badge" style="background:#dcfce7;color:#16a34a;">' + metrics.shaclCoveredClasses + ' covered</span> ';
+      if (uncov.length) {
+        h += '<span class="ov-badge" style="background:#fef2f2;color:#dc2626;">' + uncov.length + ' uncovered</span>';
+        h += ' <button class="ov-chip" onclick="ontoink.showCoverage(\'' + id + '\')">Show on graph</button>';
+      }
+      h += '</div>';
+    }
+
+    // OntoSniff — Smell Detection
+    var smells = inst.data.smells || [];
+    if (smells.length) {
+      h += '<div class="ov-stats-section"><strong>OntoSniff \u2014 Quality</strong> <span style="font-size:10px;color:#9ca3af;">(' + smells.length + ' smell' + (smells.length > 1 ? 's' : '') + ')</span>';
+      smells.forEach(function(s) {
+        var sevColor = s.severity === "error" ? "#dc2626" : s.severity === "warning" ? "#f59e0b" : "#6b7280";
+        var sevIcon = s.severity === "error" ? "\u2718" : s.severity === "warning" ? "\u26A0" : "\u2139";
+        h += '<details style="margin:4px 0;font-size:12px;"><summary style="cursor:pointer;color:' + sevColor + ';">' + sevIcon + ' <strong>' + esc(s.name) + '</strong> <span style="color:#9ca3af;">(' + s.entities.length + ')</span></summary>';
+        h += '<div style="padding:4px 0 4px 18px;color:#4b5563;">' + esc(s.description) + '</div>';
+        if (s.suggestion) h += '<div style="padding:0 0 4px 18px;color:#0891b2;font-size:11px;">\u2192 ' + esc(s.suggestion) + '</div>';
+        h += '<div style="padding:0 0 4px 18px;">';
+        s.entities.forEach(function(e) { h += '<span style="display:inline-block;font-size:10px;background:#f3f4f6;padding:1px 6px;border-radius:3px;margin:1px;color:#374151;">' + esc(e.label) + '</span> '; });
+        h += '</div></details>';
+      });
+      h += '</div>';
+    } else {
+      h += '<div class="ov-stats-section"><strong>OntoSniff</strong> <span style="font-size:11px;color:#16a34a;">\u2714 No smells detected</span></div>';
+    }
+
+    // LOD Cloud links
+    var lodLinks = [];
+    var allNs = inst.data.namespaces || {};
+    Object.values(allNs).forEach(function(uri) {
+      for (var prefix in LOD_DATASETS) {
+        if (uri.indexOf(prefix) === 0 || prefix.indexOf(uri) === 0) {
+          var d = LOD_DATASETS[prefix];
+          if (lodLinks.indexOf(d.name) < 0) lodLinks.push(d.name);
+        }
+      }
+    });
+    if (lodLinks.length) {
+      h += '<div class="ov-stats-section"><strong>Linked Open Data</strong><div style="font-size:12px;margin-top:4px;">';
+      lodLinks.forEach(function(name) {
+        var d; for (var p in LOD_DATASETS) { if (LOD_DATASETS[p].name === name) { d = LOD_DATASETS[p]; break; } }
+        if (d) h += '<a href="' + esc(d.url) + '" target="_blank" class="ov-lod-link">' + esc(d.name) + '</a> ';
+      });
+      h += '</div></div>';
+    }
+
+    h += '</div>';
+    panel.innerHTML = h;
+  }
+
+  // ── Validation Coverage Map ────────────────────────────────────────────
+
+  function showCoverage(id) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy;
+    var metrics = inst.data.metrics || {};
+    var uncovered = new Set(metrics.shaclUncoveredClasses || []);
+    var covered = new Set();
+    (inst.data.shacl || []).forEach(function(s) { if (s.targetClass) covered.add(s.targetClass); });
+
+    cy.nodes().forEach(function(n) {
+      var iri = n.data("iri");
+      if (covered.has(iri)) {
+        n.style({ "border-color": "#16a34a", "border-width": 3 });
+      } else if (uncovered.has(iri)) {
+        n.style({ "border-color": "#dc2626", "border-width": 3, "border-style": "dashed" });
+      }
+    });
+  }
+
+  // ── Minimap ────────────────────────────────────────────────────────────
+
+  function initMinimap(containerId, cy) {
+    var c = document.getElementById(containerId);
+    var minimapEl = c.querySelector(".ov-minimap");
+    if (!minimapEl) return;
+    var mmCy = cytoscape({
+      container: minimapEl,
+      elements: cy.elements().jsons(),
+      style: [
+        { selector: "node", style: { "background-color": "data(color)", "width": 6, "height": 6, "label": "" } },
+        { selector: "edge", style: { "width": 0.5, "line-color": "#ccc", "target-arrow-shape": "none" } },
+      ],
+      layout: { name: "preset" },
+      userZoomingEnabled: false, userPanningEnabled: false,
+      autoungrabify: true, autounselectify: true,
+    });
+    mmCy.fit(null, 4);
+
+    // Draw viewport rectangle
+    function updateViewport() {
+      var ext = cy.extent();
+      minimapEl.querySelectorAll(".ov-mm-viewport").forEach(function(el) { el.remove(); });
+      var mmExt = mmCy.extent();
+      var mmZoom = mmCy.zoom(), mmPan = mmCy.pan();
+      var x1 = (ext.x1 - mmExt.x1) / (mmExt.x2 - mmExt.x1) * minimapEl.offsetWidth;
+      var y1 = (ext.y1 - mmExt.y1) / (mmExt.y2 - mmExt.y1) * minimapEl.offsetHeight;
+      var w = (ext.w) / (mmExt.x2 - mmExt.x1) * minimapEl.offsetWidth;
+      var h = (ext.h) / (mmExt.y2 - mmExt.y1) * minimapEl.offsetHeight;
+      var vp = document.createElement("div");
+      vp.className = "ov-mm-viewport";
+      vp.style.cssText = "position:absolute;left:" + Math.max(0, x1) + "px;top:" + Math.max(0, y1) + "px;width:" + Math.min(w, minimapEl.offsetWidth) + "px;height:" + Math.min(h, minimapEl.offsetHeight) + "px;border:2px solid #0891b2;background:rgba(8,145,178,0.08);pointer-events:none;border-radius:2px;";
+      minimapEl.appendChild(vp);
+    }
+    cy.on("viewport", updateViewport);
+    updateViewport();
+  }
+
+  // ── Path Finder ────────────────────────────────────────────────────────
+
+  // ── Abstract Model View ─────────────────────────────────────────────
+
+  function abstractView(id) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy;
+    // Save full elements if not already saved
+    if (!inst._fullElements) inst._fullElements = cy.elements().jsons();
+    // Extract schema: classes, subClassOf, domain/range, object properties between classes
+    var classIds = new Set();
+    cy.nodes().forEach(function(n) { if (n.data("type") === "Class") classIds.add(n.id()); });
+    // Keep class nodes + edges between classes (subclass, object-property)
+    var keepNodes = cy.nodes().filter(function(n) { return n.data("type") === "Class"; });
+    var keepEdges = cy.edges().filter(function(e) {
+      var et = e.data("edgeType");
+      return (et === "subclass" || et === "object-property" || et === "shacl-constraint")
+        && classIds.has(e.data("source")) && classIds.has(e.data("target"));
+    });
+    cy.elements().style("display", "none");
+    keepNodes.style("display", "element");
+    keepEdges.style("display", "element");
+    cy.fit(keepNodes, 40);
+    inst._abstractMode = true;
+    // Show hint
+    var c = document.getElementById(id);
+    var old = c.querySelector(".ov-abstract-hint"); if (old) old.remove();
+    var hint = document.createElement("div"); hint.className = "ov-focus-hint ov-abstract-hint";
+    hint.innerHTML = 'Abstract Model View (' + keepNodes.length + ' classes). <button class="ov-chip" onclick="ontoink.fullView(\'' + id + '\');this.parentElement.remove();">Show Full Graph</button>';
+    c.querySelector(".ov-canvas-wrap").appendChild(hint);
+  }
+
+  function fullView(id) {
+    var inst = instances[id]; if (!inst) return;
+    inst.cy.elements().style("display", "element");
+    inst.cy.fit(null, 30);
+    inst._abstractMode = false;
+    var c = document.getElementById(id);
+    var hint = c.querySelector(".ov-abstract-hint"); if (hint) hint.remove();
+  }
+
+  function togglePathFinder(id) {
+    var c = document.getElementById(id), inst = instances[id];
+    if (!c || !inst) return;
+    var panel = c.querySelector(".ov-pathfinder-panel");
+    if (!panel) return;
+    if (panel.style.display !== "none") { panel.style.display = "none"; return; }
+    panel.style.display = "block";
+    var cy = inst.cy;
+    var nodeOpts = "";
+    cy.nodes().forEach(function(n) {
+      nodeOpts += '<option value="' + esc(n.id()) + '">' + esc(n.data("label") || n.id()) + '</option>';
+    });
+    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">Path Finder<button class="ov-panel-close" onclick="this.closest(\'.ov-pathfinder-panel\').style.display=\'none\'">&times;</button></div>'
+      + '<div class="ov-pathfinder-body">'
+      + '<div class="ov-pf-row"><label>From:</label><select class="ov-pf-select" id="pf-from-' + id + '">' + nodeOpts + '</select></div>'
+      + '<div class="ov-pf-row"><label>To:</label><select class="ov-pf-select" id="pf-to-' + id + '">' + nodeOpts + '</select></div>'
+      + '<div class="ov-pf-row"><button class="ov-btn ov-btn-primary" onclick="ontoink.findPath(\'' + id + '\')">Find Path</button>'
+      + '<button class="ov-btn" onclick="ontoink.clearPath(\'' + id + '\')">Clear</button></div>'
+      + '<div class="ov-pf-result" id="pf-result-' + id + '"></div>'
+      + '</div>';
+  }
+
+  function findPath(id) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy;
+    var fromId = document.getElementById("pf-from-" + id).value;
+    var toId = document.getElementById("pf-to-" + id).value;
+    var resultEl = document.getElementById("pf-result-" + id);
+    if (fromId === toId) { resultEl.innerHTML = '<span style="color:#9ca3af;">Source and target are the same.</span>'; return; }
+
+    // BFS shortest path
+    var dijkstra = cy.elements().dijkstra(cy.getElementById(fromId), function() { return 1; });
+    var pathTo = dijkstra.pathTo(cy.getElementById(toId));
+
+    if (!pathTo.length) {
+      resultEl.innerHTML = '<span style="color:#dc2626;">No path found between these nodes.</span>';
+      return;
+    }
+
+    // Reset all styles
+    cy.elements().style({ "opacity": 0.12 });
+    // Highlight path with animation
+    var pathNodes = pathTo.nodes(), pathEdges = pathTo.edges();
+    pathTo.style("opacity", 1);
+
+    // Animate path nodes sequentially with a pulse effect
+    var delay = 0;
+    pathNodes.forEach(function(n, i) {
+      setTimeout(function() {
+        n.style({ "border-width": 4, "border-color": "#f59e0b", "opacity": 1 });
+        n.animate({ style: { "border-width": 3 } }, { duration: 300 });
+      }, delay);
+      delay += 200;
+    });
+    pathEdges.forEach(function(e) {
+      setTimeout(function() {
+        e.style({ "width": 4, "line-color": "#f59e0b", "target-arrow-color": "#f59e0b", "opacity": 1 });
+        e.animate({ style: { "width": 3 } }, { duration: 400 });
+      }, delay);
+      delay += 150;
+    });
+
+    // Fit to path
+    cy.animate({ fit: { eles: pathTo, padding: 60 } }, { duration: 500 });
+
+    // Show result
+    var labels = [];
+    pathNodes.forEach(function(n) { labels.push(esc(n.data("label") || n.id())); });
+    resultEl.innerHTML = '<div class="ov-pf-path-display">' + labels.join(' <span class="ov-pf-arrow">&#x2192;</span> ') + '</div><div style="font-size:11px;color:#6b7280;margin-top:4px;">' + pathNodes.length + ' nodes, ' + pathEdges.length + ' edges</div>';
+  }
+
+  function clearPath(id) {
+    var inst = instances[id]; if (!inst) return;
+    inst.cy.elements().removeStyle();
+    inst.cy.elements().style("opacity", 1);
+    var r = document.getElementById("pf-result-" + id);
+    if (r) r.innerHTML = "";
+  }
+
+  // ── SPARQL Query Panel ─────────────────────────────────────────────────
+
+  function toggleSparql(id) {
+    var c = document.getElementById(id), inst = instances[id];
+    if (!c || !inst) return;
+    var panel = c.querySelector(".ov-sparql-panel");
+    if (!panel) return;
+    if (panel.style.display !== "none") { panel.style.display = "none"; return; }
+    panel.style.display = "block";
+    if (panel.querySelector(".ov-sparql-textarea")) return; // already built
+
+    // Build class/property options from graph data
+    var cy = inst.cy;
+    var classOpts = '<option value="">-- class --</option>';
+    var propOpts = '<option value="">-- property --</option>';
+    var seenC = {}, seenP = {};
+    cy.nodes().forEach(function(n) {
+      var iri = n.data("iri"); if (!iri || seenC[iri]) return; seenC[iri] = true;
+      if (n.data("type") === "Class") classOpts += '<option value="' + esc(iri) + '">' + esc(n.data("label") || iri) + '</option>';
+    });
+    cy.edges().forEach(function(e) {
+      var iri = e.data("iri"); if (!iri || seenP[iri]) return; seenP[iri] = true;
+      propOpts += '<option value="' + esc(iri) + '">' + esc(e.data("label") || iri) + '</option>';
+    });
+
+    // Build autocomplete catalog
+    inst._sparqlCatalog = [];
+    cy.nodes().forEach(function(n) { var iri=n.data("iri"); if(iri) inst._sparqlCatalog.push({iri:iri,label:n.data("label")||"",short:n.data("label")||iri.split("/").pop().split("#").pop(),type:n.data("type")==="Class"?"class":"node"}); });
+    cy.edges().forEach(function(e) { var iri=e.data("iri"); if(iri&&!inst._sparqlCatalog.find(function(x){return x.iri===iri;})) inst._sparqlCatalog.push({iri:iri,label:e.data("label")||"",short:e.data("label")||iri.split("/").pop().split("#").pop(),type:"prop"}); });
+    ["SELECT","WHERE","FILTER","OPTIONAL","GROUP BY","ORDER BY","LIMIT","COUNT","DISTINCT","CONTAINS","LCASE","STR","BIND","VALUES"].forEach(function(kw) { inst._sparqlCatalog.push({iri:"",label:kw,short:kw,type:"keyword"}); });
+
+    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">SPARQL Query <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;">Ctrl+Space for autocomplete</span><button class="ov-panel-close" onclick="this.closest(\'.ov-sparql-panel\').style.display=\'none\'">&times;</button></div>'
+      + '<div class="ov-sparql-body">'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
+      + '<select class="ov-shape-select" onchange="ontoink.sparqlTemplate(\'' + id + '\',this.value)"><option value="">Template...</option><option value="all">All triples</option><option value="type">Instances of class</option><option value="props">Properties of class</option><option value="label">Find by label</option></select>'
+      + '<select class="ov-shape-select ov-sparql-class-sel">' + classOpts + '</select>'
+      + '<select class="ov-shape-select ov-sparql-prop-sel">' + propOpts + '</select>'
+      + '</div>'
+      + '<div style="position:relative;"><textarea class="ov-sparql-textarea" rows="6">SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o\n} LIMIT 20</textarea></div>'
+      + '<div class="ov-editor-actions"><button class="ov-btn ov-btn-primary" onclick="ontoink.runSparql(\'' + id + '\')">Run Query</button>'
+      + '<button class="ov-btn" onclick="ontoink.sparqlHighlight(\'' + id + '\')">Highlight Results</button></div>'
+      + '<div class="ov-sparql-result"></div>'
+      + '</div>';
+
+    // Wire Ctrl+Space autocomplete
+    var ta = panel.querySelector(".ov-sparql-textarea");
+    ta.addEventListener("keydown", function(e) {
+      if (e.ctrlKey && e.key === " ") { e.preventDefault(); showSparqlAC(id, ta); }
+      if (e.key === "Escape") hideSparqlAC(id);
+      if (e.key === "Tab") {
+        var acEl = panel.querySelector(".ov-sparql-ac");
+        if (acEl && acEl.style.display !== "none" && acEl._matches && acEl._matches.length) { e.preventDefault(); selectSparqlAC(id, 0); }
+      }
+    });
+    ta.addEventListener("input", function() {
+      var acEl = panel.querySelector(".ov-sparql-ac");
+      if (acEl && acEl.style.display !== "none") showSparqlAC(id, ta);
+    });
+    ta.addEventListener("blur", function() {
+      setTimeout(function() {
+        var acEl2 = panel.querySelector(".ov-sparql-ac");
+        if (acEl2 && acEl2.contains(document.activeElement)) return;
+        hideSparqlAC(id);
+      }, 250);
+    });
+  }
+
+  function sparqlTemplate(id, t) {
+    var c = document.getElementById(id);
+    var cls = c.querySelector(".ov-sparql-class-sel").value;
+    var prop = c.querySelector(".ov-sparql-prop-sel").value;
+    var ta = c.querySelector(".ov-sparql-textarea");
+    if (t === "all") ta.value = "SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o\n} LIMIT 20";
+    else if (t === "type") ta.value = "SELECT ?s WHERE {\n  ?s a <" + (cls || "CLASS_IRI") + "> .\n} LIMIT 50";
+    else if (t === "props") ta.value = "SELECT ?prop (COUNT(?val) AS ?count) WHERE {\n  ?s a <" + (cls || "CLASS_IRI") + "> ;\n     ?prop ?val .\n} GROUP BY ?prop ORDER BY DESC(?count)";
+    else if (t === "label") ta.value = 'SELECT ?s ?label WHERE {\n  ?s <http://www.w3.org/2000/01/rdf-schema#label> ?label .\n} LIMIT 50';
+  }
+
+  // Inline SPARQL autocomplete with search field
+  function getSparqlACMatches(catalog, query) {
+    if (!query) return catalog.slice(0, 12).map(function(item){return {item:item,score:1};});
+    var matches = [];
+    catalog.forEach(function(item) {
+      var score = Math.max(fuzzyMatch(item.short, query), fuzzyMatch(item.label, query), item.iri ? fuzzyMatch(item.iri, query) : 0);
+      if (score > 0) matches.push({item:item, score:score});
+    });
+    matches.sort(function(a,b){return b.score-a.score;});
+    return matches.slice(0, 12);
+  }
+
+  function renderSparqlACItem(id, item, i) {
+    var typeColor = item.type==="class"?"#6366f1":item.type==="prop"?"#0891b2":item.type==="node"?"#f59e0b":"#9ca3af";
+    return '<div style="padding:5px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f3f4f6;" onmousedown="ontoink.selectSparqlAC(\'' + id + '\',' + i + ')">'
+      + '<span style="background:'+typeColor+';color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;">'+item.type+'</span>'
+      + '<span style="color:#1f2937;flex:1;">'+(item.label||item.short)+'</span>'
+      + (item.iri ? '<span style="color:#9ca3af;font-size:10px;">'+(item.iri.split("/").pop().split("#").pop())+'</span>' : '')
+      + '</div>';
+  }
+
+  function showSparqlAC(id, ta) {
+    var inst = instances[id]; if (!inst || !inst._sparqlCatalog) return;
+    var pos = ta.selectionStart || 0, text = ta.value || "";
+    var start = pos;
+    while (start > 0 && /[^\s<>{}();\n]/.test(text[start-1])) start--;
+    var word = text.substring(start, pos) || "";
+
+    var panel = document.getElementById(id).querySelector(".ov-sparql-panel");
+    var acEl = panel.querySelector(".ov-sparql-ac");
+    if (!acEl) {
+      acEl = document.createElement("div"); acEl.className = "ov-sparql-ac";
+      acEl.style.cssText = "position:absolute;z-index:1000;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:280px;overflow:hidden;font-size:12px;min-width:300px;bottom:100%;left:0;margin-bottom:4px;display:flex;flex-direction:column;";
+      ta.parentElement.appendChild(acEl);
+    }
+    acEl.style.display = "flex";
+
+    var searchVal = acEl._searchVal || word;
+    var matches = getSparqlACMatches(inst._sparqlCatalog, searchVal);
+
+    var h = '<div style="padding:5px 8px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:6px;">'
+      + '<span style="color:#9ca3af;font-size:13px;">&#x1F50D;</span>'
+      + '<input class="ov-sparql-ac-search" type="text" value="' + (searchVal||"").replace(/"/g,'&quot;') + '" placeholder="Search..." '
+      + 'style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;color:#374151;background:#fff;outline:none;">'
+      + '</div><div class="ov-sparql-ac-list" style="overflow-y:auto;max-height:230px;">';
+    matches.forEach(function(m, i) { h += renderSparqlACItem(id, m.item, i); });
+    h += '</div>';
+    acEl.innerHTML = h;
+    acEl._matches = matches; acEl._start = start; acEl._pos = pos;
+
+    // Wire search input
+    var si = acEl.querySelector(".ov-sparql-ac-search");
+    si.addEventListener("input", function() {
+      acEl._searchVal = si.value;
+      var m2 = getSparqlACMatches(inst._sparqlCatalog, si.value);
+      acEl._matches = m2;
+      var list = acEl.querySelector(".ov-sparql-ac-list");
+      var h2 = "";
+      m2.forEach(function(m, i) { h2 += renderSparqlACItem(id, m.item, i); });
+      list.innerHTML = h2;
+    });
+    si.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") { hideSparqlAC(id); ta.focus(); }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        if (acEl._matches && acEl._matches.length) selectSparqlAC(id, 0);
+      }
+    });
+    setTimeout(function() { si.focus(); si.selectionStart = si.selectionEnd = si.value.length; }, 10);
+  }
+
+  function selectSparqlAC(id, index) {
+    var panel = document.getElementById(id).querySelector(".ov-sparql-panel");
+    var acEl = panel.querySelector(".ov-sparql-ac");
+    if (!acEl || !acEl._matches) return;
+    var item = acEl._matches[index].item;
+    var ta = panel.querySelector(".ov-sparql-textarea");
+    var text = ta.value;
+    var insert = item.type === "keyword" ? item.short : "<" + item.iri + ">";
+    ta.value = text.substring(0, acEl._start) + insert + text.substring(acEl._pos);
+    ta.selectionStart = ta.selectionEnd = acEl._start + insert.length;
+    acEl._searchVal = "";
+    ta.focus();
+    hideSparqlAC(id);
+  }
+
+  function hideSparqlAC(id) {
+    var panel = document.getElementById(id)?.querySelector(".ov-sparql-panel");
+    if (!panel) return;
+    var acEl = panel.querySelector(".ov-sparql-ac");
+    if (acEl) { acEl.style.display = "none"; acEl._searchVal = ""; }
+  }
+
+  function runSparql(id) {
+    var inst = instances[id]; if (!inst) return;
+    var c = document.getElementById(id);
+    var query = c.querySelector(".ov-sparql-textarea").value.trim();
+    var resultEl = c.querySelector(".ov-sparql-result");
+    if (!query) return;
+
+    // Simple SPARQL SELECT parser over the TTL triples
+    var ttl = getEditorValue(id) || inst.originalTtl;
+    var parsed = parseTtlMinimal(ttl);
+    var triples = parsed.triples, pf = parsed.prefixes;
+
+    // Parse SELECT variables and WHERE pattern
+    var selMatch = query.match(/SELECT\s+([\s\S]*?)\s+WHERE\s*\{([\s\S]*?)\}/i);
+    if (!selMatch) { resultEl.innerHTML = '<span style="color:#dc2626;">Could not parse query. Use basic SELECT ... WHERE { ... } syntax.</span>'; return; }
+
+    var vars = selMatch[1].trim().split(/\s+/);
+    var patterns = selMatch[2].trim().split(/\s*\.\s*/).filter(function(p) { return p.trim(); });
+    var limitMatch = query.match(/LIMIT\s+(\d+)/i);
+    var limit = limitMatch ? parseInt(limitMatch[1]) : 100;
+
+    // Resolve prefixed names in patterns
+    function resolve(t) {
+      t = t.trim();
+      if (t === "a") return "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+      if (t[0] === "<" && t[t.length - 1] === ">") return t.slice(1, -1);
+      var ci = t.indexOf(":");
+      if (ci >= 0) { var p = t.substring(0, ci); if (pf[p]) return pf[p] + t.substring(ci + 1); }
+      return t;
+    }
+
+    // Execute: simple single-pattern match
+    var results = [];
+    if (patterns.length === 1) {
+      var parts = patterns[0].trim().split(/\s+/);
+      if (parts.length >= 3) {
+        var sp = parts[0], pp = parts[1], op = parts.slice(2).join(" ");
+        var sVar = sp[0] === "?", pVar = pp[0] === "?", oVar = op[0] === "?";
+        var sVal = sVar ? null : resolve(sp), pVal = pVar ? null : resolve(pp), oVal = oVar ? null : resolve(op);
+
+        triples.forEach(function(t) {
+          if (!sVar && t.s !== sVal) return;
+          if (!pVar && t.p !== pVal) return;
+          if (!oVar && t.o !== oVal) return;
+          var row = {};
+          if (sVar) row[sp] = t.s;
+          if (pVar) row[pp] = t.p;
+          if (oVar) row[op] = t.o;
+          results.push(row);
+        });
+      }
+    } else {
+      // For multi-pattern: just match all triples (simplified)
+      triples.forEach(function(t) {
+        var row = {};
+        vars.forEach(function(v) {
+          if (v === "?s") row[v] = t.s;
+          if (v === "?p") row[v] = t.p;
+          if (v === "?o") row[v] = t.o;
+        });
+        results.push(row);
+      });
+    }
+
+    results = results.slice(0, limit);
+    inst._sparqlResults = results;
+
+    if (!results.length) { resultEl.innerHTML = '<span style="color:#9ca3af;">No results.</span>'; return; }
+
+    // Render table
+    var h = '<div style="font-size:12px;color:#374151;margin-bottom:6px;"><strong>' + results.length + '</strong> result(s)</div>';
+    h += '<table class="ov-inferred-table"><thead><tr>';
+    vars.forEach(function(v) { h += '<th>' + esc(v) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    results.forEach(function(row) {
+      h += '<tr>';
+      vars.forEach(function(v) {
+        var val = row[v] || "";
+        // Shorten URIs with prefixes
+        var display = val;
+        for (var p in pf) { if (val.indexOf(pf[p]) === 0) { display = p + ":" + val.substring(pf[p].length); break; } }
+        h += '<td>' + esc(display) + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    resultEl.innerHTML = h;
+  }
+
+  function sparqlHighlight(id) {
+    var inst = instances[id]; if (!inst || !inst._sparqlResults) return;
+    var cy = inst.cy;
+    var uris = new Set();
+    inst._sparqlResults.forEach(function(row) {
+      Object.values(row).forEach(function(v) { if (v) uris.add(v); });
+    });
+    cy.elements().style("opacity", 0.12);
+    cy.nodes().forEach(function(n) { if (uris.has(n.id()) || uris.has(n.data("iri"))) n.style("opacity", 1); });
+    cy.edges().forEach(function(e) { if (uris.has(e.data("iri")) || uris.has(e.data("source")) || uris.has(e.data("target"))) e.style("opacity", 1); });
+  }
+
   // ── Auto-init ──────────────────────────────────────────────────────────
 
   document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll(".ontoink-container").forEach(function(el){initGraph(el.id);});});
 
-  return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors };
+  return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC };
 })();

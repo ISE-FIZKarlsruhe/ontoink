@@ -31,7 +31,7 @@ class OntoinkPlugin(BasePlugin):
 
     def on_post_page(self, output, page, config):
         """Inject CDN scripts and plugin JS/CSS into pages that use ontoink."""
-        if "data-ontoink-graph" not in output:
+        if "data-ontoink-graph" not in output and "ontoink.playground" not in output:
             return output
 
         resources_dir = Path(__file__).parent / "resources"

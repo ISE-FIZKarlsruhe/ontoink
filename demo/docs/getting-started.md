@@ -90,6 +90,7 @@ Each `ontoink` code block accepts these YAML options:
 | `editor`     | `true`   | Show the **Edit & Validate** button            |
 | `legend`     | `true`   | Show the legend overlay                        |
 | `namespaces` | `true`   | Show the namespace prefixes overlay            |
+| `reasoning`  | `true`   | Enable OWL-RL reasoning (show Reasoning button)|
 
 ---
 
@@ -148,6 +149,7 @@ Every ontoink diagram comes with a toolbar:
 | **SVG**            | Export as scalable vector graphics                        |
 | **TTL**            | Download the current TTL data                             |
 | **Edit Layout**    | Open the layout panel — change colors, shapes, edge styles|
+| **Reasoning**      | Toggle the reasoning panel — view inferred triples, show them on graph, validate with inferences |
 | **Edit & Validate**| Open the inline TTL editor and SHACL validation panel     |
 
 ---
@@ -161,6 +163,52 @@ The MkDocs plugin parses your TTL files with [rdflib](https://rdflib.readthedocs
 
 **Browser (JavaScript):**
 [Cytoscape.js](https://js.cytoscape.org/) renders the interactive graph with a [dagre](https://github.com/dagrejs/dagre) layout. [CodeMirror](https://codemirror.net/5/) provides the TTL editor. A lightweight JavaScript SHACL checker enables live validation without server round-trips.
+
+---
+
+## OWL Reasoning
+
+ontoink can run OWL DL reasoning at build time using the [HermiT](http://www.hermit-reasoner.com/) reasoner (via [owlready2](https://owlready2.readthedocs.io/)).
+
+### Installation
+
+HermiT reasoning requires Java and owlready2:
+
+```bash
+pip install ontoink[reasoning]
+```
+
+Or: `pip install owlready2` separately. If owlready2 is not available, ontoink falls back to [owlrl](https://owl-rl.readthedocs.io/) (OWL-RL profile, included via pyshacl).
+
+### What Gets Inferred
+
+The reasoner computes:
+
+- **Subclass chains** — if Dog < Mammal < Animal, then every Dog is also a Mammal and Animal
+- **Inverse properties** — if `hasPet owl:inverseOf isPetOf`, then `alice hasPet rex` implies `rex isPetOf alice`
+- **Transitive closures** — if `hasAncestor` is transitive and `alice hasAncestor bob`, `bob hasAncestor dave`, then `alice hasAncestor dave`
+- **Symmetric properties** — if `knows` is symmetric and `alice knows bob`, then `bob knows alice`
+- **And more** — equivalentClass, property chains, etc.
+
+### Using Reasoning
+
+The **Reasoning** button appears automatically when inferred triples are found. Click it to:
+
+1. **View inferred triples** in a table
+2. **Show on graph** — check the box to overlay inferred triples as purple dotted edges/nodes
+3. **Validate with Inferences** — run SHACL validation with inferred triples included
+
+Disable reasoning for a specific diagram with `reasoning: false`:
+
+````markdown
+```ontoink
+source: data.ttl
+shape: shape.ttl
+reasoning: false
+```
+````
+
+See the [OWL Reasoning example](examples/reasoning-demo.md) for a complete demo.
 
 ---
 

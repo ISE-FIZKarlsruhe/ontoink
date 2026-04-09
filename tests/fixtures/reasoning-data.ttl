@@ -1,0 +1,15 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex:Animal a owl:Class .
+ex:Dog    a owl:Class ; rdfs:subClassOf ex:Animal .
+ex:hasPet a owl:ObjectProperty .
+ex:isPetOf a owl:ObjectProperty ; owl:inverseOf ex:hasPet .
+ex:knows a owl:ObjectProperty, owl:SymmetricProperty .
+
+ex:alice a ex:Dog ; rdfs:label "Alice" ; ex:knows ex:bob .
+ex:bob a ex:Dog ; rdfs:label "Bob" .
+ex:carol a ex:Dog ; rdfs:label "Carol" ; ex:hasPet ex:rex .
+ex:rex a ex:Dog ; rdfs:label "Rex" .

@@ -8,6 +8,33 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] — 2026-04-09
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.3.0/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.3.0)
+
+### Added
+
+- **OWL Reasoning** — [HermiT](http://www.hermit-reasoner.com/) reasoner (via [owlready2](https://owlready2.readthedocs.io/)) runs at build time for full OWL DL reasoning, with [owlrl](https://owl-rl.readthedocs.io/) fallback for OWL-RL profile
+    - **Reasoning** toolbar button opens an inferences panel showing all inferred triples in a table
+    - **"Show on graph"** checkbox overlays inferred triples as purple dotted edges and nodes
+    - **"Validate with Inferences"** button runs SHACL validation with inferred triples included
+    - Smart filtering removes reflexive triples, built-in namespace noise, and domain/range propagation
+    - Configuration option: `reasoning: true/false` per diagram
+- **OWL Reasoning demo** — new [example](examples/reasoning-demo.md) with class hierarchy, inverse, transitive, and symmetric properties
+- **Draggable popups** — node and edge popups can be repositioned by dragging the header
+- **Collapsible popup sections** — Connections and SHACL Constraints are collapsed by default (click to expand)
+- **IRI dereferencing** — "More…" button in popups fetches structured data from the IRI via content negotiation
+- **Prefix editing** — toggle prefix visibility from the Edit Layout panel
+
+### Fixed
+
+- Prefix overlay only shows prefixes declared in the TTL source (not rdflib built-ins like dc, dcterms, skos, etc.)
+- Popup toggle sections work correctly for all node types (fixed special character issue in IRI-based IDs)
+- PNG/SVG export captures the exact viewport with overlays at their on-screen positions
+
+---
+
 ## [0.2.0] — 2026-04-08
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.2.0/)

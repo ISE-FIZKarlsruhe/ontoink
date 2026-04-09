@@ -22,8 +22,8 @@ with SHACL constraint visualization and live editing — right inside MkDocs.
 </div>
 
 <div class="ov-cta">
-  <a href="getting-started/" class="ov-primary">Get Started</a>
-  <a href="examples/foaf-person/" class="ov-secondary">See Examples</a>
+  <a href="playground/" class="ov-primary">Try Playground</a>
+  <a href="getting-started/" class="ov-secondary">Get Started</a>
 </div>
 
 <div class="ov-install" markdown>
@@ -47,26 +47,26 @@ ontoink embeds live ontology diagrams directly into your MkDocs site — no scre
 
 <div class="ov-feature-card" markdown>
 ### :material-graph-outline: Interactive Graphs
-Pan, zoom, drag nodes, click any element for details.
-Powered by Cytoscape.js with hierarchical dagre layout.
+Pan, zoom, drag, search, switch layouts (dagre, force, circle, tree).
+Click any node or edge for details with IRI dereferencing.
 </div>
 
 <div class="ov-feature-card" markdown>
 ### :material-shield-check-outline: SHACL Validation
-Constraints are overlaid on the graph with cardinality badges.
-Validate live in the browser — no server needed.
+Constraints overlaid with cardinality badges. Visual coverage map.
+[SHACL Editor](shacl-editor.md) for building shapes without code.
 </div>
 
 <div class="ov-feature-card" markdown>
-### :material-pencil-outline: Live TTL Editor
-Edit RDF/Turtle inline with syntax highlighting.
-Update the graph instantly and validate against shapes.
+### :material-brain: OWL Reasoning
+HermiT reasoner infers subclass chains, inverse properties,
+transitive closures. Consistency check with green/red badge.
 </div>
 
 <div class="ov-feature-card" markdown>
-### :material-file-image-outline: Publication-Ready Export
-Export PNG (3x hi-DPI) or SVG with legend and prefixes.
-What you see is what you get.
+### :material-chart-bar: Analytics & SPARQL
+Graph statistics, ontology metrics, LOD cloud links, path finder.
+[SPARQL Explorer](sparql-explorer.md) and [OntoSniff](ontosniff.md) quality checker.
 </div>
 
 <div class="ov-feature-card" markdown>
@@ -76,9 +76,9 @@ per element type — all from the toolbar.
 </div>
 
 <div class="ov-feature-card" markdown>
-### :material-puzzle-outline: Zero Config
-One pip install, two lines in `mkdocs.yml`.
-Write a fenced code block and you're done.
+### :material-rocket-launch-outline: Playground & Editor
+[Playground](playground.md): paste TTL and visualize instantly — no install.
+[SHACL Editor](shacl-editor.md): build shapes visually with templates.
 </div>
 
 </div>

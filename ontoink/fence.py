@@ -64,9 +64,15 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
         show_legend = str(config.get("legend", "true")).lower() == "true"
         show_ns = str(config.get("namespaces", "true")).lower() == "true"
 
+        show_reasoning = str(config.get("reasoning", "true")).lower() == "true"
+
         editor_btn = ""
         if show_editor:
             editor_btn = f'<button class="ov-btn ov-btn-accent" onclick="ontoink.toggleEditor(\'{graph_id}\')" title="Edit TTL & Validate">Edit &amp; Validate</button>\n'
+
+        reasoning_btn = ""
+        if show_reasoning:
+            reasoning_btn = f'<button class="ov-btn" onclick="ontoink.toggleReasoning(\'{graph_id}\')" title="Show/hide inferred triples">Reasoning</button>\n'
 
         return (
             f'<div id="{graph_id}" class="ontoink-container" '
@@ -79,6 +85,13 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'      <button class="ov-btn" onclick="ontoink.zoomOut(\'{graph_id}\')" title="Zoom out">&minus;</button>\n'
             f'      <button class="ov-btn" onclick="ontoink.fit(\'{graph_id}\')" title="Fit to view">Fit</button>\n'
             f'      <button class="ov-btn" onclick="ontoink.fullscreen(\'{graph_id}\')" title="Fullscreen">&#x26F6;</button>\n'
+            f'      <select class="ov-layout-select" onchange="ontoink.changeLayout(\'{graph_id}\',this.value)" title="Layout algorithm">\n'
+            f'        <option value="dagre">Dagre</option><option value="cose">Force</option><option value="circle">Circle</option>\n'
+            f'        <option value="concentric">Concentric</option><option value="breadthfirst">Tree</option><option value="grid">Grid</option>\n'
+            f'      </select>\n'
+            f'    </div>\n'
+            f'    <div class="ov-toolbar-group">\n'
+            f'      <input class="ov-search-input" type="text" placeholder="Search..." oninput="ontoink.search(\'{graph_id}\',this.value)" title="Fuzzy search nodes &amp; edges">\n'
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
             f'      <button class="ov-btn" onclick="ontoink.exportPNG(\'{graph_id}\')" title="Export PNG">PNG</button>\n'
@@ -87,6 +100,11 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
             f'      <button class="ov-btn" onclick="ontoink.toggleColors(\'{graph_id}\')" title="Edit layout, colors and shapes">Edit Layout</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.abstractView(\'{graph_id}\')" title="Show abstract model (classes only)">Abstract</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.toggleStats(\'{graph_id}\')" title="Graph statistics">Stats</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.togglePathFinder(\'{graph_id}\')" title="Find paths between nodes">Paths</button>\n'
+            f'      <button class="ov-btn" onclick="ontoink.toggleSparql(\'{graph_id}\')" title="SPARQL query">SPARQL</button>\n'
+            f'      {reasoning_btn}'
             f'      {editor_btn}'
             f'    </div>\n'
             f'  </div>\n'
@@ -94,8 +112,22 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'    <div class="ov-canvas" style="width:100%;height:100%;"></div>\n'
             f'    <div class="ov-legend-overlay ov-draggable" style="bottom:12px;left:12px;"></div>\n'
             f'    <div class="ov-ns-overlay ov-draggable" style="bottom:12px;right:12px;"></div>\n'
+            f'    <div class="ov-minimap" style="position:absolute;top:8px;right:8px;width:150px;height:100px;border:1px solid #d1d5db;border-radius:6px;background:rgba(255,255,255,0.9);overflow:hidden;"></div>\n'
+            f'  </div>\n'
+            f'  <div class="ov-stats-panel" style="display:none;"></div>\n'
+            f'  <div class="ov-pathfinder-panel" style="display:none;"></div>\n'
+            f'  <div class="ov-sparql-panel" style="display:none;"></div>\n'
+            f'  <div class="ov-reasoning-panel" style="display:none;">\n'
+            f'    <div class="ov-editor-header ov-panel-head">Inferred Triples (OWL-RL)<button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>\n'
+            f'    <div class="ov-reasoning-content"></div>\n'
+            f'    <div class="ov-editor-actions">\n'
+            f'      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-family:var(--ov-font);cursor:pointer;">'
+            f'<input type="checkbox" class="ov-reasoning-graph-toggle" onchange="ontoink.toggleInferredOnGraph(\'{graph_id}\',this.checked)"> Show on graph</label>\n'
+            f'      <button class="ov-btn" onclick="ontoink.validateWithReasoning(\'{graph_id}\')">Validate with Inferences</button>\n'
+            f'    </div>\n'
             f'  </div>\n'
             f'  <div class="ov-editor-panel" style="display:none;">\n'
+            f'    <div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" onclick="this.closest(\'.ov-editor-panel\').style.display=\'none\'">&times;</button></div>\n'
             f'    <div class="ov-editor-split">\n'
             f'      <div class="ov-editor-left">\n'
             f'        <div class="ov-editor-header">TTL Editor</div>\n'

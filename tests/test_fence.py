@@ -1,6 +1,5 @@
 """Tests for the fence handler."""
 
-import os
 from pathlib import Path
 
 from ontoink.fence import render_ontoink, reset_counter
@@ -50,3 +49,76 @@ def test_render_includes_editor_panel():
 
     assert "ov-editor-panel" in result
     assert "Edit &amp; Validate" in result
+
+
+def test_render_includes_search_input():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl"
+    result = render_ontoink(source, "ontoink", "ontoink", {}, None)
+
+    assert "ov-search-input" in result
+    assert "ov-layout-select" in result
+
+
+def test_render_includes_new_toolbar_buttons():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl"
+    result = render_ontoink(source, "ontoink", "ontoink", {}, None)
+
+    assert "toggleStats" in result
+    assert "togglePathFinder" in result
+    assert "toggleSparql" in result
+    assert "ov-minimap" in result
+    assert "ov-stats-panel" in result
+    assert "ov-pathfinder-panel" in result
+    assert "ov-sparql-panel" in result
+
+
+def test_render_reasoning_button():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl"
+    result = render_ontoink(source, "ontoink", "ontoink", {}, None)
+
+    assert "toggleReasoning" in result
+
+
+def test_render_reasoning_disabled():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl\nreasoning: false"
+    result = render_ontoink(source, "ontoink", "ontoink", {}, None)
+
+    assert "toggleReasoning" not in result
+
+
+def test_render_includes_layout_selector():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl"
+    result = render_ontoink(source, "ontoink", "ontoink", {}, None)
+
+    assert "ov-layout-select" in result
+    assert "changeLayout" in result
+    assert "dagre" in result.lower()
+
+
+def test_render_includes_abstract_button():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl"
+    result = render_ontoink(source, "ontoink", "ontoink", {}, None)
+
+    assert "abstractView" in result
+
+
+def test_render_includes_coverage_and_sparql():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl"
+    result = render_ontoink(source, "ontoink", "ontoink", {}, None)
+
+    assert "showCoverage" in result or "toggleStats" in result
+    assert "ov-sparql-panel" in result
