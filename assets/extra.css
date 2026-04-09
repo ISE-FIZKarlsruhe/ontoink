@@ -1,0 +1,93 @@
+/* ontoink docs — custom overrides for Material theme */
+
+/* Hero section on the landing page */
+.ov-hero {
+  text-align: center;
+  padding: 2.5rem 1rem 1.5rem;
+}
+.ov-hero h1 {
+  font-size: 2.8rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 0.5rem;
+}
+.ov-hero .ov-tagline {
+  font-size: 1.15rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 640px;
+  margin: 0 auto 1.5rem;
+  line-height: 1.6;
+}
+.ov-badges {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.ov-badges img { height: 22px; }
+.ov-cta {
+  display: inline-flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ov-cta a {
+  display: inline-block;
+  padding: 10px 28px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+.ov-cta a:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.ov-cta .ov-primary {
+  background: var(--md-primary-fg-color);
+  color: #fff;
+}
+.ov-cta .ov-secondary {
+  background: transparent;
+  color: var(--md-primary-fg-color);
+  border: 2px solid var(--md-primary-fg-color);
+}
+
+/* Feature cards grid */
+.ov-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.2rem;
+  margin: 2rem 0;
+}
+.ov-feature-card {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 10px;
+  padding: 1.2rem 1.4rem;
+  background: var(--md-default-bg-color);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.ov-feature-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  border-color: var(--md-primary-fg-color);
+}
+.ov-feature-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+.ov-feature-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--md-default-fg-color--light);
+  line-height: 1.5;
+}
+
+/* Citation code block styling */
+.ov-cite-block {
+  position: relative;
+}
+
+/* Compact install snippet on landing */
+.ov-install {
+  max-width: 480px;
+  margin: 1.5rem auto 0;
+}

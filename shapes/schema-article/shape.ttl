@@ -1,0 +1,23 @@
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix schema: <https://schema.org/> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/ArticleShape>
+    a sh:NodeShape ;
+    sh:targetClass schema:ScholarlyArticle ;
+    sh:property [
+        sh:path schema:name ;
+        sh:minCount 1 ;
+        sh:message "Every ScholarlyArticle must have a name." ;
+    ] ;
+    sh:property [
+        sh:path schema:author ;
+        sh:minCount 1 ;
+        sh:message "Every ScholarlyArticle must have at least one author." ;
+    ] ;
+    sh:property [
+        sh:path schema:datePublished ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "Every ScholarlyArticle must have exactly one datePublished." ;
+    ] .
