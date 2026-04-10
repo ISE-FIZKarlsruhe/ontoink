@@ -34,12 +34,16 @@ ontoink is a MkDocs plugin that transforms RDF/Turtle files into interactive, pu
 | rdfs:subClassOf | Black solid line | `#374151` |
 | SHACL Constraint | Cyan dashed bold line | `#0891b2` |
 
-### Click Popups
+### Click Popups & IRI Dereferencing
 - Node label, type badge, full IRI (clickable)
 - Copy Label / Copy IRI buttons
 - Ontology source indicator
 - Connected edges (incoming/outgoing)
 - SHACL constraints applicable to the node
+- **"More..." button** with automatic ontology dereferencing — fetches `rdfs:label`, `rdfs:comment`, type, subclass, and more from the original ontology source via content negotiation
+- **Known ontology registry** — bypasses CORS-broken redirects for nfdicore, BFO, IAO, RO, FOAF, Schema.org, SKOS
+- **Robust OWL parser** — handles complex Protégé-style TTL with nested blank nodes and collections
+- Scrollable popup with `max-height: 70vh` for large result sets
 
 ### SHACL Constraint Overlay
 - Constraints shown as bold dashed cyan edges with cardinality badges `[1..*]`
@@ -100,7 +104,7 @@ ontoink is a MkDocs plugin that transforms RDF/Turtle files into interactive, pu
 ### Browser-only Tools (no installation)
 - **[Playground](https://ise-fizkarlsruhe.github.io/ontoink/playground/)** — paste or upload TTL and visualize instantly. Shareable via URL parameters.
 - **[SHACL Editor](https://ise-fizkarlsruhe.github.io/ontoink/shacl-editor/)** — build SHACL shapes visually with templates, tooltips, live preview, and **Shape Recommender** that auto-generates constraints from instance data or SPARQL endpoints using data profiling (Mihindukulasooriya et al. 2018).
-- **[SPARQL Explorer](https://ise-fizkarlsruhe.github.io/ontoink/sparql-explorer/)** — connect to any SPARQL endpoint, auto-discover schema, write queries with Ctrl+Space autocomplete. Adaptive discovery for large KGs (DBpedia, Wikidata).
+- **[SPARQL Explorer](https://ise-fizkarlsruhe.github.io/ontoink/sparql-explorer/)** — connect to any SPARQL endpoint, auto-discover schema, write queries with Ctrl+Space autocomplete. Adaptive discovery for large KGs (DBpedia, Wikidata). **Automatic label resolution** from ontology sources when the endpoint lacks `rdfs:label` — fetches nfdicore, BFO, IAO, FOAF, etc. directly.
 - **[OntoSniff](https://ise-fizkarlsruhe.github.io/ontoink/ontosniff/)** — paste TTL and get instant quality analysis with a score and annotated anti-patterns.
 - **Abstract Model View** — toggle between full graph and schema-only view (classes and class-level properties only).
 
@@ -123,8 +127,9 @@ Connecting to a SPARQL endpoint with millions of triples (DBpedia: 9.5B, Wikidat
 2. **Class discovery with counts** — `SELECT ?class (COUNT(?inst) AS ?count) GROUP BY ?class LIMIT 100` gives the schema overview. If this times out (>15s), falls back to `SELECT DISTINCT ?class` which is orders of magnitude faster
 3. **Property discovery with domain/range** — joins `?s a ?domain . ?o a ?range` to infer property signatures. Falls back to `SELECT DISTINCT ?prop` for large endpoints
 4. **Batch label fetching** — `VALUES` clause retrieves labels for up to 80 IRIs in one query
+5. **Ontology source fallback** — for IRIs still without labels after endpoint queries, fetches the ontology files directly (via known URL registry) and extracts `rdfs:label`/`skos:prefLabel` using a robust Turtle/RDF-XML parser
 
-This adaptive approach means any endpoint works — from a 100-triple demo to Wikidata.
+This adaptive approach means any endpoint works — from a 100-triple demo to Wikidata — and labels are always resolved even when the triplestore doesn't contain ontology annotations.
 
 ### OWL Reasoning Pipeline
 
@@ -172,6 +177,20 @@ The SPARQL query editor provides Wikidata-style autocomplete:
 - Fuzzy matching searches across IRI, label, and prefixed name simultaneously
 - Classes, properties, and SPARQL keywords are all suggested with color-coded type badges
 - Selecting an item inserts the full `<IRI>` into the query
+
+### Automatic Ontology Label Resolution
+
+ontoink automatically fetches and caches labels from all ontologies referenced in the graph:
+
+1. **On graph init** — collects all unique namespaces from nodes/edges and fetches ontology files in the background
+2. **Known ontology registry** — maps namespaces to CORS-friendly download URLs (GitHub Pages, raw GitHub, W3C), bypassing servers that redirect without CORS headers (e.g., `nfdi.fiz-karlsruhe.de → ise-fizkarlsruhe.github.io`)
+3. **Dual parser strategy** — merges results from a fast minimal parser with a robust line-based parser that handles complex OWL TTL (nested blank nodes, collections, multi-line strings)
+4. **Label propagation** — resolved labels are used in:
+   - Click popups ("More..." shows label, comment, type, subclass, deprecation status)
+   - SPARQL autocomplete (Ctrl+Space shows `"contributor role"` + `NFDI_0000118`)
+   - SPARQL class/property dropdowns (`contributor role (NFDI_0000118)` instead of just `NFDI_0000118`)
+   - Query results (IRIs rendered as `label (prefixed:name)`)
+5. **SPARQL Explorer endpoint fallback** — when the triplestore lacks labels, fetches ontology source files directly and extracts `rdfs:label`/`skos:prefLabel` from Turtle and RDF/XML
 
 ## Installation
 

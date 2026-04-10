@@ -8,6 +8,48 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] — 2026-04-10
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.0/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.0)
+
+### Highlight: Automatic Ontology Label Resolution
+
+ontoink now **automatically fetches and resolves human-readable labels** from referenced ontologies. When your shape graph uses IRIs from nfdicore, BFO, IAO, or other ontologies, ontoink fetches the ontology source files and extracts `rdfs:label`, `rdfs:comment`, type information, and more — so you see `"contributor role"` instead of `NFDI_0000118` everywhere.
+
+This works across:
+
+- **Click popups** — "More..." shows label, comment, type, subclass, deprecation status
+- **SPARQL autocomplete** — Ctrl+Space shows both human label and IRI local name
+- **SPARQL class/property dropdowns** — `contributor role (NFDI_0000118)` instead of just `NFDI_0000118`
+- **Query results** — IRIs rendered as `label (prefixed:name)`
+- **SPARQL Explorer** — when the endpoint lacks labels, fetches ontology source files as fallback
+
+### Added
+
+- **Automatic ontology label resolution** — background fetch of all referenced ontology namespaces on graph init
+    - Known ontology URL registry bypasses CORS-broken redirects for nfdicore, BFO, IAO, RO, FOAF, Schema.org, SKOS
+    - Robust line-based OWL TTL parser handles Protégé-style files with nested blank nodes, collections, and `"""` strings
+    - Dual parser strategy: merges results from minimal + robust parsers for maximum coverage
+- **Enhanced IRI dereferencing** — "More..." button shows label, comment, type, subClassOf, deprecation, SKOS definitions, editorial notes
+- **Scrollable popups** — popup containers capped at 70vh with overflow scroll; deref results independently scrollable
+- **Sticky toolbar** — toolbar stays fixed at viewport top while scrolling
+- **SPARQL Explorer ontology fallback** — fetches nfdicore, BFO, IAO, FOAF, etc. when endpoint lacks rdfs:label
+- **SPARQL results with labels** — query result IRIs shown as `label (prefixed:name)`
+- **SPARQL dropdowns always fresh** — class/property selects rebuild with latest labels every time panel opens
+- **OntoSniff** — ontology smell detector with 9 anti-patterns, quality score (0-100), standalone page
+- **SPARQL Explorer** — endpoint connection, schema discovery, query builder, Ctrl+Space autocomplete
+- **Abstract Model View**, **Search & Highlight**, **Layout Switcher**, **Graph Statistics**, **Path Finder**, **Minimap**, **Neighborhood Focus**, **Playground**, **SHACL Editor**
+
+### Fixed
+
+- IRI dereferencing for nfdicore and ontologies with CORS-broken 302 redirects
+- SPARQL Explorer label fetching with batch loading and ontology source fallback
+- SPARQL dropdowns refresh labels on every panel open (not just first build)
+- PNG/SVG export: minimap hidden, scale 2x, reliable overlay positioning
+
+---
+
 ## [0.3.0] — 2026-04-09
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.3.0/)

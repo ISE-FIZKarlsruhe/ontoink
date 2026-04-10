@@ -52,6 +52,11 @@ Click any node or edge for details with IRI dereferencing.
 </div>
 
 <div class="ov-feature-card" markdown>
+### :material-tag-text-outline: Automatic Label Resolution { .ov-feature-new }
+Fetches human-readable labels from referenced ontologies (nfdicore, BFO, IAO, FOAF, etc.) — see `"contributor role"` instead of `NFDI_0000118` in popups, SPARQL autocomplete, and query results.
+</div>
+
+<div class="ov-feature-card" markdown>
 ### :material-shield-check-outline: SHACL Validation
 Constraints overlaid with cardinality badges. Visual coverage map.
 [SHACL Editor](shacl-editor.md) for building shapes without code.

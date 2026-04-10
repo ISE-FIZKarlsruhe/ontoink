@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.2.0 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.5.0 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -242,41 +242,468 @@ var ontoink = (function () {
   }
 
   // ── IRI dereferencing ──────────────────────────────────────────────────
+  // ── IRI Dereference helpers ───────────────────────────────────────────
+
+  // Global cache for fetched ontology files (keyed by namespace URL)
+  var _ontologyCache = {};  // namespace → { triples: [...], prefixes: {...} }
+  var _ontologyFetchPromises = {};  // namespace → Promise (dedup in-flight fetches)
+
+  var _DEREF_PROPS = {
+    RL: "http://www.w3.org/2000/01/rdf-schema#label",
+    RC: "http://www.w3.org/2000/01/rdf-schema#comment",
+    RT: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+    SC: "http://www.w3.org/2000/01/rdf-schema#subClassOf",
+    DOM: "http://www.w3.org/2000/01/rdf-schema#domain",
+    RNG: "http://www.w3.org/2000/01/rdf-schema#range",
+    DEPR: "http://www.w3.org/2002/07/owl#deprecated",
+    SKOS_DEF: "http://www.w3.org/2004/02/skos/core#definition",
+    SKOS_NOTE: "http://www.w3.org/2004/02/skos/core#editorialNote"
+  };
+
+  // Extract info for a single IRI from a parsed triples array
+  function extractInfoFromTriples(triples, iri, prefixes) {
+    var info = {}, P = _DEREF_PROPS;
+    triples.forEach(function(t) {
+      if (t.s === iri) {
+        if (t.p === P.RL && !info["Label"]) info["Label"] = litVal(t.o);
+        if (t.p === P.RC && !info["Comment"]) info["Comment"] = litVal(t.o).substring(0, 400);
+        if (t.p === P.RT && !info["Type"]) info["Type"] = uriLabel(t.o, prefixes);
+        if (t.p === P.SC) info["Subclass of"] = (info["Subclass of"] ? info["Subclass of"] + ", " : "") + uriLabel(t.o, prefixes);
+        if (t.p === P.DOM && !info["Domain"]) info["Domain"] = uriLabel(t.o, prefixes);
+        if (t.p === P.RNG && !info["Range"]) info["Range"] = uriLabel(t.o, prefixes);
+        if (t.p === P.DEPR) info["Deprecated"] = litVal(t.o);
+        if (t.p === P.SKOS_DEF && !info["Definition"]) info["Definition"] = litVal(t.o).substring(0, 400);
+        if (t.p === P.SKOS_NOTE && !info["Note"]) info["Note"] = litVal(t.o).substring(0, 300);
+      }
+      if (t.o === iri && t.p === P.SC) {
+        info["Superclass of"] = (info["Superclass of"] ? info["Superclass of"] + ", " : "") + uriLabel(t.s, prefixes);
+      }
+    });
+    return info;
+  }
+
+  // Build a cache of all IRIs' info from parsed triples and merge into inst._derefCache
+  function indexOntologyTriples(parsed, inst) {
+    if (!inst) return;
+    if (!inst._derefCache) inst._derefCache = {};
+    var P = _DEREF_PROPS, pf = parsed.prefixes;
+    var bySubject = {};
+    parsed.triples.forEach(function(t) {
+      if (!bySubject[t.s]) bySubject[t.s] = [];
+      bySubject[t.s].push(t);
+      // reverse subClassOf
+      if (t.p === P.SC && t.o && t.o[0] !== '"') {
+        if (!bySubject[t.o]) bySubject[t.o] = [];
+        bySubject[t.o].push({ s: t.o, p: "__superclassOf__", o: t.s });
+      }
+    });
+    for (var subj in bySubject) {
+      var info = {};
+      bySubject[subj].forEach(function(t) {
+        if (t.p === "__superclassOf__") { info["Superclass of"] = (info["Superclass of"] ? info["Superclass of"] + ", " : "") + uriLabel(t.o, pf); return; }
+        if (t.s !== subj) return;
+        if (t.p === P.RL && !info["Label"]) info["Label"] = litVal(t.o);
+        if (t.p === P.RC && !info["Comment"]) info["Comment"] = litVal(t.o).substring(0, 400);
+        if (t.p === P.RT && !info["Type"]) info["Type"] = uriLabel(t.o, pf);
+        if (t.p === P.SC) info["Subclass of"] = (info["Subclass of"] ? info["Subclass of"] + ", " : "") + uriLabel(t.o, pf);
+        if (t.p === P.DOM && !info["Domain"]) info["Domain"] = uriLabel(t.o, pf);
+        if (t.p === P.RNG && !info["Range"]) info["Range"] = uriLabel(t.o, pf);
+        if (t.p === P.DEPR) info["Deprecated"] = litVal(t.o);
+        if (t.p === P.SKOS_DEF && !info["Definition"]) info["Definition"] = litVal(t.o).substring(0, 400);
+      });
+      if (Object.keys(info).length) {
+        // Merge (don't overwrite existing local data)
+        var existing = inst._derefCache[subj] || {};
+        for (var kk in info) { if (!existing[kk]) existing[kk] = info[kk]; }
+        inst._derefCache[subj] = existing;
+      }
+    }
+    // Enrich SPARQL catalog with resolved labels
+    if (inst._sparqlCatalog) {
+      inst._sparqlCatalog.forEach(function(item) {
+        if (item.iri && inst._derefCache[item.iri] && inst._derefCache[item.iri]["Label"]) {
+          if (!item.label) { item.label = inst._derefCache[item.iri]["Label"]; item.short = inst._derefCache[item.iri]["Label"]; }
+        }
+      });
+      // Add IRIs found in ontology but not yet in catalog
+      for (var cIri in inst._derefCache) {
+        var cd = inst._derefCache[cIri];
+        if (!cd["Label"]) continue;
+        var inCat = false;
+        for (var ci = 0; ci < inst._sparqlCatalog.length; ci++) { if (inst._sparqlCatalog[ci].iri === cIri) { inCat = true; break; } }
+        if (!inCat) {
+          var cType = (cd["Type"] || "").toLowerCase();
+          inst._sparqlCatalog.push({ iri: cIri, label: cd["Label"], short: cd["Label"], type: cType.indexOf("property") >= 0 ? "prop" : "class" });
+        }
+      }
+    }
+  }
+
+  // Get the namespace base from an IRI (for fetching the whole ontology)
+  function getNamespaceBase(iri) {
+    // Try hash namespace
+    var hi = iri.lastIndexOf("#");
+    if (hi >= 0) return iri.substring(0, hi + 1);
+    // Try slash namespace (but not http:// or https://)
+    var si = iri.lastIndexOf("/");
+    if (si > 8) return iri.substring(0, si + 1);
+    return iri;
+  }
+
+  // Known ontology URLs: maps namespace prefixes to CORS-friendly direct download URLs.
+  // Many ontology servers (nfdi.fiz-karlsruhe.de, purl.obolibrary.org, etc.) return
+  // 302 redirects WITHOUT CORS headers, so browser fetch() fails. These mappings let us
+  // skip the redirect and fetch the ontology file directly from the final host.
+  var _KNOWN_ONTOLOGY_URLS = [
+    { ns: "https://nfdi.fiz-karlsruhe.de/ontology/", urls: ["https://ise-fizkarlsruhe.github.io/nfdicore/3.0.4/ontology.ttl"] },
+    { ns: "http://purl.obolibrary.org/obo/BFO_", urls: ["https://raw.githubusercontent.com/BFO-ontology/BFO-2020/master/src/owl/bfo-2020.owl"] },
+    { ns: "http://purl.obolibrary.org/obo/IAO_", urls: ["https://raw.githubusercontent.com/information-artifact-ontology/IAO/master/src/ontology/iao.owl"] },
+    { ns: "http://purl.obolibrary.org/obo/RO_", urls: ["https://raw.githubusercontent.com/oborel/obo-relations/master/ro.owl"] },
+    { ns: "http://xmlns.com/foaf/0.1/", urls: ["https://xmlns.com/foaf/spec/index.rdf"] },
+    { ns: "http://www.w3.org/2004/02/skos/core#", urls: ["https://www.w3.org/2009/08/skos-reference/skos.rdf"] },
+    { ns: "https://schema.org/", urls: ["https://schema.org/version/latest/schemaorg-current-https.jsonld"] },
+    { ns: "http://schema.org/", urls: ["https://schema.org/version/latest/schemaorg-current-http.jsonld"] },
+  ];
+
+  // Resolve a namespace to a direct, CORS-safe URL (or null if unknown)
+  function resolveOntologyUrl(nsBase) {
+    for (var i = 0; i < _KNOWN_ONTOLOGY_URLS.length; i++) {
+      if (nsBase.indexOf(_KNOWN_ONTOLOGY_URLS[i].ns) === 0 || _KNOWN_ONTOLOGY_URLS[i].ns.indexOf(nsBase) === 0) {
+        return _KNOWN_ONTOLOGY_URLS[i].urls;
+      }
+    }
+    return null;
+  }
+
+  // Fetch a URL and detect format from content-type
+  function fetchRdfUrl(url, acceptHeader) {
+    return fetch(url, { headers: { "Accept": acceptHeader || "text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8" }, mode: "cors", redirect: "follow" })
+      .then(function(r) {
+        if (!r.ok) throw new Error(r.status);
+        var ct = r.headers.get("content-type") || "";
+        return r.text().then(function(body) {
+          var fmt = "turtle";
+          if (ct.indexOf("rdf+xml") >= 0 || ct.indexOf("/xml") >= 0 || (body.trimStart().charAt(0) === '<' && body.indexOf("rdf:RDF") >= 0)) fmt = "rdfxml";
+          else if (ct.indexOf("json") >= 0 || body.trimStart().charAt(0) === '{' || body.trimStart().charAt(0) === '[') fmt = "jsonld";
+          return { body: body, format: fmt };
+        });
+      });
+  }
+
+  // Robust TTL parser for complex OWL ontology files (handles nested blank nodes,
+  // collections, multi-line strings). Instead of full parsing, we extract subject blocks
+  // by tracking the current subject and scanning for well-known predicates.
+  function parseTtlRobust(ttl) {
+    var prefixes = {};
+    var triples = [];
+    var lines = ttl.split("\n");
+
+    // Pass 1: extract prefixes and @base
+    var baseUri = "";
+    for (var i = 0; i < lines.length; i++) {
+      var pMatch = lines[i].match(/^@prefix\s+(\w*)\s*:\s*<([^>]+)>\s*\./);
+      if (pMatch) { prefixes[pMatch[1]] = pMatch[2]; continue; }
+      var bMatch = lines[i].match(/^@base\s+<([^>]+)>\s*\./);
+      if (bMatch) { baseUri = bMatch[1]; continue; }
+      // Also handle PREFIX (SPARQL-style)
+      var pMatch2 = lines[i].match(/^PREFIX\s+(\w*)\s*:\s*<([^>]+)>/i);
+      if (pMatch2) { prefixes[pMatch2[1]] = pMatch2[2]; }
+    }
+
+    function resolveRef(token) {
+      if (!token) return "";
+      token = token.trim();
+      if (token.charAt(0) === "<" && token.charAt(token.length - 1) === ">") return token.slice(1, -1);
+      if (token === "a") return "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+      var ci = token.indexOf(":");
+      if (ci >= 0) {
+        var pfx = token.substring(0, ci);
+        if (prefixes[pfx] !== undefined) return prefixes[pfx] + token.substring(ci + 1);
+      }
+      return token;
+    }
+
+    // Pass 2: line-by-line, track current subject and extract simple predicate-object pairs
+    var currentSubject = "";
+    var inMultiLineString = false;
+    var bracketDepth = 0; // track [ ] nesting
+    var parenDepth = 0;   // track ( ) nesting
+
+    for (var j = 0; j < lines.length; j++) {
+      var line = lines[j];
+
+      // Skip prefix/base/comments
+      if (/^@prefix\s/.test(line) || /^@base\s/.test(line) || /^PREFIX\s/i.test(line)) continue;
+      if (/^\s*#/.test(line) || /^\s*$/.test(line)) continue;
+      if (/^#{2,}/.test(line)) continue;  // ### section headers
+
+      // Handle multi-line strings (""" ... """)
+      if (inMultiLineString) {
+        if (line.indexOf('"""') >= 0) inMultiLineString = false;
+        continue;
+      }
+      var tripleQuoteCount = (line.match(/"""/g) || []).length;
+      if (tripleQuoteCount === 1) { inMultiLineString = true; continue; }
+
+      // Track bracket/paren depth (blank nodes and collections)
+      for (var ci2 = 0; ci2 < line.length; ci2++) {
+        var ch = line.charAt(ci2);
+        if (ch === "[") bracketDepth++;
+        else if (ch === "]") bracketDepth--;
+        else if (ch === "(") parenDepth++;
+        else if (ch === ")") parenDepth--;
+      }
+
+      // Detect new subject: line starts with < or prefix:name (not whitespace)
+      var trimmed = line.trimStart();
+      if (trimmed.charAt(0) === "<" || (/^\w+:\w/.test(trimmed) && line.charAt(0) !== " " && line.charAt(0) !== "\t")) {
+        // Extract subject IRI
+        var subjMatch = trimmed.match(/^(<[^>]+>)/);
+        if (subjMatch) {
+          currentSubject = resolveRef(subjMatch[1]);
+        } else {
+          var subjMatch2 = trimmed.match(/^(\w+:\w+)/);
+          if (subjMatch2) currentSubject = resolveRef(subjMatch2[1]);
+        }
+        bracketDepth = 0; parenDepth = 0;
+        // Count brackets on this line
+        for (var ci3 = 0; ci3 < line.length; ci3++) {
+          var ch2 = line.charAt(ci3);
+          if (ch2 === "[") bracketDepth++;
+          else if (ch2 === "]") bracketDepth--;
+          else if (ch2 === "(") parenDepth++;
+          else if (ch2 === ")") parenDepth--;
+        }
+      }
+
+      if (!currentSubject) continue;
+      // Only extract triples at top level (not inside blank nodes/collections)
+      if (bracketDepth > 0 || parenDepth > 0) continue;
+
+      // Extract predicate-object pairs from this line
+      // Look for known predicates we care about
+      var knownPreds = [
+        { pattern: "rdfs:label", full: "http://www.w3.org/2000/01/rdf-schema#label" },
+        { pattern: "rdfs:comment", full: "http://www.w3.org/2000/01/rdf-schema#comment" },
+        { pattern: "rdf:type", full: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" },
+        { pattern: "rdfs:subClassOf", full: "http://www.w3.org/2000/01/rdf-schema#subClassOf" },
+        { pattern: "rdfs:domain", full: "http://www.w3.org/2000/01/rdf-schema#domain" },
+        { pattern: "rdfs:range", full: "http://www.w3.org/2000/01/rdf-schema#range" },
+        { pattern: "owl:deprecated", full: "http://www.w3.org/2002/07/owl#deprecated" },
+        { pattern: "skos:definition", full: "http://www.w3.org/2004/02/skos/core#definition" },
+        { pattern: "skos:prefLabel", full: "http://www.w3.org/2004/02/skos/core#prefLabel" },
+        { pattern: "skos:altLabel", full: "http://www.w3.org/2004/02/skos/core#altLabel" },
+      ];
+
+      // Also check for "a" (rdf:type) — e.g., "rdf:type owl:Class"
+      if (/\brdf:type\b/.test(trimmed) || /\ba\b/.test(trimmed)) {
+        var typeMatch = trimmed.match(/(?:rdf:type|(?:^|\s)a)\s+(<[^>]+>|[\w]+:[\w]+)/);
+        if (typeMatch) {
+          triples.push({ s: currentSubject, p: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", o: resolveRef(typeMatch[1]) });
+        }
+      }
+
+      for (var ki = 0; ki < knownPreds.length; ki++) {
+        var kp = knownPreds[ki];
+        var pidx = trimmed.indexOf(kp.pattern);
+        if (pidx < 0) continue;
+        // Extract the object after the predicate
+        var afterPred = trimmed.substring(pidx + kp.pattern.length).trim();
+        if (!afterPred) continue;
+        // Object is either <IRI>, "literal"@lang, "literal"^^type, or prefix:name
+        var objMatch = afterPred.match(/^(<[^>]+>)/);
+        if (objMatch) {
+          triples.push({ s: currentSubject, p: kp.full, o: resolveRef(objMatch[1]) });
+        } else {
+          var litMatch = afterPred.match(/^("(?:[^"\\]|\\.)*"(?:@[\w-]+)?(?:\^\^(?:<[^>]+>|[\w]+:[\w]+))?)/);
+          if (litMatch) {
+            triples.push({ s: currentSubject, p: kp.full, o: litMatch[1] });
+          } else {
+            var prefMatch = afterPred.match(/^([\w]+:[\w]+)/);
+            if (prefMatch) triples.push({ s: currentSubject, p: kp.full, o: resolveRef(prefMatch[1]) });
+          }
+        }
+      }
+
+      // Reset subject on statement end (line ends with .)
+      if (/\.\s*$/.test(trimmed) && bracketDepth <= 0 && parenDepth <= 0) {
+        currentSubject = "";
+      }
+    }
+
+    return { triples: triples, prefixes: prefixes };
+  }
+
+  function parseRdfResponse(result) {
+    if (result.format === "turtle") {
+      // Use both parsers and merge: minimal handles simple TTL well,
+      // robust handles complex OWL TTL with nested blank nodes/collections
+      var p1 = parseTtlMinimal(result.body);
+      var p2 = parseTtlRobust(result.body);
+      if (!p1 || p1.triples.length === 0) return p2;
+      if (!p2 || p2.triples.length === 0) return p1;
+      // Merge: add triples from robust that aren't in minimal (deduplicated by s+p key)
+      var seen = {};
+      p1.triples.forEach(function(t) { seen[t.s + "|" + t.p + "|" + t.o] = true; });
+      p2.triples.forEach(function(t) {
+        var key = t.s + "|" + t.p + "|" + t.o;
+        if (!seen[key]) { p1.triples.push(t); seen[key] = true; }
+      });
+      // Merge prefixes
+      for (var pk in p2.prefixes) { if (!p1.prefixes[pk]) p1.prefixes[pk] = p2.prefixes[pk]; }
+      return p1;
+    }
+    if (result.format === "rdfxml") return parseRdfXmlMinimal(result.body);
+    if (result.format === "jsonld") {
+      try { return parseJsonLdMinimal(JSON.parse(result.body)); } catch(e) { /* */ }
+    }
+    return null;
+  }
+
+  // Fetch ontology by content negotiation, caching the full result
+  function fetchOntology(nsBase) {
+    if (_ontologyCache[nsBase]) return Promise.resolve(_ontologyCache[nsBase]);
+    if (_ontologyFetchPromises[nsBase]) return _ontologyFetchPromises[nsBase];
+
+    // Step 1: Check known URL registry (bypasses CORS-broken redirects)
+    var knownUrls = resolveOntologyUrl(nsBase);
+
+    function tryKnownUrls() {
+      if (!knownUrls || !knownUrls.length) return Promise.reject("no known URLs");
+      function tryUrl(idx) {
+        if (idx >= knownUrls.length) return Promise.reject("all known URLs failed");
+        return fetchRdfUrl(knownUrls[idx]).catch(function() { return tryUrl(idx + 1); });
+      }
+      return tryUrl(0);
+    }
+
+    // Step 2: Try direct content negotiation (for servers that DO support CORS)
+    function tryContentNeg() {
+      var accepts = ["text/turtle", "application/rdf+xml", "application/ld+json"];
+      function tryAccept(idx) {
+        if (idx >= accepts.length) return Promise.reject("exhausted");
+        return fetchRdfUrl(nsBase, accepts[idx]).catch(function() { return tryAccept(idx + 1); });
+      }
+      return tryAccept(0);
+    }
+
+    _ontologyFetchPromises[nsBase] = tryKnownUrls()
+      .catch(function() { return tryContentNeg(); })
+      .then(function(result) {
+        var parsed = parseRdfResponse(result);
+        if (parsed && parsed.triples.length) {
+          _ontologyCache[nsBase] = parsed;
+        }
+        delete _ontologyFetchPromises[nsBase];
+        return parsed;
+      }).catch(function(err) {
+        delete _ontologyFetchPromises[nsBase];
+        throw err;
+      });
+    return _ontologyFetchPromises[nsBase];
+  }
+
+  // Minimal RDF/XML parser → { triples: [], prefixes: {} }
+  function parseRdfXmlMinimal(xmlText) {
+    var triples = [], prefixes = {};
+    try {
+      var doc = new DOMParser().parseFromString(xmlText, "application/xml");
+      var nsRDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+      var descs = doc.querySelectorAll("*");
+      for (var i = 0; i < descs.length; i++) {
+        var el = descs[i];
+        var about = el.getAttributeNS(nsRDF, "about") || el.getAttribute("rdf:about");
+        if (!about) continue;
+        for (var j = 0; j < el.children.length; j++) {
+          var ch = el.children[j];
+          var pred = (ch.namespaceURI || "") + ch.localName;
+          var obj = ch.getAttributeNS(nsRDF, "resource") || ch.getAttribute("rdf:resource");
+          if (obj) { triples.push({ s: about, p: pred, o: obj }); }
+          else if (ch.textContent) { triples.push({ s: about, p: pred, o: '"' + ch.textContent + '"' }); }
+        }
+      }
+    } catch(e) { /* */ }
+    return { triples: triples, prefixes: prefixes };
+  }
+
+  // Minimal JSON-LD → { triples: [], prefixes: {} }
+  function parseJsonLdMinimal(data) {
+    var triples = [], prefixes = {};
+    var items = Array.isArray(data) ? data : (data["@graph"] || [data]);
+    items.forEach(function(item) {
+      var subj = item["@id"];
+      if (!subj) return;
+      for (var key in item) {
+        if (key === "@id" || key === "@context") continue;
+        var val = item[key];
+        if (key === "@type") {
+          var types = Array.isArray(val) ? val : [val];
+          types.forEach(function(t) { triples.push({ s: subj, p: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", o: t }); });
+          continue;
+        }
+        var vals = Array.isArray(val) ? val : [val];
+        vals.forEach(function(v) {
+          if (typeof v === "object" && v !== null) {
+            if (v["@id"]) triples.push({ s: subj, p: key, o: v["@id"] });
+            else if (v["@value"] !== undefined) triples.push({ s: subj, p: key, o: '"' + v["@value"] + '"' });
+          } else if (typeof v === "string") {
+            if (v.indexOf("http") === 0) triples.push({ s: subj, p: key, o: v });
+            else triples.push({ s: subj, p: key, o: '"' + v + '"' });
+          }
+        });
+      }
+    });
+    return { triples: triples, prefixes: prefixes };
+  }
+
+  // Auto-fetch all unique namespaces used in the graph and cache their ontology data
+  function autoDerefNamespaces(inst) {
+    if (!inst || !inst.cy) return;
+    var namespaces = {};
+    // Collect unique namespaces from all nodes and edges
+    inst.cy.nodes().forEach(function(n) {
+      var iri = n.data("iri"); if (iri) namespaces[getNamespaceBase(iri)] = true;
+    });
+    inst.cy.edges().forEach(function(e) {
+      var iri = e.data("iri"); if (iri) namespaces[getNamespaceBase(iri)] = true;
+    });
+
+    // Skip built-in namespaces (we don't need to fetch RDF/RDFS/OWL/XSD/SHACL)
+    var skip = ["http://www.w3.org/1999/02/22-rdf-syntax-ns#", "http://www.w3.org/2000/01/rdf-schema#",
+      "http://www.w3.org/2002/07/owl#", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/ns/shacl#"];
+    var toFetch = Object.keys(namespaces).filter(function(ns) {
+      for (var si = 0; si < skip.length; si++) { if (ns === skip[si]) return false; }
+      return true;
+    });
+
+    // Fetch each namespace ontology in parallel (fire-and-forget, enriches cache)
+    toFetch.forEach(function(ns) {
+      fetchOntology(ns).then(function(parsed) {
+        if (parsed) indexOntologyTriples(parsed, inst);
+      }).catch(function() { /* silently skip unreachable namespaces */ });
+    });
+  }
+
   function derefIri(iri, btn) {
     var popup = btn.closest(".ov-popup");
     var existing = popup.querySelector(".ov-deref-result");
     if (existing) { existing.remove(); return; }
 
-    // Step 1: Look up in the LOCAL graph data first (no network needed)
     var containerId = popup.closest(".ontoink-container")?.id;
     var inst = containerId ? instances[containerId] : null;
     var info = {};
 
-    if (inst) {
+    // Check deref cache (populated by autoDerefNamespaces or previous lookups)
+    if (inst && inst._derefCache && inst._derefCache[iri]) {
+      info = Object.assign({}, inst._derefCache[iri]);
+    }
+
+    // If not in cache, check local TTL
+    if (!Object.keys(info).length && inst) {
       var ttl = inst.originalTtl || "";
       if (ttl) {
         var parsed = parseTtlMinimal(ttl);
-        var RL = "http://www.w3.org/2000/01/rdf-schema#label";
-        var RC = "http://www.w3.org/2000/01/rdf-schema#comment";
-        var RT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
-        var SC = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
-        var DOM = "http://www.w3.org/2000/01/rdf-schema#domain";
-        var RNG = "http://www.w3.org/2000/01/rdf-schema#range";
-        parsed.triples.forEach(function(t) {
-          if (t.s === iri) {
-            if (t.p === RL) info["Label"] = litVal(t.o);
-            if (t.p === RC) info["Comment"] = litVal(t.o).substring(0, 200);
-            if (t.p === RT) info["Type"] = uriLabel(t.o, parsed.prefixes);
-            if (t.p === SC) info["Subclass of"] = uriLabel(t.o, parsed.prefixes);
-            if (t.p === DOM) info["Domain"] = uriLabel(t.o, parsed.prefixes);
-            if (t.p === RNG) info["Range"] = uriLabel(t.o, parsed.prefixes);
-          }
-          // Reverse: who links to this IRI
-          if (t.o === iri && t.p === SC) {
-            var k = "Superclass of";
-            info[k] = (info[k] ? info[k] + ", " : "") + uriLabel(t.s, parsed.prefixes);
-          }
-        });
+        info = extractInfoFromTriples(parsed.triples, iri, parsed.prefixes);
       }
       // Also check cytoscape data
       var cy = inst.cy;
@@ -288,78 +715,158 @@ var ontoink = (function () {
       }
     }
 
-    // If we found local data, show it immediately
+    // Show result (scrollable container)
+    btn.textContent = "More\u2026";
+    var el = document.createElement("div"); el.className = "ov-deref-result";
+    el.style.cssText = "max-height:220px;overflow-y:auto;";
+
     if (Object.keys(info).length) {
-      btn.textContent = "More\u2026";
-      var el = document.createElement("div"); el.className = "ov-deref-result";
       var h = "";
       for (var k in info) h += '<div class="ov-popup-meta"><strong>' + esc(k) + ':</strong> ' + esc(info[k]) + '</div>';
-      h += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
+      h += '<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
+        + '<a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI \u2197</a>'
+        + '<button class="ov-btn ov-deref-fetch-btn" style="font-size:10px;padding:2px 8px;" onclick="ontoink.derefIriRemote(\'' + esc(iri).replace(/'/g, "\\'") + '\',this)">Fetch from web</button>'
+        + '</div>';
       el.innerHTML = h;
+      if (inst) { if (!inst._derefCache) inst._derefCache = {}; inst._derefCache[iri] = info; }
+    } else {
+      // No local data at all → try fetching immediately
+      el.innerHTML = '<div class="ov-popup-meta" style="color:#9ca3af;">Loading from web\u2026</div>';
       popup.querySelector(".ov-popup-actions").before(el);
+      derefIriRemote(iri, btn);
       return;
     }
 
-    // Step 2: Try well-known ontology APIs
-    btn.textContent = "Loading\u2026";
-    var apiUrl = null;
-    if (iri.indexOf("purl.obolibrary.org/obo/") >= 0) {
-      apiUrl = "https://www.ebi.ac.uk/ols4/api/terms?iri=" + encodeURIComponent(iri);
-    } else if (iri.indexOf("wikidata.org/entity/") >= 0) {
-      var qid = iri.split("/").pop();
-      apiUrl = "https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + qid + "&format=json&origin=*&props=labels|descriptions";
+    popup.querySelector(".ov-popup-actions").before(el);
+  }
+
+  function derefIriRemote(iri, btn) {
+    var popup = btn.closest(".ov-popup");
+    var containerId = popup.closest(".ontoink-container")?.id;
+    var inst = containerId ? instances[containerId] : null;
+
+    // Toggle off if already shown
+    var prevRemote = popup.querySelector(".ov-deref-remote");
+    if (prevRemote) { prevRemote.remove(); return; }
+
+    btn.textContent = "Loading\u2026"; btn.disabled = true;
+
+    var nsBase = getNamespaceBase(iri);
+
+    // Strategy: fetch the full ontology for this namespace (or use cached),
+    // then extract info for this specific IRI plus index everything else
+    function tryOntologyFetch() {
+      return fetchOntology(nsBase).then(function(parsed) {
+        if (parsed) {
+          indexOntologyTriples(parsed, inst);
+          return extractInfoFromTriples(parsed.triples, iri, parsed.prefixes);
+        }
+        return {};
+      });
     }
 
-    var fetchPromise = apiUrl
-      ? fetch(apiUrl).then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-      : fetch(iri, { headers: { "Accept": "application/ld+json" }, mode: "cors" })
-          .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+    // Also try well-known APIs in parallel
+    function tryApis() {
+      // OBO Library → EBI OLS
+      if (iri.indexOf("purl.obolibrary.org/obo/") >= 0) {
+        return fetch("https://www.ebi.ac.uk/ols4/api/terms?iri=" + encodeURIComponent(iri))
+          .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function(data) { return parseOlsResponse(data); });
+      }
+      // Wikidata
+      if (iri.indexOf("wikidata.org/entity/") >= 0) {
+        var qid = iri.split("/").pop();
+        return fetch("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + qid + "&format=json&origin=*&props=labels|descriptions")
+          .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function(data) {
+            var info2 = {};
+            if (data.entities) {
+              var eid = Object.keys(data.entities)[0];
+              var ent = data.entities[eid];
+              if (ent.labels && ent.labels.en) info2["Label"] = ent.labels.en.value;
+              if (ent.descriptions && ent.descriptions.en) info2["Description"] = ent.descriptions.en.value;
+            }
+            return info2;
+          });
+      }
+      // Try EBI OLS for any IRI
+      return fetch("https://www.ebi.ac.uk/ols4/api/terms?iri=" + encodeURIComponent(iri))
+        .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function(data) {
+          var result = parseOlsResponse(data);
+          if (Object.keys(result).length) return result;
+          throw new Error("no OLS data");
+        });
+    }
 
-    fetchPromise.then(function(data) {
-      var info2 = {};
-      // OLS API response
-      if (data._embedded && data._embedded.terms && data._embedded.terms[0]) {
-        var term = data._embedded.terms[0];
-        if (term.label) info2["Label"] = term.label;
-        if (term.description && term.description[0]) info2["Description"] = term.description[0].substring(0, 200);
-        if (term.ontology_name) info2["Ontology"] = term.ontology_name.toUpperCase();
-      }
-      // Wikidata response
-      else if (data.entities) {
-        var eid = Object.keys(data.entities)[0];
-        var ent = data.entities[eid];
-        if (ent.labels && ent.labels.en) info2["Label"] = ent.labels.en.value;
-        if (ent.descriptions && ent.descriptions.en) info2["Description"] = ent.descriptions.en.value;
-      }
-      // JSON-LD response
-      else {
-        var d = Array.isArray(data) ? data[0] : data;
-        if (d) {
-          var lbl = d["rdfs:label"] || d["http://www.w3.org/2000/01/rdf-schema#label"] || d["schema:name"] || d["label"] || "";
-          if (typeof lbl === "object") lbl = lbl["@value"] || "";
-          if (lbl) info2["Label"] = String(lbl);
-          var cmt = d["rdfs:comment"] || d["http://www.w3.org/2000/01/rdf-schema#comment"] || d["description"] || "";
-          if (typeof cmt === "object") cmt = cmt["@value"] || "";
-          if (cmt) info2["Description"] = String(cmt).substring(0, 200);
+    // Run ontology fetch and API fetch in parallel, merge results
+    Promise.allSettled([tryOntologyFetch(), tryApis()]).then(function(results) {
+      var merged = {};
+      results.forEach(function(r) {
+        if (r.status === "fulfilled" && r.value) {
+          for (var kk in r.value) { if (!merged[kk]) merged[kk] = r.value[kk]; }
+        }
+      });
+
+      btn.textContent = "Fetch from web"; btn.disabled = false;
+
+      // Cache merged result
+      if (inst) {
+        if (!inst._derefCache) inst._derefCache = {};
+        var existing = inst._derefCache[iri] || {};
+        for (var mk in merged) { if (!existing[mk]) existing[mk] = merged[mk]; }
+        inst._derefCache[iri] = existing;
+        // Enrich SPARQL catalog
+        if (inst._sparqlCatalog && merged["Label"]) {
+          var found = false;
+          inst._sparqlCatalog.forEach(function(item) { if (item.iri === iri) { if (!item.label) { item.label = merged["Label"]; item.short = merged["Label"]; } found = true; } });
+          if (!found) inst._sparqlCatalog.push({ iri: iri, label: merged["Label"], short: merged["Label"], type: (merged["Type"] || "").toLowerCase().indexOf("property") >= 0 ? "prop" : "class" });
         }
       }
-      btn.textContent = "More\u2026";
-      var el2 = document.createElement("div"); el2.className = "ov-deref-result";
-      if (Object.keys(info2).length) {
-        var h2 = "";
-        for (var k2 in info2) h2 += '<div class="ov-popup-meta"><strong>' + esc(k2) + ':</strong> ' + esc(info2[k2]) + '</div>';
+
+      var el2 = document.createElement("div"); el2.className = "ov-deref-remote";
+      el2.style.cssText = "max-height:180px;overflow-y:auto;";
+      if (Object.keys(merged).length) {
+        var h2 = '<div style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;"><span style="font-size:10px;color:#9ca3af;">From web:</span></div>';
+        for (var k2 in merged) h2 += '<div class="ov-popup-meta"><strong>' + esc(k2) + ':</strong> ' + esc(merged[k2]) + '</div>';
         h2 += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
         el2.innerHTML = h2;
       } else {
         el2.innerHTML = '<div class="ov-popup-meta" style="color:#9ca3af;">No structured data found. <a href="' + esc(iri) + '" target="_blank" style="color:#2563eb;">Open in browser \u2197</a></div>';
       }
-      popup.querySelector(".ov-popup-actions").before(el2);
-    }).catch(function() {
-      btn.textContent = "More\u2026";
-      var el3 = document.createElement("div"); el3.className = "ov-deref-result";
-      el3.innerHTML = '<div class="ov-popup-meta" style="color:#9ca3af;">Could not dereference. <a href="' + esc(iri) + '" target="_blank" style="color:#2563eb;">Open in browser \u2197</a></div>';
-      popup.querySelector(".ov-popup-actions").before(el3);
+
+      // If derefIri showed "Loading..." placeholder, replace it
+      var placeholder = popup.querySelector(".ov-deref-result");
+      if (placeholder && placeholder.querySelector(".ov-popup-meta") && placeholder.textContent.indexOf("Loading") >= 0) {
+        if (Object.keys(merged).length) {
+          placeholder.style.cssText = "max-height:220px;overflow-y:auto;";
+          var hReplace = "";
+          var all = Object.assign({}, inst && inst._derefCache ? inst._derefCache[iri] || {} : {}, merged);
+          for (var kr in all) hReplace += '<div class="ov-popup-meta"><strong>' + esc(kr) + ':</strong> ' + esc(all[kr]) + '</div>';
+          hReplace += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
+          placeholder.innerHTML = hReplace;
+        } else {
+          placeholder.innerHTML = '<div class="ov-popup-meta" style="color:#9ca3af;">No data found. <a href="' + esc(iri) + '" target="_blank" style="color:#2563eb;">Open in browser \u2197</a></div>';
+        }
+        return;
+      }
+
+      var localResult = popup.querySelector(".ov-deref-result");
+      if (localResult) { localResult.after(el2); } else { popup.querySelector(".ov-popup-actions").before(el2); }
     });
+  }
+
+  function parseOlsResponse(data) {
+    var info2 = {};
+    if (data._embedded && data._embedded.terms && data._embedded.terms[0]) {
+      var term = data._embedded.terms[0];
+      if (term.label) info2["Label"] = term.label;
+      if (term.description && term.description[0]) info2["Description"] = term.description[0].substring(0, 400);
+      if (term.ontology_name) info2["Ontology"] = term.ontology_name.toUpperCase();
+      if (term.obo_id) info2["OBO ID"] = term.obo_id;
+      if (term.synonyms && term.synonyms.length) info2["Synonyms"] = term.synonyms.slice(0, 3).join(", ");
+    }
+    return info2;
   }
 
   // ── Legend overlay (inside canvas) ──────────────────────────────────────
@@ -526,6 +1033,9 @@ var ontoink = (function () {
     var ta = container.querySelector(".ov-editor-textarea");
     if (ta && data.rawTtl) ta.value = data.rawTtl;
     if (data.validation) { var o=container.querySelector(".ov-validation-output"); if(o) renderValidation(o,data.validation); }
+
+    // Auto-fetch ontology data for all namespaces used in the graph (fire-and-forget)
+    setTimeout(function() { autoDerefNamespaces(instances[containerId]); }, 500);
   }
 
   // ── Editor ──────────────────────────────────────────────────────────────
@@ -1590,6 +2100,123 @@ var ontoink = (function () {
 
   // ── SPARQL Query Panel ─────────────────────────────────────────────────
 
+  // Resolve a human-readable label for an IRI using deref cache and graph data
+  function resolveIriLabel(iri, inst) {
+    if (!iri || iri[0] === '"') return "";
+    var dc = inst && inst._derefCache ? inst._derefCache : {};
+    var localName = iri.indexOf("#") >= 0 ? iri.split("#").pop() : iri.split("/").pop();
+    // Check deref cache first
+    if (dc[iri] && dc[iri]["Label"]) return dc[iri]["Label"];
+    // Check cytoscape graph
+    if (inst && inst.cy) {
+      var node = inst.cy.getElementById(iri);
+      if (node.length) {
+        var lbl = node.data("label");
+        if (lbl && lbl !== localName && lbl !== iri) return lbl;
+      }
+    }
+    return "";
+  }
+
+  // Build a display label: "human label (LocalName)" or just "LocalName"
+  function buildDisplayLabel(iri, fallback, inst) {
+    var dc = inst && inst._derefCache ? inst._derefCache : {};
+    var localName = iri.indexOf("#") >= 0 ? iri.split("#").pop() : iri.split("/").pop();
+    var resolved = dc[iri] && dc[iri]["Label"] ? dc[iri]["Label"] : "";
+    var graphLabel = fallback || "";
+    if (resolved && (graphLabel === localName || graphLabel === iri || !graphLabel)) {
+      return resolved + " (" + localName + ")";
+    }
+    if (graphLabel && graphLabel !== localName && graphLabel !== iri) {
+      return graphLabel + (resolved && resolved !== graphLabel ? " \u2014 " + resolved : "") + " (" + localName + ")";
+    }
+    return resolved ? resolved + " (" + localName + ")" : graphLabel || localName;
+  }
+
+  // Build/refresh the SPARQL catalog and class/property dropdowns
+  function buildSparqlCatalog(id) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy, dc = inst._derefCache || {};
+
+    // Build autocomplete catalog from graph + all TTL IRIs + deref cache
+    inst._sparqlCatalog = [];
+    var seenIris = {};
+    cy.nodes().forEach(function(n) { var iri=n.data("iri"); if(iri) { seenIris[iri]=true; var lbl=resolveIriLabel(iri,inst)||n.data("label")||""; inst._sparqlCatalog.push({iri:iri,label:lbl,short:lbl||iri.split("/").pop().split("#").pop(),type:n.data("type")==="Class"?"class":"node"}); }});
+    cy.edges().forEach(function(e) { var iri=e.data("iri"); if(iri&&!seenIris[iri]) { seenIris[iri]=true; var lbl=resolveIriLabel(iri,inst)||e.data("label")||""; inst._sparqlCatalog.push({iri:iri,label:lbl,short:lbl||iri.split("/").pop().split("#").pop(),type:"prop"}); }});
+
+    // Enrich catalog with ALL IRIs from the original TTL (properties/classes not in graph)
+    var ttlSrc = inst.originalTtl || "";
+    if (ttlSrc) {
+      var parsedTtl = parseTtlMinimal(ttlSrc);
+      var ttlLabels = {};
+      var RL2 = "http://www.w3.org/2000/01/rdf-schema#label";
+      var RT2 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+      var RDFS_CLASS = "http://www.w3.org/2000/01/rdf-schema#Class";
+      var OWL_CLASS = "http://www.w3.org/2002/07/owl#Class";
+      var OWL_OP = "http://www.w3.org/2002/07/owl#ObjectProperty";
+      var OWL_DP = "http://www.w3.org/2002/07/owl#DatatypeProperty";
+      var RDF_PROP = "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property";
+      var knownTypes = {};
+      parsedTtl.triples.forEach(function(t) {
+        if (t.p === RL2 && t.o[0] === '"') ttlLabels[t.s] = litVal(t.o);
+        if (t.p === RT2) {
+          if (t.o === OWL_CLASS || t.o === RDFS_CLASS) knownTypes[t.s] = "class";
+          else if (t.o === OWL_OP || t.o === OWL_DP || t.o === RDF_PROP) knownTypes[t.s] = "prop";
+        }
+      });
+      var rdfNs = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+      var rdfsNs = "http://www.w3.org/2000/01/rdf-schema#";
+      var owlNs = "http://www.w3.org/2002/07/owl#";
+      var xsdNs = "http://www.w3.org/2001/XMLSchema#";
+      var shNs = "http://www.w3.org/ns/shacl#";
+      parsedTtl.triples.forEach(function(t) {
+        [t.s, t.p, t.o].forEach(function(u) {
+          if (!u || u[0] === '"' || u[0] === "_" || seenIris[u]) return;
+          if (u.indexOf(rdfNs) === 0 || u.indexOf(rdfsNs) === 0 || u.indexOf(owlNs) === 0 || u.indexOf(xsdNs) === 0 || u.indexOf(shNs) === 0) return;
+          seenIris[u] = true;
+          var label = ttlLabels[u] || (dc[u] && dc[u]["Label"]) || "";
+          var type = knownTypes[u] || (u === t.p ? "prop" : "node");
+          inst._sparqlCatalog.push({ iri: u, label: label, short: label || uriLabel(u, parsedTtl.prefixes), type: type });
+        });
+      });
+    }
+    // Add all entries from deref cache not yet in catalog
+    if (dc) {
+      for (var cachedIri in dc) {
+        if (seenIris[cachedIri] || !dc[cachedIri]["Label"]) continue;
+        seenIris[cachedIri] = true;
+        var cType = (dc[cachedIri]["Type"] || "").toLowerCase();
+        inst._sparqlCatalog.push({ iri: cachedIri, label: dc[cachedIri]["Label"], short: dc[cachedIri]["Label"], type: cType.indexOf("property") >= 0 ? "prop" : "class" });
+      }
+      // Update existing entries that have no label yet
+      inst._sparqlCatalog.forEach(function(item) {
+        if (!item.label && item.iri && dc[item.iri] && dc[item.iri]["Label"]) {
+          item.label = dc[item.iri]["Label"];
+          item.short = dc[item.iri]["Label"];
+        }
+      });
+    }
+    ["SELECT","WHERE","FILTER","OPTIONAL","GROUP BY","ORDER BY","LIMIT","COUNT","DISTINCT","CONTAINS","LCASE","STR","BIND","VALUES"].forEach(function(kw) { inst._sparqlCatalog.push({iri:"",label:kw,short:kw,type:"keyword"}); });
+  }
+
+  // Build dropdown HTML for class/property selects
+  function buildSparqlDropdowns(id) {
+    var inst = instances[id]; if (!inst) return {};
+    var cy = inst.cy;
+    var classOpts = '<option value="">-- class --</option>';
+    var propOpts = '<option value="">-- property --</option>';
+    var seenC = {}, seenP = {};
+    cy.nodes().forEach(function(n) {
+      var iri = n.data("iri"); if (!iri || seenC[iri]) return; seenC[iri] = true;
+      if (n.data("type") === "Class") classOpts += '<option value="' + esc(iri) + '">' + esc(buildDisplayLabel(iri, n.data("label"), inst)) + '</option>';
+    });
+    cy.edges().forEach(function(e) {
+      var iri = e.data("iri"); if (!iri || seenP[iri]) return; seenP[iri] = true;
+      propOpts += '<option value="' + esc(iri) + '">' + esc(buildDisplayLabel(iri, e.data("label"), inst)) + '</option>';
+    });
+    return { classOpts: classOpts, propOpts: propOpts };
+  }
+
   function toggleSparql(id) {
     var c = document.getElementById(id), inst = instances[id];
     if (!c || !inst) return;
@@ -1597,34 +2224,28 @@ var ontoink = (function () {
     if (!panel) return;
     if (panel.style.display !== "none") { panel.style.display = "none"; return; }
     panel.style.display = "block";
-    if (panel.querySelector(".ov-sparql-textarea")) return; // already built
 
-    // Build class/property options from graph data
-    var cy = inst.cy;
-    var classOpts = '<option value="">-- class --</option>';
-    var propOpts = '<option value="">-- property --</option>';
-    var seenC = {}, seenP = {};
-    cy.nodes().forEach(function(n) {
-      var iri = n.data("iri"); if (!iri || seenC[iri]) return; seenC[iri] = true;
-      if (n.data("type") === "Class") classOpts += '<option value="' + esc(iri) + '">' + esc(n.data("label") || iri) + '</option>';
-    });
-    cy.edges().forEach(function(e) {
-      var iri = e.data("iri"); if (!iri || seenP[iri]) return; seenP[iri] = true;
-      propOpts += '<option value="' + esc(iri) + '">' + esc(e.data("label") || iri) + '</option>';
-    });
+    // Always refresh catalog and dropdowns (ontology fetch may have completed since last open)
+    buildSparqlCatalog(id);
+    var dd = buildSparqlDropdowns(id);
 
-    // Build autocomplete catalog
-    inst._sparqlCatalog = [];
-    cy.nodes().forEach(function(n) { var iri=n.data("iri"); if(iri) inst._sparqlCatalog.push({iri:iri,label:n.data("label")||"",short:n.data("label")||iri.split("/").pop().split("#").pop(),type:n.data("type")==="Class"?"class":"node"}); });
-    cy.edges().forEach(function(e) { var iri=e.data("iri"); if(iri&&!inst._sparqlCatalog.find(function(x){return x.iri===iri;})) inst._sparqlCatalog.push({iri:iri,label:e.data("label")||"",short:e.data("label")||iri.split("/").pop().split("#").pop(),type:"prop"}); });
-    ["SELECT","WHERE","FILTER","OPTIONAL","GROUP BY","ORDER BY","LIMIT","COUNT","DISTINCT","CONTAINS","LCASE","STR","BIND","VALUES"].forEach(function(kw) { inst._sparqlCatalog.push({iri:"",label:kw,short:kw,type:"keyword"}); });
+    if (panel.querySelector(".ov-sparql-textarea")) {
+      // Panel already built — just refresh the dropdowns
+      var classSel = panel.querySelector(".ov-sparql-class-sel");
+      var propSel = panel.querySelector(".ov-sparql-prop-sel");
+      var prevClass = classSel ? classSel.value : "";
+      var prevProp = propSel ? propSel.value : "";
+      if (classSel) { classSel.innerHTML = dd.classOpts; classSel.value = prevClass; }
+      if (propSel) { propSel.innerHTML = dd.propOpts; propSel.value = prevProp; }
+      return;
+    }
 
     panel.innerHTML = '<div class="ov-editor-header ov-panel-head">SPARQL Query <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;">Ctrl+Space for autocomplete</span><button class="ov-panel-close" onclick="this.closest(\'.ov-sparql-panel\').style.display=\'none\'">&times;</button></div>'
       + '<div class="ov-sparql-body">'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
       + '<select class="ov-shape-select" onchange="ontoink.sparqlTemplate(\'' + id + '\',this.value)"><option value="">Template...</option><option value="all">All triples</option><option value="type">Instances of class</option><option value="props">Properties of class</option><option value="label">Find by label</option></select>'
-      + '<select class="ov-shape-select ov-sparql-class-sel">' + classOpts + '</select>'
-      + '<select class="ov-shape-select ov-sparql-prop-sel">' + propOpts + '</select>'
+      + '<select class="ov-shape-select ov-sparql-class-sel">' + dd.classOpts + '</select>'
+      + '<select class="ov-shape-select ov-sparql-prop-sel">' + dd.propOpts + '</select>'
       + '</div>'
       + '<div style="position:relative;"><textarea class="ov-sparql-textarea" rows="6">SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o\n} LIMIT 20</textarea></div>'
       + '<div class="ov-editor-actions"><button class="ov-btn ov-btn-primary" onclick="ontoink.runSparql(\'' + id + '\')">Run Query</button>'
@@ -1680,10 +2301,14 @@ var ontoink = (function () {
 
   function renderSparqlACItem(id, item, i) {
     var typeColor = item.type==="class"?"#6366f1":item.type==="prop"?"#0891b2":item.type==="node"?"#f59e0b":"#9ca3af";
+    var localName = item.iri ? item.iri.split("/").pop().split("#").pop() : "";
+    var displayLabel = item.label || item.short || localName;
+    // Show label AND local name when they differ (so user sees both human label and IRI fragment)
+    var showLocalName = item.iri && localName && displayLabel !== localName;
     return '<div style="padding:5px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f3f4f6;" onmousedown="ontoink.selectSparqlAC(\'' + id + '\',' + i + ')">'
       + '<span style="background:'+typeColor+';color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;">'+item.type+'</span>'
-      + '<span style="color:#1f2937;flex:1;">'+(item.label||item.short)+'</span>'
-      + (item.iri ? '<span style="color:#9ca3af;font-size:10px;">'+(item.iri.split("/").pop().split("#").pop())+'</span>' : '')
+      + '<span style="color:#1f2937;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(displayLabel) + '</span>'
+      + (showLocalName ? '<span style="color:#9ca3af;font-size:10px;white-space:nowrap;" title="'+esc(item.iri)+'">'+esc(localName)+'</span>' : '')
       + '</div>';
   }
 
@@ -1828,7 +2453,7 @@ var ontoink = (function () {
 
     if (!results.length) { resultEl.innerHTML = '<span style="color:#9ca3af;">No results.</span>'; return; }
 
-    // Render table
+    // Render table with labels
     var h = '<div style="font-size:12px;color:#374151;margin-bottom:6px;"><strong>' + results.length + '</strong> result(s)</div>';
     h += '<table class="ov-inferred-table"><thead><tr>';
     vars.forEach(function(v) { h += '<th>' + esc(v) + '</th>'; });
@@ -1837,10 +2462,22 @@ var ontoink = (function () {
       h += '<tr>';
       vars.forEach(function(v) {
         var val = row[v] || "";
-        // Shorten URIs with prefixes
-        var display = val;
-        for (var p in pf) { if (val.indexOf(pf[p]) === 0) { display = p + ":" + val.substring(pf[p].length); break; } }
-        h += '<td>' + esc(display) + '</td>';
+        if (val[0] === '"') {
+          // Literal value
+          h += '<td style="color:#059669;">' + esc(litVal(val)) + '</td>';
+        } else if (val.indexOf("http") === 0) {
+          // IRI — show label + prefixed name
+          var label = resolveIriLabel(val, inst);
+          var display = val;
+          for (var p in pf) { if (val.indexOf(pf[p]) === 0) { display = p + ":" + val.substring(pf[p].length); break; } }
+          if (label) {
+            h += '<td title="' + esc(val) + '"><span style="color:#1f2937;">' + esc(label) + '</span> <span style="color:#9ca3af;font-size:11px;">(' + esc(display) + ')</span></td>';
+          } else {
+            h += '<td title="' + esc(val) + '">' + esc(display) + '</td>';
+          }
+        } else {
+          h += '<td>' + esc(val) + '</td>';
+        }
       });
       h += '</tr>';
     });
@@ -1864,5 +2501,5 @@ var ontoink = (function () {
 
   document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll(".ontoink-container").forEach(function(el){initGraph(el.id);});});
 
-  return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC };
+  return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC, derefIriRemote:derefIriRemote };
 })();

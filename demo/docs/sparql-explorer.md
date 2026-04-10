@@ -316,6 +316,96 @@ async function spxConnect() {
       for (var uri in KNOWN_PFX) { if (iri.indexOf(uri) === 0 && !spxState.prefixes[KNOWN_PFX[uri]]) spxState.prefixes[KNOWN_PFX[uri]] = uri; }
     });
 
+    // Phase 5b: For IRIs still without labels, fetch from ontology source files
+    var missingLabels = allLabelIris.filter(function(iri) { return !spxState.labels[iri]; });
+    if (missingLabels.length > 0) {
+      spxStatus("Fetching labels from ontology sources...");
+      var nsGroups = {};
+      missingLabels.forEach(function(iri) {
+        var ns = iri.indexOf("#") >= 0 ? iri.substring(0, iri.lastIndexOf("#") + 1) : iri.substring(0, iri.lastIndexOf("/") + 1);
+        if (!nsGroups[ns]) nsGroups[ns] = [];
+        nsGroups[ns].push(iri);
+      });
+      var ONTO_URLS = {
+        "https://nfdi.fiz-karlsruhe.de/ontology/": "https://ise-fizkarlsruhe.github.io/nfdicore/3.0.4/ontology.ttl",
+        "http://purl.obolibrary.org/obo/BFO_": "https://raw.githubusercontent.com/BFO-ontology/BFO-2020/master/src/owl/bfo-2020.owl",
+        "http://purl.obolibrary.org/obo/IAO_": "https://raw.githubusercontent.com/information-artifact-ontology/IAO/master/src/ontology/iao.owl",
+        "http://purl.obolibrary.org/obo/RO_": "https://raw.githubusercontent.com/oborel/obo-relations/master/ro.owl",
+        "http://xmlns.com/foaf/0.1/": "https://xmlns.com/foaf/spec/index.rdf",
+        "http://www.w3.org/2004/02/skos/core#": "https://www.w3.org/2009/08/skos-reference/skos.rdf",
+        "https://schema.org/": "https://schema.org/version/latest/schemaorg-current-https.jsonld",
+      };
+      // Resolve namespace to a known URL
+      function resolveNsUrl(ns) {
+        for (var key in ONTO_URLS) { if (ns.indexOf(key) === 0 || key.indexOf(ns) === 0) return ONTO_URLS[key]; }
+        return ns; // try the namespace itself as fallback
+      }
+      var fetchedNs = {};
+      for (var ns in nsGroups) {
+        if (fetchedNs[ns]) continue; fetchedNs[ns] = true;
+        var url = resolveNsUrl(ns);
+        try {
+          spxStatus("Fetching ontology: " + ns.split("/").slice(2, 4).join("/") + "...");
+          var ontoResp = await fetch(url, { headers: { "Accept": "text/turtle, application/rdf+xml;q=0.9" }, mode: "cors", redirect: "follow" });
+          if (!ontoResp.ok) continue;
+          var ct = ontoResp.headers.get("content-type") || "";
+          var body = await ontoResp.text();
+          // Parse and extract rdfs:label triples
+          var RL = "http://www.w3.org/2000/01/rdf-schema#label";
+          if (ct.indexOf("xml") >= 0 || (body.trimStart().charAt(0) === '<' && body.indexOf("rdf:RDF") >= 0)) {
+            // Parse RDF/XML
+            try {
+              var doc = new DOMParser().parseFromString(body, "application/xml");
+              var els = doc.querySelectorAll("*");
+              for (var ei = 0; ei < els.length; ei++) {
+                var about = els[ei].getAttributeNS("http://www.w3.org/1999/02/22-rdf-syntax-ns#", "about") || els[ei].getAttribute("rdf:about");
+                if (!about) continue;
+                for (var ej = 0; ej < els[ei].children.length; ej++) {
+                  var ch = els[ei].children[ej];
+                  if ((ch.namespaceURI === "http://www.w3.org/2000/01/rdf-schema#" && ch.localName === "label") ||
+                      (ch.namespaceURI === "http://www.w3.org/2004/02/skos/core#" && ch.localName === "prefLabel")) {
+                    if (ch.textContent && !spxState.labels[about]) spxState.labels[about] = ch.textContent;
+                  }
+                }
+              }
+            } catch(xmlErr) {}
+          } else {
+            // Parse Turtle line-by-line (robust, handles complex OWL)
+            var lines = body.split("\n"), pfx = {}, curSubj = "", inTripleQuote = false, bDepth = 0, pDepth = 0;
+            for (var li2 = 0; li2 < lines.length; li2++) {
+              var ln = lines[li2];
+              var pfxM = ln.match(/^@prefix\s+(\w*)\s*:\s*<([^>]+)>\s*\./);
+              if (pfxM) { pfx[pfxM[1]] = pfxM[2]; continue; }
+              if (/^\s*#/.test(ln) || /^\s*$/.test(ln) || /^#{2,}/.test(ln)) continue;
+              if (inTripleQuote) { if (ln.indexOf('"""') >= 0) inTripleQuote = false; continue; }
+              if ((ln.match(/"""/g)||[]).length === 1) { inTripleQuote = true; continue; }
+              for (var ci4 = 0; ci4 < ln.length; ci4++) { if (ln[ci4]==='[') bDepth++; else if (ln[ci4]===']') bDepth--; else if (ln[ci4]==='(') pDepth++; else if (ln[ci4]===')') pDepth--; }
+              var trim2 = ln.trimStart();
+              if (trim2.charAt(0) === '<' || (/^\w+:\w/.test(trim2) && ln.charAt(0) !== ' ' && ln.charAt(0) !== '\t')) {
+                var sm = trim2.match(/^(<[^>]+>)/);
+                if (sm) curSubj = sm[1].slice(1,-1);
+                else { var sm2 = trim2.match(/^(\w+:\w+)/); if (sm2) { var ci5=sm2[1].indexOf(':'); var pp=sm2[1].substring(0,ci5); curSubj=pfx[pp]?pfx[pp]+sm2[1].substring(ci5+1):sm2[1]; } }
+                bDepth = 0; pDepth = 0;
+                for (var ci6 = 0; ci6 < ln.length; ci6++) { if (ln[ci6]==='[') bDepth++; else if (ln[ci6]===']') bDepth--; else if (ln[ci6]==='(') pDepth++; else if (ln[ci6]===')') pDepth--; }
+              }
+              if (!curSubj || bDepth > 0 || pDepth > 0) continue;
+              // Extract rdfs:label
+              var labelIdx = trim2.indexOf("rdfs:label");
+              if (labelIdx < 0 && trim2.indexOf("skos:prefLabel") < 0) {
+                if (/\.\s*$/.test(trim2) && bDepth <= 0 && pDepth <= 0) curSubj = "";
+                continue;
+              }
+              var predStr = labelIdx >= 0 ? "rdfs:label" : "skos:prefLabel";
+              var afterPred = trim2.substring(trim2.indexOf(predStr) + predStr.length).trim();
+              var litM = afterPred.match(/^"((?:[^"\\]|\\.)*)"/);
+              if (litM && !spxState.labels[curSubj]) spxState.labels[curSubj] = litM[1];
+              if (/\.\s*$/.test(trim2) && bDepth <= 0 && pDepth <= 0) curSubj = "";
+            }
+          }
+        } catch(fetchErr) { /* silently skip unreachable ontologies */ }
+      }
+    }
+
     var labelCount = Object.keys(spxState.labels).length;
     var uniqueProps = {}; spxState.objProps.forEach(function(p){uniqueProps[p.prop]=true;});
     spxStatus(spxState.classes.length + " classes, " + Object.keys(uniqueProps).length + " properties, " + labelCount + " labels loaded", true);
@@ -448,15 +538,19 @@ function spxInsertTemplate() {
   var prop = document.getElementById("spx-prop-select").value;
   var param = document.getElementById("spx-param").value.trim();
   var q = "";
+  var clsLabel = cls ? (spxState.labels[cls] || spxShorten(cls)) : "";
+  var propLabel = prop ? (spxState.labels[prop] || spxShorten(prop)) : "";
+  var clsComment = clsLabel ? "  # " + clsLabel + "\n" : "\n";
+  var propComment = propLabel ? "  # " + propLabel + "\n" : "\n";
 
   if (t === "count") {
-    q = "SELECT (COUNT(?x) AS ?count) WHERE {\n  ?x a <" + (cls||"CLASS_IRI") + "> .\n}";
+    q = "SELECT (COUNT(?x) AS ?count) WHERE {\n  ?x a <" + (cls||"CLASS_IRI") + "> ." + clsComment + "}";
   } else if (t === "label") {
     q = 'SELECT ?s ?label WHERE {\n  ?s <http://www.w3.org/2000/01/rdf-schema#label> ?label .\n  FILTER(CONTAINS(LCASE(STR(?label)), "' + (param||"search text").toLowerCase() + '"))\n} LIMIT 50';
   } else if (t === "props") {
-    q = "SELECT ?prop (COUNT(?val) AS ?count) WHERE {\n  ?s a <" + (cls||"CLASS_IRI") + "> ;\n     ?prop ?val .\n} GROUP BY ?prop ORDER BY DESC(?count) LIMIT 50";
+    q = "SELECT ?prop (COUNT(?val) AS ?count) WHERE {\n  ?s a <" + (cls||"CLASS_IRI") + "> ;" + clsComment + "     ?prop ?val .\n} GROUP BY ?prop ORDER BY DESC(?count) LIMIT 50";
   } else if (t === "explore") {
-    q = "SELECT ?s ?value WHERE {\n  ?s a <" + (cls||"CLASS_IRI") + "> ;\n     <" + (prop||"PROPERTY_IRI") + "> ?value .\n} LIMIT 50";
+    q = "SELECT ?s ?value WHERE {\n  ?s a <" + (cls||"CLASS_IRI") + "> ;" + clsComment + "     <" + (prop||"PROPERTY_IRI") + "> ?value ." + propComment + "} LIMIT 50";
   } else if (t === "describe") {
     q = "SELECT ?p ?o WHERE {\n  <" + (param||"RESOURCE_IRI") + "> ?p ?o .\n} LIMIT 100";
   } else if (t === "triples") {
@@ -653,8 +747,17 @@ async function spxRunQuery() {
       h += '<tr>';
       vars.forEach(function(v) {
         var val = row[v] ? row[v].value : "";
-        var display = val.indexOf("http") === 0 ? spxShorten(val) : val;
-        h += '<td title="' + val.replace(/"/g,'&quot;') + '">' + display + '</td>';
+        if (val.indexOf("http") === 0) {
+          var label = spxState.labels[val] || "";
+          var short = spxShorten(val);
+          if (label && label !== short) {
+            h += '<td title="' + val.replace(/"/g,'&quot;') + '"><span style="color:#1f2937;">' + label + '</span> <span style="color:#9ca3af;font-size:10px;">(' + short + ')</span></td>';
+          } else {
+            h += '<td title="' + val.replace(/"/g,'&quot;') + '">' + short + '</td>';
+          }
+        } else {
+          h += '<td title="' + val.replace(/"/g,'&quot;') + '">' + val + '</td>';
+        }
       });
       h += '</tr>';
     });

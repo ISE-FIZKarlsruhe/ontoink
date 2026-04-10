@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - 2026-04-10
+## [0.5.0] - 2026-04-10
 
 ### Added
 - **OntoSniff** — ontology smell detector with 9 anti-patterns based on published research
@@ -20,12 +20,23 @@
 - **Playground** — full toolbar with all features (search, layout, stats, paths, SPARQL)
 - **SHACL Editor** — load TTL, add/remove prefixes, tooltip help, class/property dropdowns with suggestions
 - Close (×) button on all panels (Stats, Paths, SPARQL, Reasoning, Editor)
+- **Automatic ontology label resolution** — on graph init, fetches and caches labels from all referenced ontologies
+    - Known ontology URL registry bypasses CORS-broken redirects (nfdicore, BFO, IAO, RO, FOAF, Schema.org, SKOS)
+    - Robust line-based OWL TTL parser handles nested blank nodes, collections, and multi-line strings
+    - Labels propagated to click popups, SPARQL autocomplete, class/property dropdowns, and query results
+- **Enhanced IRI dereferencing** — "More..." button in popups shows label, comment, type, subclass, deprecation, SKOS definitions from fetched ontology data
+- **Scrollable popups** — popup and deref results scroll within bounded containers
+- **Sticky toolbar** — toolbar stays fixed at top while scrolling the page
+- **SPARQL Explorer ontology fallback** — when endpoint lacks labels, fetches ontology source files directly and extracts rdfs:label/skos:prefLabel
+- **SPARQL results with labels** — query results render IRIs as `label (prefixed:name)` instead of bare IRIs
 
 ### Fixed
 - SPARQL Explorer label fetching: batch loading, multiple predicates (rdfs:label, skos:prefLabel, schema:name), FILTER IN fallback
 - PNG/SVG export: minimap hidden, scale 2x, reliable overlay positioning
+- IRI dereferencing for nfdicore and other ontologies with CORS-broken redirects
+- SPARQL dropdowns now refresh labels every time the panel is opened (not just on first build)
 
-## [0.3.0] - 2026-04-09
+## [0.4.0] - 2026-04-09
 
 ### Added
 - **OWL Reasoning** — HermiT reasoner (via owlready2) runs at build time, with owlrl fallback
