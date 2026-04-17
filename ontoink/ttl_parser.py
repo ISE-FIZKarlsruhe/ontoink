@@ -138,7 +138,7 @@ def _extract_namespaces(g: Graph, ttl_text: str = "") -> Dict[str, str]:
     declared: Dict[str, str] = {}
     if ttl_text:
         for m in re.finditer(
-            r"(?:@prefix|PREFIX)\s+(\w*)\s*:\s*<([^>]+)>", ttl_text, re.IGNORECASE
+            r"(?:@prefix|PREFIX)\s+([\w-]*)\s*:\s*<([^>]+)>", ttl_text, re.IGNORECASE
         ):
             p = m.group(1)
             if p and p not in ("xml", "xsd", "rdf", "rdfs", "owl"):

@@ -8,6 +8,18 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.2] — 2026-04-17
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.2/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.2)
+
+### Fixed
+
+- **Broken parsing of TTL with periods inside strings** — the statement splitter now respects quoted strings, so descriptions like `"...time frame. Every batch..."` no longer break parsing
+- **Hyphenated prefixes not recognized** — prefixes like `samm-c:`, `ext-built:`, `ext-classification:` are now correctly captured
+
+---
+
 ## [0.5.1] — 2026-04-17
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.1/)
@@ -15,7 +27,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Playground hang on non-HTTP namespaces** — files using `urn:`, `oid:`, or other non-HTTP URI schemes (e.g. SAMM/Catena-X ontologies) no longer cause the auto-dereference step to hang indefinitely
+- **Playground hang on non-HTTP namespaces** — `urn:`, `oid:`, and other non-HTTP URI schemes are skipped during auto-dereference
 
 ---
 

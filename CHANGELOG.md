@@ -1,9 +1,15 @@
 # Changelog
 
+## [0.5.2] - 2026-04-17
+
+### Fixed
+- **Broken parsing of TTL with periods inside strings** — the statement splitter now respects quoted strings, so descriptions like `"...time frame. Every batch..."` no longer break parsing
+- **Hyphenated prefixes not recognized** — prefixes like `samm-c:`, `ext-built:`, `ext-classification:` are now correctly captured (`\w` → `[\w-]` in prefix regex)
+
 ## [0.5.1] - 2026-04-17
 
 ### Fixed
-- **Playground hang on non-HTTP namespaces** — files using `urn:`, `oid:`, or other non-HTTP URI schemes no longer cause the auto-dereference step to hang indefinitely
+- **Playground hang on non-HTTP namespaces** — `urn:`, `oid:`, and other non-HTTP URI schemes are skipped during auto-dereference
 
 ## [0.5.0] - 2026-04-10
 

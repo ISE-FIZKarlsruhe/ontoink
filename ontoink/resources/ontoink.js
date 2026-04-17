@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.5.1 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.5.2 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -401,7 +401,7 @@ var ontoink = (function () {
     // Pass 1: extract prefixes and @base
     var baseUri = "";
     for (var i = 0; i < lines.length; i++) {
-      var pMatch = lines[i].match(/^@prefix\s+(\w*)\s*:\s*<([^>]+)>\s*\./);
+      var pMatch = lines[i].match(/^@prefix\s+([\w-]*)\s*:\s*<([^>]+)>\s*\./);
       if (pMatch) { prefixes[pMatch[1]] = pMatch[2]; continue; }
       var bMatch = lines[i].match(/^@base\s+<([^>]+)>\s*\./);
       if (bMatch) { baseUri = bMatch[1]; continue; }
@@ -1078,11 +1078,20 @@ var ontoink = (function () {
 
   // ── TTL Parser ──────────────────────────────────────────────────────────
 
-  function parseTtlMinimal(ttl){var pf={},tr=[];var re=/@prefix\s+(\w*)\s*:\s*<([^>]+)>\s*\./g,m;while((m=re.exec(ttl))!==null)pf[m[1]]=m[2];
+  function parseTtlMinimal(ttl){var pf={},tr=[];var re=/@prefix\s+([\w-]*)\s*:\s*<([^>]+)>\s*\./g,m;while((m=re.exec(ttl))!==null)pf[m[1]]=m[2];
     function res(t){t=t.trim();if(t[0]==="<"&&t[t.length-1]===">")return t.slice(1,-1);if(t==="a")return"http://www.w3.org/1999/02/22-rdf-syntax-ns#type";var ci=t.indexOf(":");if(ci>=0){var p=t.substring(0,ci);if(pf[p]!==undefined)return pf[p]+t.substring(ci+1);}return t;}
     var lines=ttl.split("\n").map(function(l){var inA=false;for(var i=0;i<l.length;i++){if(l[i]==="<")inA=true;if(l[i]===">")inA=false;if(l[i]==="#"&&!inA)return l.substring(0,i);}return l;});
     var cl=lines.join("\n").replace(/@prefix[^.]*\.\s*/g,"").replace(/@base[^.]*\.\s*/g,"");
-    cl.split(/\.\s*(?=\S|$)/).forEach(function(st){st=st.trim();if(!st)return;var tk=tokenize(st);if(tk.length<3)return;var s=res(tk[0]),i=1;
+    // Split on statement-ending "." while respecting quoted strings
+    var stmts=[],cur="",inQ=false,esc=false;
+    for(var si=0;si<cl.length;si++){var ch=cl[si];
+      if(esc){cur+=ch;esc=false;continue;}
+      if(ch==="\\"&&inQ){cur+=ch;esc=true;continue;}
+      if(ch==='"'){inQ=!inQ;cur+=ch;continue;}
+      if(!inQ&&ch==="."&&(si===cl.length-1||/\s/.test(cl[si+1])||cl[si+1]===undefined)){if(cur.trim())stmts.push(cur.trim());cur="";continue;}
+      cur+=ch;}
+    if(cur.trim())stmts.push(cur.trim());
+    stmts.forEach(function(st){if(!st)return;var tk=tokenize(st);if(tk.length<3)return;var s=res(tk[0]),i=1;
       while(i<tk.length-1){var p=res(tk[i]);i++;while(i<tk.length){var o=tk[i];i++;if(o===";")break;if(o===",")continue;tr.push({s:s,p:p,o:res(o)});if(i<tk.length&&tk[i]===","){i++;continue;}if(i<tk.length&&tk[i]===";"){i++;break;}}}});
     return{triples:tr,prefixes:pf};}
   function tokenize(t){var tk=[],i=0;while(i<t.length){while(i<t.length&&/\s/.test(t[i]))i++;if(i>=t.length)break;
