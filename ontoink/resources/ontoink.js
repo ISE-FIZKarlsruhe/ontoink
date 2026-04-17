@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.5.0 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.5.1 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -562,6 +562,8 @@ var ontoink = (function () {
 
   // Fetch ontology by content negotiation, caching the full result
   function fetchOntology(nsBase) {
+    // Skip non-HTTP(S) URIs (e.g. urn:, oid:, tag:) — they cannot be dereferenced
+    if (nsBase && nsBase.indexOf("http") !== 0) return Promise.reject("non-HTTP namespace");
     if (_ontologyCache[nsBase]) return Promise.resolve(_ontologyCache[nsBase]);
     if (_ontologyFetchPromises[nsBase]) return _ontologyFetchPromises[nsBase];
 

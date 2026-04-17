@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.1] - 2026-04-17
+
+### Fixed
+- **Playground hang on non-HTTP namespaces** — files using `urn:`, `oid:`, or other non-HTTP URI schemes no longer cause the auto-dereference step to hang indefinitely
+
 ## [0.5.0] - 2026-04-10
 
 ### Added

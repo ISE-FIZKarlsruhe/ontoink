@@ -8,6 +8,17 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.1] — 2026-04-17
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.1/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.1)
+
+### Fixed
+
+- **Playground hang on non-HTTP namespaces** — files using `urn:`, `oid:`, or other non-HTTP URI schemes (e.g. SAMM/Catena-X ontologies) no longer cause the auto-dereference step to hang indefinitely
+
+---
+
 ## [0.5.0] — 2026-04-10
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.0/)
