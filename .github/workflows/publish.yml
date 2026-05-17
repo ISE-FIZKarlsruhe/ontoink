@@ -29,3 +29,9 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # PyPI versions are immutable. If a release is republished (e.g. you
+          # edit the release notes on GitHub), the workflow re-fires and the
+          # upload would otherwise 400 with "File already exists". This makes
+          # such re-runs a no-op instead of a hard failure.
+          skip-existing: true
