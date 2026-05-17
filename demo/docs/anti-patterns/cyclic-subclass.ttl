@@ -1,0 +1,15 @@
+@prefix :     <http://example.org/cycle/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:A a owl:Class ; rdfs:label "Class A"@en ;
+    rdfs:subClassOf :B .
+
+:B a owl:Class ; rdfs:label "Class B"@en ;
+    rdfs:subClassOf :C .
+
+:C a owl:Class ; rdfs:label "Class C"@en ;
+    rdfs:subClassOf :A .         # ← closes the cycle: A ⊑ B ⊑ C ⊑ A
+
+# Side effect: an OWL-DL reasoner concludes A ≡ B ≡ C.
+:x a :A ; rdfs:label "an instance of A (also B and C after reasoning)"@en .

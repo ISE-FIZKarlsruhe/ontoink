@@ -1,0 +1,34 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# SHACL — conflicting min/max cardinality
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 16. SHACL spec — conflicting cardinality on the SAME property shape ──
+#
+# A property shape that declares sh:minCount > sh:maxCount is unsatisfiable:
+# no graph can ever match it.
+#
+# We target every subject of sh:minCount instead of `sh:targetClass
+# sh:PropertyShape`, because most authors do not explicitly type their
+# inline property shapes — the SHACL specification only *implies* the type
+# via the presence of sh:path. The implicit typing is invisible to
+# sh:targetClass, which matches on rdf:type only.
+#
+ap:ConflictingCardinalityShape a sh:NodeShape ;
+    sh:targetSubjectsOf sh:minCount ;
+    sh:sparql [
+        sh:message "SHACL2FOL: sh:minCount > sh:maxCount makes the shape unsatisfiable." ;
+        sh:select """
+            SELECT $this ?min ?max WHERE {
+                $this <http://www.w3.org/ns/shacl#minCount> ?min ;
+                      <http://www.w3.org/ns/shacl#maxCount> ?max .
+                FILTER(xsd:integer(?min) > xsd:integer(?max))
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://arxiv.org/abs/2406.08018> .

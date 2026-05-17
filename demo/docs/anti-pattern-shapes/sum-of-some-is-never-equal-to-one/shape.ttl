@@ -1,0 +1,36 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# SOSINETO (Corcho/Roussey) — SOS combined with maxCardinality 1
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 11. Corcho/Roussey SOSINETO — SumOfSom never equal to 1 ──────────────
+# Two ∃R restrictions with disjoint fillers AND maxCardinality 1
+#
+ap:SumOfSomNeverEqualToOneShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "SOSINETO (Corcho/Roussey): two ∃R with disjoint fillers but maxCardinality 1 — unsatisfiable." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2, ?card .
+                ?r1 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c1 .
+                ?r2 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c2 .
+                ?card <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                      <http://www.w3.org/2002/07/owl#maxCardinality> "1"^^<http://www.w3.org/2001/XMLSchema#nonNegativeInteger> .
+                { ?c1 <http://www.w3.org/2002/07/owl#disjointWith> ?c2 . }
+                UNION
+                { ?c2 <http://www.w3.org/2002/07/owl#disjointWith> ?c1 . }
+                FILTER(?c1 != ?c2)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#

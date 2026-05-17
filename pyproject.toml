@@ -52,6 +52,10 @@ dependencies = [
 reasoning = [
     "owlready2>=0.25",
 ]
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov",

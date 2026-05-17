@@ -1,0 +1,34 @@
+@prefix :     <http://example.org/mdr/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/mdr> a owl:Ontology ;
+    rdfs:label "Multiple-domain-range example ontology"@en ;
+    rdfs:comment "Demonstrates OOPS! pitfall P19 -- multiple rdfs:domain (or rdfs:range) axioms are interpreted as intersection (Person AND Robot), not union."@en .
+
+# OOPS! P19. The OWL/RDFS semantics for multiple rdfs:domain axioms is
+# CONJUNCTION (intersection), not DISJUNCTION (union). Declaring two
+# different domain classes for a property silently restricts the
+# property's subjects to instances that belong to BOTH classes -- which
+# is almost always not what the modeller intended.
+
+:Person a owl:Class ; rdfs:label "Person"@en .
+:Robot  a owl:Class ; rdfs:label "Robot"@en .
+:Person owl:disjointWith :Robot .
+
+# ANTI-PATTERN: two rdfs:domain axioms => domain is Person AND Robot.
+# Since :Person owl:disjointWith :Robot, the domain is effectively
+# owl:Nothing and the property can never be applied to any subject.
+:hasName a owl:DatatypeProperty ;
+    rdfs:label "has name"@en ;
+    rdfs:domain :Person ;            # <- P19: first domain
+    rdfs:domain :Robot ;             # <- P19: second domain (intersected)
+    rdfs:range  xsd:string .
+
+# Recommended fix: state the union explicitly.
+#
+#   :hasName rdfs:domain [
+#       a owl:Class ;
+#       owl:unionOf ( :Person :Robot )
+#   ] .

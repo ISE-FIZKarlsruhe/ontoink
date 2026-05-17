@@ -1,0 +1,60 @@
+cff-version: 1.2.0
+message: "If you use ontoink in your research, please cite it as below."
+title: "ontoink: Interactive ontology visualization, SHACL validation, and live TTL editing for MkDocs"
+abstract: >-
+  ontoink is a MkDocs plugin that transforms RDF/Turtle files into interactive,
+  publication-ready ontology diagrams with SHACL constraint visualization and
+  optional OWL reasoning (HermiT via owlready2, or Konclude via WASM).
+authors:
+  - family-names: Norouzi
+    given-names: Ebrahim
+    email: ebrahim.norouzi@fiz-karlsruhe.de
+    affiliation: "FIZ Karlsruhe -- Leibniz Institute for Information Infrastructure"
+url: "https://github.com/ISE-FIZKarlsruhe/ontoink"
+repository-code: "https://github.com/ISE-FIZKarlsruhe/ontoink"
+license: MIT
+keywords:
+  - ontology
+  - visualization
+  - SHACL
+  - OWL
+  - RDF
+  - mkdocs
+
+references:
+  - type: article
+    title: "Konclude: System Description"
+    authors:
+      - family-names: Liebig
+        given-names: Thorsten
+      - family-names: Jaeger
+        given-names: Marian
+      - family-names: Möller
+        given-names: Ralf
+      - family-names: Möller
+        given-names: Birte
+    journal: "Journal of Web Semantics"
+    year: 2014
+    volume: "27-28"
+    start: 78
+    end: 85
+    doi: "10.1016/j.websem.2014.06.003"
+    notes: "Cite this when using the Konclude reasoner backend (ONTOINK_REASONER=konclude)."
+  - type: software
+    title: "rdf-reasoner-konclude (Konclude WASM port for browsers and Node.js)"
+    authors:
+      - family-names: Hanke
+        given-names: Thomas
+    url: "https://github.com/ThHanke/rdf-reasoner-konclude"
+    notes: "npm package providing OWL-DL reasoning in browsers and Node.js via Konclude compiled to WebAssembly. Cite when using ONTOINK_REASONER=konclude-wasm."
+  - type: software
+    title: "Konclude (native OWL-DL tableau reasoner)"
+    authors:
+      - family-names: Steigmiller
+        given-names: Andreas
+      - family-names: Liebig
+        given-names: Thorsten
+      - family-names: Glimm
+        given-names: Birte
+    url: "https://github.com/konclude/Konclude"
+    notes: "Upstream C++ reasoner from University of Ulm. Cite when using ONTOINK_REASONER=konclude."

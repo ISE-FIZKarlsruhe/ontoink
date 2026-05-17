@@ -1,5 +1,51 @@
 # Changelog
 
+## [Unreleased] — targeting 0.6.0
+
+### Added
+- **Unified interactive Reasoning UI on every ontoink graph** (not just the playground) — fence-rendered diagrams in the demo home and `/ontosniff/` now get the same reasoner dropdown with progress status, elapsed-ms timing, scrollable log panel, and Download / Copy buttons for inferred triples
+- **Persisted reasoning runs** — each `/reason` call writes `input.ttl`, `inferences.json`, and `inferences.nt` to a mounted volume (`ONTOINK_OUTPUT_DIR`, default `/output`). One timestamped subdirectory per request. Docker-compose mounts `./output:/output` automatically
+- **Pytest suite for reasoners + API** — `tests/test_reasoners.py` and `tests/test_api.py` cover each backend's dispatch contract and every endpoint (health, reason, validate, output persistence, reasoner override). Backends without a binary skip cleanly; 52 tests pass, 2 skip on non-Docker hosts
+- **Browser-side OWL-DL reasoning in the playground** — Reasoning button with backend dropdown (Auto / Browser WASM Konclude / Server: native Konclude / HermiT / WASM CLI / OWL-RL). Options are auto-detected: browser is enabled only when the page is cross-origin isolated, server options are enabled only when `/health` is reachable
+- **`coi-serviceworker`** vendored at [`demo/docs/assets/coi-serviceworker.js`](demo/docs/assets/coi-serviceworker.js) so the playground's WASM Konclude works on GitHub Pages (no server-side header support required). Registers from `mkdocs.yml` via `extra_javascript`
+- **COOP/COEP middleware** on the FastAPI `/reason` endpoint for self-hosted deployments
+- **`reasoner` field on POST /reason** — clients can override the server's default `ONTOINK_REASONER` per request without restarting the container
+- **Playground parity** — Abstract View and reasoning panel are now wired in the browser playground, matching the MkDocs fence path
+- **Production Docker image** with `ONTOINK_MODE` env switch (`serve` / `build` / `api` / `all`) and `ONTOINK_REASONER` selector. `all` mode builds the docs once and serves them via FastAPI on the same origin as `/reason`, so the playground's "Server" reasoner option works without a reverse proxy
+- **Konclude two-pass classification + realization** — native Konclude wrapper now invokes both subcommands and merges results. **Note**: Konclude expects OWL/XML input (different from rdflib's RDF/XML); for full inference from TTL input use `owlready2` or `konclude-wasm`
+- **Native Konclude reasoner** (`ONTOINK_REASONER=konclude`) — upstream Konclude C++ tableau binary from University of Ulm, downloaded and installed in the production Docker image
+- **rdf-reasoner-konclude integration** (`ONTOINK_REASONER=konclude-wasm`) — OWL-DL tableau reasoning via WASM Konclude for **browsers and Node.js**, no Java required. Ships with a thin CLI wrapper (`owl-reason`) compensating for an upstream packaging gap
+- **FastAPI mode** — `/reason`, `/validate`, `/health` endpoints when `ONTOINK_MODE=api` (optional extra `pip install ontoink[api]`)
+- **SHACL constraint edges in the playground** — `sh:path` / `sh:targetClass` shapes now render as cyan dashed cardinality-labelled edges, matching the MkDocs build path. Shapes with no instance data render against the targetClass and a placeholder target (`sh:class` / `sh:node` / `sh:datatype`).
+- **SHACL shape IRI dereferencing** — labels and axioms auto-fetched for `sh:path`, `sh:targetClass`, `sh:class`, `sh:datatype`, `sh:node` IRIs on graph load
+- **GitHub Actions workflow** to build & push the Docker image to GHCR on each `v*` tag (`.github/workflows/docker.yml`)
+- **TESTING.md** with end-to-end manual test plan (Python, JS, MkDocs, playground, Docker)
+- **.env.sample**, **NOTICE**, and **CITATION.cff** files documenting deployment config and third-party attribution
+
+### Fixed
+- **Browser WASM reasoner "Worker error"** — three independent issues stacked. Each is now addressed:
+  1. The Web Worker was spawned cross-origin (esm.sh) and Chromium refused to start it.
+  2. The bundle's `new Worker(new URL("./worker.js", import.meta.url))` requires `worker.js` to live next to the bundle, but it was never copied.
+  3. `konclude.mjs` (Emscripten output) starts with a top-level `import { createRequire } from "module"` that throws in browsers — the `require()` it sets up is only used in Node-only branches.
+  The Docker image now ships a same-origin esbuild bundle of rdf-reasoner-konclude + n3 at `/assets/reasoner/bundle.mjs`, with `worker.js`, `konclude.wasm`, and a patched `konclude.mjs` (browser-safe `require` stub) alongside. The JS loader prefers this vendored bundle and falls back to esm.sh only if it is unreachable.
+- **Reasoning panel UX overhaul** —
+  - Panel **no longer toggles off** on a second Reasoning click; cached results stay visible. Use the explicit ↻ Re-run button to redo reasoning.
+  - **Statistics row** at the top of the result panel: inferred-triple count, elapsed ms, distinct subjects, distinct predicates, backend used.
+  - **Show inferences on graph** checkbox — toggles inferred elements as a distinct purple-dotted overlay (`edgeType: "inferred"`), customisable from Edit Layout like every other edge type.
+  - **Stop button** is now styled as a clear `⏹ Stop` action chip; on cancel, the request is aborted via `AbortController` and the UI re-enables cleanly.
+  - **Retry** button on errors so the user can rerun without closing the panel.
+  - **Reasoning logs** auto-expand when an error happens (you see what failed without clicking around).
+- **Reasoning UI lock state** — the Reasoning button and reasoner dropdown are now disabled while a request is in flight, with a visible Cancel button. Server requests are aborted via `AbortController` when the user cancels
+- **SPARQL autocomplete on macOS** — added `Alt+/` as a universal trigger because macOS reserves `Ctrl+Space` for input source switching by default. Hint text adapts to the user's platform
+- **Browser WASM reasoner module loading** — switched from jsdelivr's `/+esm` to `esm.sh` (n3 is CommonJS and jsdelivr couldn't transpile it cleanly)
+- **Demo pages looked unstyled in `all` mode** — switched `Cross-Origin-Embedder-Policy` from `require-corp` to `credentialless`, so cross-origin assets (Google Fonts, etc.) load without requiring every resource to set CORP
+- **Legend and namespace overlay** now refresh when the layout is switched
+- **Edit Layout customizations now propagate to the legend** — changing a node color, node shape, edge color, edge line style, or edge arrow shape immediately updates the legend in the page
+- **PNG and SVG exports** now include Edit Layout customizations in the embedded legend (previously the legend in exports always showed the default colors and shapes regardless of edits)
+
+### Changed
+- Reasoner selection is now user-configurable via env var (was implicitly owlready2 → owlrl)
+
 ## [0.5.2] - 2026-04-17
 
 ### Fixed

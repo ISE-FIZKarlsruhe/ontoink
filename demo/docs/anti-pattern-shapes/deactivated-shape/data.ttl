@@ -1,0 +1,27 @@
+@prefix :     <http://example.org/deact/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+
+<http://example.org/deact> a owl:Ontology ;
+    rdfs:label "Deactivated-shape SHACL example"@en ;
+    rdfs:comment "Demonstrates the anti-pattern of a SHACL shape switched off with sh:deactivated true -- handy during debugging, easy to forget when shipping."@en .
+
+:Book a owl:Class ;
+    rdfs:label "Book"@en .
+
+# ANTI-PATTERN: sh:deactivated true. The shape is part of the SHACL
+# graph (it parses, it is well-typed) but the validator never applies
+# it. Such shapes look like coverage in audits but provide none.
+:ArchivedShape a sh:NodeShape ;
+    rdfs:label "Archived shape"@en ;
+    rdfs:comment "Anti-pattern: switched off, contributes no validation."@en ;
+    sh:targetClass :Book ;
+    sh:deactivated true ;                # <- shape does nothing
+    sh:property [
+        sh:path :title ;
+        sh:minCount 1
+    ] .
+
+# Recommended fix: either remove the shape, or remove the
+# sh:deactivated triple so the validator actually applies it.

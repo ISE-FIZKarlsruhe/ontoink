@@ -1,0 +1,23 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# OOPS! P24 — recursive class definition
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 5. OOPS! P24 — recursive definition ──────────────────────────────────
+#
+ap:RecursiveDefinitionShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:equivalentClass ;
+    sh:sparql [
+        sh:message "OOPS! P24: class equivalent to itself — definition is recursive." ;
+        sh:select """
+            SELECT $this WHERE { $this <http://www.w3.org/2002/07/owl#equivalentClass> $this . }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#

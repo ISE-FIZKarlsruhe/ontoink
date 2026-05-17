@@ -1,0 +1,22 @@
+@prefix :     <http://example.org/dr/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:Person a owl:Class ;
+    rdfs:label "Person"@en .
+
+# :knows has NO rdfs:domain and NO rdfs:range — the anti-pattern.
+:knows a owl:ObjectProperty ;
+    rdfs:label "knows"@en .
+
+# :worksWith is properly typed.
+:worksWith a owl:ObjectProperty ;
+    rdfs:label "works with"@en ;
+    rdfs:domain :Person ;
+    rdfs:range  :Person .
+
+:alice a :Person ; rdfs:label "Alice"@en .
+:bob   a :Person ; rdfs:label "Bob"@en .
+
+:alice :knows     :bob .
+:alice :worksWith :bob .

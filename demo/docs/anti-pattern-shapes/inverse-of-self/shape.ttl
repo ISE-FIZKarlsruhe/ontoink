@@ -1,0 +1,23 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# OOPS! P25 — property declared inverse of itself
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 3. OOPS! P25 — property declared inverse of itself ───────────────────
+#
+ap:InverseOfSelfShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:inverseOf ;
+    sh:sparql [
+        sh:message "OOPS! P25: property declared owl:inverseOf itself — use owl:SymmetricProperty instead." ;
+        sh:select """
+            SELECT $this WHERE { $this <http://www.w3.org/2002/07/owl#inverseOf> $this . }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#

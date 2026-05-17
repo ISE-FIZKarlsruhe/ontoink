@@ -1,0 +1,46 @@
+@prefix :     <http://example.org/smalo/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/smalo> a owl:Ontology ;
+    rdfs:label "SomeMeansAtLeastOne example ontology"@en ;
+    rdfs:comment "Demonstrates the SMALO anti-pattern (Corcho/Roussey 2009) -- minCardinality 1 next to someValuesFrom is redundant: the existential already entails 'at least one'."@en .
+
+# SMALO -- Corcho/Roussey 2009.
+#
+# An existential restriction `exists R.A` already entails `R-cardinality
+# >= 1` (since the existential demands at least one R-filler). Stacking
+# `minCardinality 1` on the same property is logically redundant; it
+# clutters the ontology and misleads readers about the modeller's
+# intent (was the minCardinality meant to be 2 or more?).
+
+:originatedBy a owl:ObjectProperty ;
+    rdfs:label "originated by"@en .
+
+:Torrent a owl:Class ;
+    rdfs:label "Torrent"@en .
+
+# ANTI-PATTERN: redundant minCardinality 1 next to someValuesFrom.
+:Rambla a owl:Class ;
+    rdfs:label "Rambla"@en ;
+    rdfs:comment "Anti-pattern SMALO: minCardinality 1 next to someValuesFrom is redundant."@en ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :originatedBy ;
+        owl:someValuesFrom :Torrent
+    ] ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :originatedBy ;
+        owl:minCardinality "1"^^xsd:nonNegativeInteger
+    ] .
+
+# Recommended fix: drop the minCardinality 1 axiom -- the existential
+# already implies it.
+#
+#   :Rambla rdfs:subClassOf [
+#       a owl:Restriction ;
+#       owl:onProperty :originatedBy ;
+#       owl:someValuesFrom :Torrent
+#   ] .

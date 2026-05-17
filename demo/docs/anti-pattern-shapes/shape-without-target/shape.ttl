@@ -1,0 +1,26 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# SHACL — shape without target
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 18. SHACL — shape without target ─────────────────────────────────────
+#
+ap:ShapeWithoutTargetShape a sh:NodeShape ;
+    sh:targetClass sh:NodeShape ;
+    sh:sparql [
+        sh:message "SHACLEval: node shape has no sh:targetClass / sh:targetNode / sh:targetSubjectsOf / sh:targetObjectsOf — never applied." ;
+        sh:select """
+            SELECT $this WHERE {
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetClass> ?x }
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetNode> ?x }
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetSubjectsOf> ?x }
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetObjectsOf> ?x }
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://ceur-ws.org/Vol-4064/UKG-paper3.pdf> .

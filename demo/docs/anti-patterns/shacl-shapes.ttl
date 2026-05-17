@@ -1,0 +1,440 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+#
+# ontoink — SHACL Anti-Pattern Validation Catalogue
+#
+# AUTO-GENERATED from demo/docs/anti-pattern-shapes/<slug>/shape.ttl by
+# scripts/build_antipattern_bundle.py. Edit a per-pattern shape.ttl, then
+# run `python scripts/build_antipattern_bundle.py` to regenerate this file.
+#
+# Run this shape graph against any ontology TTL with `pyshacl`:
+#
+#     pyshacl -s shacl-shapes.ttl -d my-ontology.ttl -f human
+#
+# OOPS! P03 — `is` used as a property name
+
+# ── 1. OOPS! P03 — `is` used as a property name ──────────────────────────
+#
+ap:IsRelationshipShape a sh:NodeShape ;
+    sh:targetSubjectsOf rdf:type ;
+    sh:sparql [
+        sh:message "OOPS! P03: a property is named `is` (or `isa`) — use rdfs:subClassOf, rdf:type, or owl:sameAs instead." ;
+        sh:prefixes [ sh:declare [ sh:prefix "owl" ; sh:namespace "http://www.w3.org/2002/07/owl#"^^xsd:anyURI ] ] ;
+        sh:select """
+            SELECT $this WHERE {
+                $this a owl:ObjectProperty .
+                FILTER(REGEX(STR($this), "[/#](is|isa|is_a)$", "i"))
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#
+
+# OOPS! P19 — multiple `rdfs:domain` axioms
+
+# ── 2. OOPS! P19 — multiple rdfs:domain treated as conjunction ───────────
+#
+ap:MultipleDomainShape a sh:NodeShape ;
+    sh:targetSubjectsOf rdfs:domain ;
+    sh:sparql [
+        sh:message "OOPS! P19: a property has >1 rdfs:domain — interpreted as intersection, not union." ;
+        sh:select """
+            SELECT $this (COUNT(?d) AS ?n) WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#domain> ?d .
+            } GROUP BY $this HAVING (COUNT(?d) > 1)
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#
+
+# OOPS! P25 — property declared inverse of itself
+
+# ── 3. OOPS! P25 — property declared inverse of itself ───────────────────
+#
+ap:InverseOfSelfShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:inverseOf ;
+    sh:sparql [
+        sh:message "OOPS! P25: property declared owl:inverseOf itself — use owl:SymmetricProperty instead." ;
+        sh:select """
+            SELECT $this WHERE { $this <http://www.w3.org/2002/07/owl#inverseOf> $this . }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#
+
+# OOPS! P10 — sibling subclasses with no disjointness
+
+# ── 4. OOPS! P10 — missing disjointness between siblings ─────────────────
+#
+# Two classes share a common parent in the rdfs:subClassOf hierarchy but
+# no owl:disjointWith axiom links them. A DL reasoner cannot then prove
+# that an instance of one cannot also be an instance of the other --
+# which is almost always what the modeller intended.
+#
+# We target subjects of rdfs:subClassOf (i.e. every child class) and
+# report a violation when a sibling exists without a disjointness axiom.
+# Targeting the *child* (rather than the parent or owl:Class generally)
+# guarantees $this is bound to an actual focus node that the user can
+# correct.
+#
+ap:MissingDisjointnessShape a sh:NodeShape ;
+    sh:targetSubjectsOf rdfs:subClassOf ;
+    sh:sparql [
+        sh:message "OOPS! P10: sibling subclasses with no owl:disjointWith axiom." ;
+        sh:select """
+            SELECT $this ?sibling ?parent WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?parent .
+                ?sibling <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?parent .
+                FILTER(isIRI($this) && isIRI(?sibling) && isIRI(?parent))
+                FILTER($this != ?sibling)
+                # Canonical ordering so each unordered pair is only reported once.
+                FILTER(STR($this) < STR(?sibling))
+                FILTER NOT EXISTS { $this <http://www.w3.org/2002/07/owl#disjointWith> ?sibling . }
+                FILTER NOT EXISTS { ?sibling <http://www.w3.org/2002/07/owl#disjointWith> $this . }
+                # Skip the trivial cases parent = owl:Thing / rdfs:Resource /
+                # the class itself: disjointness only matters within a domain
+                # taxonomy.
+                FILTER(?parent != <http://www.w3.org/2002/07/owl#Thing>)
+                FILTER(?parent != <http://www.w3.org/2000/01/rdf-schema#Resource>)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+# OOPS! P24 — recursive class definition
+
+# ── 5. OOPS! P24 — recursive definition ──────────────────────────────────
+#
+ap:RecursiveDefinitionShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:equivalentClass ;
+    sh:sparql [
+        sh:message "OOPS! P24: class equivalent to itself — definition is recursive." ;
+        sh:select """
+            SELECT $this WHERE { $this <http://www.w3.org/2002/07/owl#equivalentClass> $this . }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#
+
+# AIO (Corcho/Roussey) -- intersection used for union
+
+# AndIsOr (AIO) -- Corcho/Roussey 2009
+#   C subClassOf  exists R.A  intersection  exists R.B
+#   with Disjoint(A, B)
+#
+# The class is SATISFIABLE: any instance needs two distinct R-successors.
+# The smell is intent: the modeller almost always meant
+#   C subClassOf exists R.(A union B)
+# i.e. "at least one of A or B", not "at least one of each".
+#
+ap:AndIsOrShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "AIO (Corcho/Roussey): two existential restrictions on the same property with disjoint fillers; modeller probably meant a disjunction." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2 .
+                ?r1 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c1 .
+                ?r2 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c2 .
+                { ?c1 <http://www.w3.org/2002/07/owl#disjointWith> ?c2 . }
+                UNION
+                { ?c2 <http://www.w3.org/2002/07/owl#disjointWith> ?c1 . }
+                FILTER(?r1 != ?r2 && ?c1 != ?c2)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# EID (Corcho/Roussey) — equivalent yet disjoint
+
+# ── 7. Corcho/Roussey EID — EquivalenceIsDifference ──────────────────────
+# C1 ≡ C2  AND  Disjoint(C1, C2)
+#
+ap:EquivalenceIsDifferenceShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:equivalentClass ;
+    sh:sparql [
+        sh:message "EID (Corcho/Roussey): equivalent classes are also asserted disjoint — contradiction." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2002/07/owl#equivalentClass> ?c .
+                {
+                    $this <http://www.w3.org/2002/07/owl#disjointWith> ?c .
+                } UNION {
+                    ?c <http://www.w3.org/2002/07/owl#disjointWith> $this .
+                }
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# OIL (Corcho/Roussey) — onlyness is loneliness
+
+# ── 8. Corcho/Roussey OIL — OnlynessIsLoneliness ─────────────────────────
+# C1 ⊑ ∀R.C2 ⊓ ∀R.C3   with Disjoint(C2, C3)
+#
+ap:OnlynessIsLonelinessShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "OIL (Corcho/Roussey): two ∀R restrictions on the same property with disjoint fillers." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2 .
+                ?r1 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#allValuesFrom> ?c1 .
+                ?r2 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#allValuesFrom> ?c2 .
+                { ?c1 <http://www.w3.org/2002/07/owl#disjointWith> ?c2 . }
+                UNION
+                { ?c2 <http://www.w3.org/2002/07/owl#disjointWith> ?c1 . }
+                FILTER(?r1 != ?r2 && ?c1 != ?c2)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# UE (Corcho/Roussey) — universal and existence collide
+
+# ── 9. Corcho/Roussey UE — UniversalExistence ────────────────────────────
+# C1 ⊑ ∀R.C2 ⊓ ∃R.C3   with Disjoint(C2, C3)
+#
+ap:UniversalExistenceShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "UE (Corcho/Roussey): allValuesFrom restriction conflicts with someValuesFrom on the same property." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2 .
+                ?r1 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#allValuesFrom> ?c1 .
+                ?r2 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c2 .
+                { ?c1 <http://www.w3.org/2002/07/owl#disjointWith> ?c2 . }
+                UNION
+                { ?c2 <http://www.w3.org/2002/07/owl#disjointWith> ?c1 . }
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# SOS (Corcho/Roussey) — sum of some
+
+# ── 10. Corcho/Roussey SOS — SumOfSom ────────────────────────────────────
+# C1 ⊑ ∃R.C2 ⊓ ∃R.C3   with Disjoint(C2, C3)
+#
+ap:SumOfSomShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "SOS (Corcho/Roussey): two ∃R restrictions on the same property with disjoint fillers." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2 .
+                ?r1 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c1 .
+                ?r2 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c2 .
+                { ?c1 <http://www.w3.org/2002/07/owl#disjointWith> ?c2 . }
+                UNION
+                { ?c2 <http://www.w3.org/2002/07/owl#disjointWith> ?c1 . }
+                FILTER(?r1 != ?r2 && ?c1 != ?c2)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# SOSINETO (Corcho/Roussey) — SOS combined with maxCardinality 1
+
+# ── 11. Corcho/Roussey SOSINETO — SumOfSom never equal to 1 ──────────────
+# Two ∃R restrictions with disjoint fillers AND maxCardinality 1
+#
+ap:SumOfSomNeverEqualToOneShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "SOSINETO (Corcho/Roussey): two ∃R with disjoint fillers but maxCardinality 1 — unsatisfiable." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2, ?card .
+                ?r1 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c1 .
+                ?r2 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c2 .
+                ?card <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                      <http://www.w3.org/2002/07/owl#maxCardinality> "1"^^<http://www.w3.org/2001/XMLSchema#nonNegativeInteger> .
+                { ?c1 <http://www.w3.org/2002/07/owl#disjointWith> ?c2 . }
+                UNION
+                { ?c2 <http://www.w3.org/2002/07/owl#disjointWith> ?c1 . }
+                FILTER(?c1 != ?c2)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# SMALO (Corcho/Roussey) — redundant minCardinality 1 + ∃
+
+# ── 12. Corcho/Roussey SMALO — Some Means At Least One ───────────────────
+# Redundant minCardinality 1 alongside someValuesFrom
+#
+ap:SomeMeansAtLeastOneShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "SMALO (Corcho/Roussey): redundant minCardinality 1 next to a someValuesFrom on the same property." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2 .
+                ?r1 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c .
+                ?r2 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#minCardinality> ?m .
+                FILTER(xsd:integer(?m) >= 1)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# SOE (Corcho/Roussey) — equivalence used for synonymy
+
+# ── 13. Corcho/Roussey SOE — Synonym Of Equivalence ──────────────────────
+#
+ap:SynonymOfEquivalenceShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:equivalentClass ;
+    sh:severity sh:Info ;
+    sh:sparql [
+        sh:message "SOE (Corcho/Roussey): two classes declared equivalent — usually meant as a lexical synonym (skos:altLabel)." ;
+        sh:select """
+            SELECT $this ?o WHERE {
+                $this a <http://www.w3.org/2002/07/owl#Class> ;
+                      <http://www.w3.org/2002/07/owl#equivalentClass> ?o .
+                ?o a <http://www.w3.org/2002/07/owl#Class> .
+                FILTER(isIRI($this) && isIRI(?o))
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# DOC (Corcho/Roussey) — complementOf used for disjointWith
+
+# ── 14. Corcho/Roussey DOC — Disjointness Of Complement ──────────────────
+#
+ap:DisjointnessOfComplementShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:complementOf ;
+    sh:severity sh:Info ;
+    sh:sparql [
+        sh:message "DOC (Corcho/Roussey): owl:complementOf is being used where owl:disjointWith would be clearer." ;
+        sh:select "SELECT $this WHERE { $this <http://www.w3.org/2002/07/owl#complementOf> ?c . }" ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# MIZ (Corcho/Roussey) — minCardinality 0 is noise
+
+# ── 15. Corcho/Roussey MIZ — Min Is Zero ─────────────────────────────────
+#
+ap:MinIsZeroShape a sh:NodeShape ;
+    sh:targetClass owl:Restriction ;
+    sh:severity sh:Info ;
+    sh:property [
+        sh:path owl:minCardinality ;
+        sh:not [ sh:hasValue "0"^^xsd:nonNegativeInteger ] ;
+        sh:message "MIZ (Corcho/Roussey): owl:minCardinality 0 has no logical effect — remove it." ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#
+
+# SHACL — conflicting min/max cardinality
+
+# ── 16. SHACL spec — conflicting cardinality on the SAME property shape ──
+#
+# A property shape that declares sh:minCount > sh:maxCount is unsatisfiable:
+# no graph can ever match it.
+#
+# We target every subject of sh:minCount instead of `sh:targetClass
+# sh:PropertyShape`, because most authors do not explicitly type their
+# inline property shapes — the SHACL specification only *implies* the type
+# via the presence of sh:path. The implicit typing is invisible to
+# sh:targetClass, which matches on rdf:type only.
+#
+ap:ConflictingCardinalityShape a sh:NodeShape ;
+    sh:targetSubjectsOf sh:minCount ;
+    sh:sparql [
+        sh:message "SHACL2FOL: sh:minCount > sh:maxCount makes the shape unsatisfiable." ;
+        sh:select """
+            SELECT $this ?min ?max WHERE {
+                $this <http://www.w3.org/ns/shacl#minCount> ?min ;
+                      <http://www.w3.org/ns/shacl#maxCount> ?max .
+                FILTER(xsd:integer(?min) > xsd:integer(?max))
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://arxiv.org/abs/2406.08018> .
+
+# SHACL — deactivated / vacuous shape
+
+# ── 17. SHACL — deactivated shape ────────────────────────────────────────
+#
+ap:DeactivatedShapeShape a sh:NodeShape ;
+    sh:targetClass sh:NodeShape ;
+    sh:severity sh:Info ;
+    sh:property [
+        sh:path sh:deactivated ;
+        sh:not [ sh:hasValue true ] ;
+        sh:message "SHACL: shape is sh:deactivated true — it validates nothing." ;
+    ] ;
+    rdfs:seeAlso <https://www.w3.org/TR/shacl/#deactivated> .
+
+#
+
+# SHACL — shape without target
+
+# ── 18. SHACL — shape without target ─────────────────────────────────────
+#
+ap:ShapeWithoutTargetShape a sh:NodeShape ;
+    sh:targetClass sh:NodeShape ;
+    sh:sparql [
+        sh:message "SHACLEval: node shape has no sh:targetClass / sh:targetNode / sh:targetSubjectsOf / sh:targetObjectsOf — never applied." ;
+        sh:select """
+            SELECT $this WHERE {
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetClass> ?x }
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetNode> ?x }
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetSubjectsOf> ?x }
+                FILTER NOT EXISTS { $this <http://www.w3.org/ns/shacl#targetObjectsOf> ?x }
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://ceur-ws.org/Vol-4064/UKG-paper3.pdf> .
+

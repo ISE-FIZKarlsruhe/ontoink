@@ -1,0 +1,18 @@
+@prefix :       <http://example.org/orphan/> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+
+schema:Thing  a owl:Class ; rdfs:label "Thing"@en .
+schema:Person a owl:Class ;
+    rdfs:label "Person"@en ;
+    rdfs:subClassOf schema:Thing .
+
+# :Sensor floats — no superclass and no subclass.
+:Sensor a owl:Class ;
+    rdfs:label "Sensor"@en ;
+    rdfs:comment "Disconnected from the rest of the taxonomy."@en .
+
+:alice a schema:Person ; rdfs:label "Alice"@en .
+:s1    a :Sensor       ; rdfs:label "Sensor #1"@en .

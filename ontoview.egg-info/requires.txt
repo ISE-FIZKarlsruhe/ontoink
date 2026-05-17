@@ -1,9 +1,0 @@
-mkdocs>=1.4
-rdflib>=6.0
-pyshacl>=0.25.0
-pymdown-extensions>=10.0
-pyyaml>=6.0
-
-[dev]
-pytest>=7.0
-pytest-cov

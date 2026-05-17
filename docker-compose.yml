@@ -1,0 +1,28 @@
+# docker-compose for ontoink production.
+#
+# Usage:
+#   cp .env.sample .env             # then edit ONTOINK_MODE / ONTOINK_REASONER
+#   docker compose up --build
+#
+# Pick a service that matches your ONTOINK_MODE, or run both side-by-side.
+
+services:
+  ontoink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ontoink:latest
+    container_name: ontoink
+    env_file: .env
+    environment:
+      ONTOINK_MODE: ${ONTOINK_MODE:-serve}
+      ONTOINK_REASONER: ${ONTOINK_REASONER:-auto}
+      ONTOINK_PORT: ${ONTOINK_PORT:-8000}
+    ports:
+      - "${ONTOINK_PORT:-8000}:${ONTOINK_PORT:-8000}"
+    volumes:
+      # Mount your own docs/ontology directory here for serve/build mode
+      - ./demo:/app/demo:ro
+      # Persisted reasoning outputs (one folder per /reason call)
+      - ./output:/output
+    restart: unless-stopped

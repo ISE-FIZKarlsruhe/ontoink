@@ -1,0 +1,53 @@
+@prefix :     <http://example.org/sos/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/sos> a owl:Ontology ;
+    rdfs:label "SumOfSome example ontology"@en ;
+    rdfs:comment "Demonstrates the SOS anti-pattern (Corcho/Roussey 2009) -- two existential restrictions on the same property with disjoint fillers force the property to have at least two distinct values simultaneously."@en .
+
+# SOS -- Corcho/Roussey 2009.
+#
+# C subClassOf exists R.A AND C subClassOf exists R.B with
+# Disjoint(A, B). The class is SATISFIABLE -- any instance just needs
+# two distinct R-successors, one in A, one in B. The smell is intent:
+# the modeller often meant exists R.(A union B) ("at least one of the
+# two"), not "at least one of each". Combined with maxCardinality 1 it
+# turns into SOSINETO and becomes unsatisfiable.
+
+:canFlowTo a owl:ObjectProperty ;
+    rdfs:label "can flow to"@en .
+
+:UndergroundStream a owl:Class ;
+    rdfs:label "Underground Stream"@en .
+
+:Ponor a owl:Class ;
+    rdfs:label "Ponor"@en .
+
+:UndergroundStream owl:disjointWith :Ponor .
+
+# ANTI-PATTERN: two existential restrictions on disjoint fillers.
+:River a owl:Class ;
+    rdfs:label "River"@en ;
+    rdfs:comment "Anti-pattern SOS: forces two simultaneous R-successors of disjoint types."@en ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :canFlowTo ;
+        owl:someValuesFrom :UndergroundStream
+    ] ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :canFlowTo ;
+        owl:someValuesFrom :Ponor
+    ] .
+
+# Recommended fix: if the intent was "either", use a disjunction:
+#
+#   :River rdfs:subClassOf [
+#       a owl:Restriction ;
+#       owl:onProperty :canFlowTo ;
+#       owl:someValuesFrom [
+#           a owl:Class ;
+#           owl:unionOf ( :UndergroundStream :Ponor )
+#       ]
+#   ] .

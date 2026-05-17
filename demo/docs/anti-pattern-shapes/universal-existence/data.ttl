@@ -1,0 +1,51 @@
+@prefix :     <http://example.org/ue/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/ue> a owl:Ontology ;
+    rdfs:label "UniversalExistence example ontology"@en ;
+    rdfs:comment "Demonstrates the UE anti-pattern (Corcho/Roussey 2009) -- a universal restriction on one filler conflicts with an existential restriction on a disjoint filler."@en .
+
+# UE -- Corcho/Roussey 2009.
+#
+# C subClassOf forall R.A AND C subClassOf exists R.B with
+# Disjoint(A, B). The forall forces every R-value of any instance of C
+# to be in A; the exists forces at least one R-value to be in B. Since
+# A and B are disjoint, no instance can satisfy both axioms: the class
+# is unsatisfiable.
+
+:flowsInto a owl:ObjectProperty ;
+    rdfs:label "flows into"@en .
+
+:Sea a owl:Class ;
+    rdfs:label "Sea"@en .
+
+:Mountain a owl:Class ;
+    rdfs:label "Mountain"@en .
+
+:Sea owl:disjointWith :Mountain .
+
+# ANTI-PATTERN: allValuesFrom :Sea  vs.  someValuesFrom :Mountain.
+# The forall starves the exists -- :River is unsatisfiable.
+:River a owl:Class ;
+    rdfs:label "River"@en ;
+    rdfs:comment "Anti-pattern UE: allValuesFrom + someValuesFrom on disjoint fillers => unsatisfiable."@en ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :flowsInto ;
+        owl:allValuesFrom :Sea
+    ] ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :flowsInto ;
+        owl:someValuesFrom :Mountain
+    ] .
+
+# Recommended fix: pick the intended constraint and drop the other,
+# or widen the universal to include both fillers.
+#
+#   :River rdfs:subClassOf [
+#       a owl:Restriction ;
+#       owl:onProperty :flowsInto ;
+#       owl:someValuesFrom :Sea
+#   ] .

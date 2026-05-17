@@ -1,0 +1,46 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# OOPS! P10 — sibling subclasses with no disjointness
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 4. OOPS! P10 — missing disjointness between siblings ─────────────────
+#
+# Two classes share a common parent in the rdfs:subClassOf hierarchy but
+# no owl:disjointWith axiom links them. A DL reasoner cannot then prove
+# that an instance of one cannot also be an instance of the other --
+# which is almost always what the modeller intended.
+#
+# We target subjects of rdfs:subClassOf (i.e. every child class) and
+# report a violation when a sibling exists without a disjointness axiom.
+# Targeting the *child* (rather than the parent or owl:Class generally)
+# guarantees $this is bound to an actual focus node that the user can
+# correct.
+#
+ap:MissingDisjointnessShape a sh:NodeShape ;
+    sh:targetSubjectsOf rdfs:subClassOf ;
+    sh:sparql [
+        sh:message "OOPS! P10: sibling subclasses with no owl:disjointWith axiom." ;
+        sh:select """
+            SELECT $this ?sibling ?parent WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?parent .
+                ?sibling <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?parent .
+                FILTER(isIRI($this) && isIRI(?sibling) && isIRI(?parent))
+                FILTER($this != ?sibling)
+                # Canonical ordering so each unordered pair is only reported once.
+                FILTER(STR($this) < STR(?sibling))
+                FILTER NOT EXISTS { $this <http://www.w3.org/2002/07/owl#disjointWith> ?sibling . }
+                FILTER NOT EXISTS { ?sibling <http://www.w3.org/2002/07/owl#disjointWith> $this . }
+                # Skip the trivial cases parent = owl:Thing / rdfs:Resource /
+                # the class itself: disjointness only matters within a domain
+                # taxonomy.
+                FILTER(?parent != <http://www.w3.org/2002/07/owl#Thing>)
+                FILTER(?parent != <http://www.w3.org/2000/01/rdf-schema#Resource>)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .

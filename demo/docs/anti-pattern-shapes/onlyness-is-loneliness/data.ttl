@@ -1,0 +1,56 @@
+@prefix :     <http://example.org/oil/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/oil> a owl:Ontology ;
+    rdfs:label "OnlynessIsLoneliness example ontology"@en ;
+    rdfs:comment "Demonstrates the OIL anti-pattern (Corcho/Roussey 2009) -- two universal restrictions on the same property with disjoint fillers force the property to be empty on every instance."@en .
+
+# OIL -- Corcho/Roussey 2009.
+#
+# A class declared subClassOf BOTH forall R.A and forall R.B with
+# Disjoint(A, B) is equivalent to "subClassOf forall R.(A intersection B)",
+# which collapses to "subClassOf forall R.Nothing" -- i.e. the property R
+# must be EMPTY for every instance of this class. The class is
+# satisfiable but the property `floodedBy` becomes "lonely" -- never
+# has any value.
+
+:floodedBy a owl:ObjectProperty ;
+    rdfs:label "flooded by"@en .
+
+:MarineWater a owl:Class ;
+    rdfs:label "Marine Water"@en .
+
+:FreshWater a owl:Class ;
+    rdfs:label "Fresh Water"@en .
+
+:MarineWater owl:disjointWith :FreshWater .
+
+# ANTI-PATTERN: two allValuesFrom restrictions on :floodedBy point at
+# disjoint fillers -- :floodedBy must be empty on every Wetland.
+:Wetland a owl:Class ;
+    rdfs:label "Wetland"@en ;
+    rdfs:comment "Anti-pattern OIL: allValuesFrom in both branches => :floodedBy is forced empty."@en ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :floodedBy ;
+        owl:allValuesFrom :MarineWater
+    ] ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :floodedBy ;
+        owl:allValuesFrom :FreshWater
+    ] .
+
+# Recommended fix: combine the disjoint fillers under a single
+# allValuesFrom + owl:unionOf, so the universal restriction does not
+# starve the property.
+#
+#   :Wetland rdfs:subClassOf [
+#       a owl:Restriction ;
+#       owl:onProperty :floodedBy ;
+#       owl:allValuesFrom [
+#           a owl:Class ;
+#           owl:unionOf ( :MarineWater :FreshWater )
+#       ]
+#   ] .

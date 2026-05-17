@@ -1,0 +1,35 @@
+@prefix :     <http://example.org/doc/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/doc> a owl:Ontology ;
+    rdfs:label "DisjointnessOfComplement example ontology"@en ;
+    rdfs:comment "Demonstrates the DOC anti-pattern (Corcho/Roussey 2009) -- owl:complementOf is used where owl:disjointWith would be clearer (and stop the inducer from inferring more than the modeller intended)."@en .
+
+# DOC -- Corcho/Roussey 2009.
+#
+# owl:complementOf is STRONGER than owl:disjointWith. The axiom
+# `A owl:complementOf B` means `A` is exactly the set of individuals
+# NOT in `B` (closed-world over the whole domain), whereas
+# `A owl:disjointWith B` only says the two sets do not overlap. The
+# stronger axiom is rarely what the modeller intends: declaring
+# :MarineWater as the complement of :FreshWater entails that every
+# individual in the universe -- including stones, ideas, and dogs --
+# is :MarineWater unless explicitly typed as :FreshWater.
+#
+# Detection severity is `info`: the axiom is logically valid; the smell
+# is that it overclaims.
+
+:FreshWater a owl:Class ;
+    rdfs:label "Fresh Water"@en .
+
+# ANTI-PATTERN: complementOf where the modeller almost certainly meant
+# disjointWith.
+:MarineWater a owl:Class ;
+    rdfs:label "Marine Water"@en ;
+    rdfs:comment "Anti-pattern DOC: complementOf overclaims (says everything non-FreshWater is MarineWater)."@en ;
+    owl:complementOf :FreshWater .           # <- DOC
+
+# Recommended fix: use owl:disjointWith.
+#
+#   :MarineWater owl:disjointWith :FreshWater .

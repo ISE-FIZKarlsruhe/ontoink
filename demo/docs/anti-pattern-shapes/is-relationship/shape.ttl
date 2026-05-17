@@ -1,0 +1,27 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# OOPS! P03 — `is` used as a property name
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 1. OOPS! P03 — `is` used as a property name ──────────────────────────
+#
+ap:IsRelationshipShape a sh:NodeShape ;
+    sh:targetSubjectsOf rdf:type ;
+    sh:sparql [
+        sh:message "OOPS! P03: a property is named `is` (or `isa`) — use rdfs:subClassOf, rdf:type, or owl:sameAs instead." ;
+        sh:prefixes [ sh:declare [ sh:prefix "owl" ; sh:namespace "http://www.w3.org/2002/07/owl#"^^xsd:anyURI ] ] ;
+        sh:select """
+            SELECT $this WHERE {
+                $this a owl:ObjectProperty .
+                FILTER(REGEX(STR($this), "[/#](is|isa|is_a)$", "i"))
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#

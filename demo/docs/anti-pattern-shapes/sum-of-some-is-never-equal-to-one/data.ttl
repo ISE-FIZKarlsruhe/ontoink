@@ -1,0 +1,63 @@
+@prefix :     <http://example.org/sosineto/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/sosineto> a owl:Ontology ;
+    rdfs:label "SOSINETO example ontology"@en ;
+    rdfs:comment "Demonstrates the SOSINETO anti-pattern (Corcho/Roussey 2009) -- a SumOfSome paired with owl:maxCardinality 1 on the same property is unsatisfiable."@en .
+
+# SOSINETO -- Corcho/Roussey 2009.
+#
+# C subClassOf exists R.A
+# C subClassOf exists R.B
+# C subClassOf maxCardinality(R) <= 1
+# with Disjoint(A, B).
+#
+# The two existentials demand two R-successors (one in A, one in B);
+# the cardinality restriction forbids more than one R-successor; A and
+# B are disjoint, so the two existentials cannot be satisfied by the
+# same individual. The class is unsatisfiable.
+
+:containsPhase a owl:ObjectProperty ;
+    rdfs:label "contains phase"@en .
+
+:LiquidWater a owl:Class ;
+    rdfs:label "Liquid Water"@en .
+
+:Ice a owl:Class ;
+    rdfs:label "Ice"@en .
+
+:LiquidWater owl:disjointWith :Ice .
+
+# ANTI-PATTERN: two exists + maxCardinality 1 on disjoint fillers.
+:Sample a owl:Class ;
+    rdfs:label "Sample"@en ;
+    rdfs:comment "Anti-pattern SOSINETO: two existentials on disjoint fillers + maxCardinality 1 => unsatisfiable."@en ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :containsPhase ;
+        owl:someValuesFrom :LiquidWater
+    ] ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :containsPhase ;
+        owl:someValuesFrom :Ice
+    ] ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :containsPhase ;
+        owl:maxCardinality "1"^^xsd:nonNegativeInteger
+    ] .
+
+# Recommended fix: remove the cardinality bound, or use a single
+# existential over a union, or use a qualified cardinality restriction.
+#
+#   :Sample rdfs:subClassOf [
+#       a owl:Restriction ;
+#       owl:onProperty :containsPhase ;
+#       owl:someValuesFrom [
+#           a owl:Class ;
+#           owl:unionOf ( :LiquidWater :Ice )
+#       ]
+#   ] .

@@ -1,0 +1,56 @@
+@prefix :     <http://example.org/aio/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/aio> a owl:Ontology ;
+    rdfs:label "AIO example ontology"@en ;
+    rdfs:comment "Demonstrates the AndIsOr anti-pattern (Corcho/Roussey 2009)."@en .
+
+# AndIsOr (AIO) -- Corcho/Roussey 2009.
+#
+# The modeller wrote
+#     :CakeRecipe rdfs:subClassOf  exists contains.Chocolate
+#                                  intersection
+#                                  exists contains.Milk
+# intending
+#     :CakeRecipe rdfs:subClassOf  exists contains.(Chocolate union Milk)
+# (i.e. "a cake recipe contains chocolate OR milk").
+#
+# In OWL DL the original is SATISFIABLE: any instance just needs two
+# distinct `contains` fillers, one in Chocolate and one in Milk. The
+# smell is intent, not contradiction -- the class as written forces
+# every instance to contain BOTH disjoint ingredients simultaneously,
+# instead of EITHER. Combine this with `owl:maxCardinality 1` on
+# `contains` and the class becomes unsatisfiable -- that variant is
+# the SOSINETO pattern.
+
+:contains a owl:ObjectProperty .
+
+:Chocolate a owl:Class ; rdfs:label "Chocolate"@en .
+:Milk      a owl:Class ; rdfs:label "Milk"@en .
+:Chocolate owl:disjointWith :Milk .
+
+:CakeRecipe a owl:Class ;
+    rdfs:label "Cake Recipe"@en ;
+    rdfs:comment "Anti-pattern: intended disjunction, written as conjunction."@en ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :contains ;
+        owl:someValuesFrom :Chocolate
+    ] ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :contains ;
+        owl:someValuesFrom :Milk
+    ] .
+
+# Recommended:
+#
+#   :CakeRecipe rdfs:subClassOf [
+#       a owl:Restriction ;
+#       owl:onProperty :contains ;
+#       owl:someValuesFrom [
+#           a owl:Class ;
+#           owl:unionOf ( :Chocolate :Milk )
+#       ]
+#   ] .

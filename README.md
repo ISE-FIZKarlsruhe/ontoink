@@ -279,6 +279,42 @@ cd demo
 mkdocs serve
 ```
 
+## Docker (production)
+
+A production-ready image is provided that bundles ontoink, MkDocs, Java (for HermiT), and Node.js (for the Konclude WASM reasoner).
+
+```bash
+cp .env.sample .env       # edit ONTOINK_MODE and ONTOINK_REASONER
+docker compose up --build
+```
+
+Configuration is environment-driven — see [`.env.sample`](.env.sample) for the full list:
+
+| Variable | Values | Purpose |
+|----------|--------|---------|
+| `ONTOINK_MODE` | `serve` \| `build` \| `api` \| `all` | What the container runs: MkDocs dev server (docs only), one-shot static build, FastAPI endpoints (no docs), or **`all`** — combined docs + API on a single port (recommended for production self-hosting; the playground's "Server" reasoner option works because docs and `/reason` are same-origin) |
+| `ONTOINK_REASONER` | `auto` \| `owlready2` \| `konclude` \| `owlrl` \| `none` | Which OWL reasoner to use (see below) |
+| `ONTOINK_PORT` | integer | HTTP port for `serve` / `api` |
+
+### Reasoner backends
+
+| `ONTOINK_REASONER` | Profile | Engine | Notes |
+|--------------------|---------|--------|-------|
+| `owlready2` | OWL DL (HermiT) | Java, bundled with owlready2 | Default fallback; complete but Java-bound |
+| `konclude` | OWL DL (SROIQ) | **Native [Konclude](https://github.com/konclude/Konclude)** C++ tableau binary | Upstream reasoner from University of Ulm; bundled in the production image. **Note**: Konclude requires OWL/XML input — TTL produced via rdflib is RDF/XML, a different format. For full inference from TTL playground/API input, use `owlready2` or `konclude-wasm`. `konclude` is best when you have a proper OWL/XML ontology |
+| `konclude-wasm` | OWL DL (SROIQ) | **[rdf-reasoner-konclude](https://github.com/ThHanke/rdf-reasoner-konclude)** — Konclude compiled to WASM for **browsers and Node.js** | Java-free, no native binary needed |
+| `owlrl` | OWL-RL | Pure Python | Fastest, weakest expressivity |
+| `auto` | — | tries owlready2 → konclude → konclude-wasm → owlrl | Default |
+| `none` | — | — | Disable reasoning |
+
+### API mode
+
+`ONTOINK_MODE=api` exposes:
+
+- `POST /reason` — `{ttl, shacl?}` → inferred triples
+- `POST /validate` — `{ttl, shacl}` → SHACL conformance report
+- `GET /health` — health check incl. selected reasoner
+
 ## Requirements
 
 - Python >= 3.9
@@ -298,7 +334,7 @@ Contributions are welcome. Please open an issue first to discuss proposed change
 1. Fork the repository
 2. Create a feature branch
 3. Add tests for new functionality
-4. Ensure `pytest` passes
+4. Ensure `pytest` passes — see [TESTING.md](TESTING.md) for the full local test guide (Python, JS, MkDocs demo, playground, and Docker)
 5. Submit a pull request
 
 ## License
@@ -309,8 +345,23 @@ MIT License. See [LICENSE](LICENSE).
 
 [Ebrahim Norouzi](https://ebrahimnorouzi.github.io/) — [FIZ Karlsruhe](https://www.fiz-karlsruhe.de/), [ISE](https://www.fiz-karlsruhe.de/en/forschung/information-service-engineering)
 
+## Citing ontoink
+
+If you use ontoink in published work, please cite this repository via the [`CITATION.cff`](CITATION.cff) file.
+
+When you enable either Konclude backend (native via `ONTOINK_REASONER=konclude`, or WASM via `ONTOINK_REASONER=konclude-wasm`), please additionally cite the Konclude paper:
+
+> Liebig, T., Jaeger, M., Möller, R., & Möller, B. (2014).
+> Konclude: System Description.
+> *Journal of Web Semantics*, 27-28, 78-85. [doi:10.1016/j.websem.2014.06.003](https://doi.org/10.1016/j.websem.2014.06.003)
+
+The WASM port for **browsers and Node.js** is provided by Thomas Hanke's [`rdf-reasoner-konclude`](https://github.com/ThHanke/rdf-reasoner-konclude) (LGPL-3.0-or-later); see the [NOTICE](NOTICE) file for full attribution of all reasoner backends.
+
 ## Acknowledgments
 
 - Developed in the context of [NFDI](https://www.nfdi.de/) and [NFDI-MatWerk](https://nfdi-matwerk.de/)
 - Visual notation inspired by ontology diagramming best practices and formal OWL notation
 - Interactive visualization powered by [Cytoscape.js](https://js.cytoscape.org/)
+- Native OWL-DL reasoning via [Konclude](https://github.com/konclude/Konclude) (University of Ulm)
+- OWL-DL reasoning in browsers and Node.js via [`rdf-reasoner-konclude`](https://github.com/ThHanke/rdf-reasoner-konclude), Thomas Hanke's WASM port of Konclude
+- HermiT reasoning via [owlready2](https://owlready2.readthedocs.io/)

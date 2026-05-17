@@ -1,0 +1,29 @@
+@prefix :     <http://example.org/rec/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/rec> a owl:Ontology ;
+    rdfs:label "Recursive-definition example ontology"@en ;
+    rdfs:comment "Demonstrates OOPS! pitfall P24 -- a class defined to be equivalent to itself."@en .
+
+# OOPS! P24. owl:equivalentClass between a class and itself is vacuous:
+# it says "everything in :Self is in :Self", which adds no semantics.
+# Most often this is a refactoring artefact left over from renaming.
+
+# ANTI-PATTERN: vacuous self-equivalence.
+:Self a owl:Class ;
+    rdfs:label "Self"@en ;
+    rdfs:comment "Anti-pattern: defined to be equivalent to itself."@en ;
+    owl:equivalentClass :Self .             # <- P24
+
+# Contrast: a well-formed class definition.
+:NamedEntity a owl:Class ;
+    rdfs:label "Named Entity"@en ;
+    owl:equivalentClass [
+        a owl:Restriction ;
+        owl:onProperty rdfs:label ;
+        owl:minCardinality "1"^^<http://www.w3.org/2001/XMLSchema#nonNegativeInteger>
+    ] .
+
+# Recommended fix: remove the self-equivalence axiom entirely, or replace
+# it with the intended target class.

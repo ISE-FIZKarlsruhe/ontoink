@@ -1,0 +1,33 @@
+@prefix :     <http://example.org/eid/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/eid> a owl:Ontology ;
+    rdfs:label "EquivalenceIsDifference example ontology"@en ;
+    rdfs:comment "Demonstrates the EID anti-pattern (Corcho/Roussey 2009) -- two classes declared both equivalent AND disjoint, an outright contradiction."@en .
+
+# EID -- Corcho/Roussey 2009.
+#
+# Asserting equivalentClass(A, B) implies that A and B denote the same
+# set; asserting disjointWith(A, B) implies that A and B share no
+# member. Both together is a flat contradiction: the only model
+# satisfying both is the empty interpretation, so any OWL DL reasoner
+# will classify A and B as equivalent to owl:Nothing.
+#
+# The modeller almost always intended subsumption (Tributary
+# rdfs:subClassOf River) -- a Tributary is a River, but Tributary is
+# the more specific concept.
+
+:River a owl:Class ;
+    rdfs:label "River"@en .
+
+# ANTI-PATTERN: equivalence + disjointness => contradiction.
+:Tributary a owl:Class ;
+    rdfs:label "Tributary"@en ;
+    rdfs:comment "Anti-pattern: declared equivalent to AND disjoint from :River."@en ;
+    owl:equivalentClass :River ;
+    owl:disjointWith    :River .
+
+# Recommended fix: subsumption.
+#
+#   :Tributary rdfs:subClassOf :River .

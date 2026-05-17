@@ -105,6 +105,7 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'      <button class="ov-btn" onclick="ontoink.togglePathFinder(\'{graph_id}\')" title="Find paths between nodes">Paths</button>\n'
             f'      <button class="ov-btn" onclick="ontoink.toggleSparql(\'{graph_id}\')" title="SPARQL query">SPARQL</button>\n'
             f'      {reasoning_btn}'
+            f'      <select class="ov-reasoner-select" title="Select reasoner backend"></select>\n'
             f'      {editor_btn}'
             f'    </div>\n'
             f'  </div>\n'

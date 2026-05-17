@@ -1,0 +1,29 @@
+@prefix :     <http://example.org/soup/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# :PersonOmnibus is a property-soup class: too many direct properties at once.
+:PersonOmnibus a owl:Class ;
+    rdfs:label "Person (with everything)"@en .
+
+:p1 a :PersonOmnibus ;
+    :firstName    "Alice" ;
+    :lastName     "Anderson" ;
+    :email        "alice@uni.edu" ;
+    :phone        "+49-721-1234" ;
+    :birthDate    "1985-07-14"^^xsd:date ;
+    :birthPlace   "Karlsruhe" ;
+    :address      "Adenauerring 20" ;
+    :employer     "Acme University" ;
+    :role         "Researcher" ;
+    :since        "2020-01-01"^^xsd:date ;
+    :until        "2025-12-31"^^xsd:date ;
+    :supervisorEmail "bob@uni.edu" ;
+    :officeBuilding  "20.30" ;
+    :officeRoom      "313" ;
+    :authoredTitle1  "On Quantum Coffee" ;
+    :authoredYear1   "2023"^^xsd:gYear ;
+    :authoredTitle2  "Better Coffee" ;
+    :authoredYear2   "2024"^^xsd:gYear .

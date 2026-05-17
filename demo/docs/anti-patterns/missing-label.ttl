@@ -1,0 +1,12 @@
+@prefix :     <http://example.org/labels/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:R0042 a owl:Class .                # ← no label, renders as opaque ID
+
+:Researcher a owl:Class ;
+    rdfs:label "Researcher"@en ;
+    rdfs:comment "A person engaged in scientific investigation."@en .
+
+:r1 a :Researcher ; rdfs:label "Dr. Marie Curie"@en .
+:s1 a :R0042       ; rdfs:label "Specimen S0014"@en .

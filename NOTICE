@@ -1,0 +1,52 @@
+ontoink
+=======
+
+This product includes software developed at FIZ Karlsruhe — Leibniz Institute
+for Information Infrastructure (https://www.fiz-karlsruhe.de/).
+
+Third-party reasoners
+---------------------
+
+ontoink can route OWL reasoning to any of the following backends, selected via
+the ONTOINK_REASONER environment variable.
+
+  Konclude (native C++ tableau reasoner, the upstream/primary reasoner)
+    ONTOINK_REASONER=konclude
+    Authors: Andreas Steigmiller, Thorsten Liebig, Birte Glimm (University of Ulm)
+    Source:  https://github.com/konclude/Konclude
+    License: LGPLv3
+    The production Docker image downloads and installs the official Linux
+    binary release of Konclude. Selecting this backend invokes the upstream
+    Konclude executable; ontoink itself contains no Konclude code.
+
+    Citation:
+      Liebig, T., Jaeger, M., Möller, R., & Möller, B. (2014).
+      Konclude: System Description.
+      Web Semantics: Science, Services and Agents on the World Wide Web,
+      27-28, 78-85. https://doi.org/10.1016/j.websem.2014.06.003
+
+  rdf-reasoner-konclude (WASM port of Konclude for browsers and Node.js)
+    ONTOINK_REASONER=konclude-wasm
+    Author:  Thomas Hanke
+    npm:     https://www.npmjs.com/package/rdf-reasoner-konclude
+    Source:  https://github.com/ThHanke/rdf-reasoner-konclude
+    License: LGPL-3.0-or-later (TypeScript wrapper)
+             LGPLv3 (WASM Konclude binary, (c) University of Ulm)
+    A WebAssembly compile of the Konclude kernel with a TypeScript API,
+    designed for in-browser and Node.js reasoning without a Java runtime.
+    ontoink uses it as a Java-free alternative to the native binary; cite
+    the same Konclude paper as above plus the npm package URL.
+
+  HermiT (via owlready2)
+    ONTOINK_REASONER=owlready2
+    URL:     https://owlready2.readthedocs.io/
+             http://www.hermit-reasoner.com/
+    License: LGPL (HermiT), LGPL (owlready2)
+    Java-based OWL DL reasoner bundled with owlready2.
+
+  OWL-RL (pure-Python OWL-RL profile)
+    ONTOINK_REASONER=owlrl
+    URL:     https://owl-rl.readthedocs.io/
+    License: W3C Software License
+    Lightweight OWL-RL implementation in Python; fastest and weakest of the
+    available reasoners.

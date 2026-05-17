@@ -1,0 +1,23 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# MIZ (Corcho/Roussey) — minCardinality 0 is noise
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 15. Corcho/Roussey MIZ — Min Is Zero ─────────────────────────────────
+#
+ap:MinIsZeroShape a sh:NodeShape ;
+    sh:targetClass owl:Restriction ;
+    sh:severity sh:Info ;
+    sh:property [
+        sh:path owl:minCardinality ;
+        sh:not [ sh:hasValue "0"^^xsd:nonNegativeInteger ] ;
+        sh:message "MIZ (Corcho/Roussey): owl:minCardinality 0 has no logical effect — remove it." ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#

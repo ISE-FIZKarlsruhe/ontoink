@@ -1,0 +1,23 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# SHACL — deactivated / vacuous shape
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 17. SHACL — deactivated shape ────────────────────────────────────────
+#
+ap:DeactivatedShapeShape a sh:NodeShape ;
+    sh:targetClass sh:NodeShape ;
+    sh:severity sh:Info ;
+    sh:property [
+        sh:path sh:deactivated ;
+        sh:not [ sh:hasValue true ] ;
+        sh:message "SHACL: shape is sh:deactivated true — it validates nothing." ;
+    ] ;
+    rdfs:seeAlso <https://www.w3.org/TR/shacl/#deactivated> .
+
+#

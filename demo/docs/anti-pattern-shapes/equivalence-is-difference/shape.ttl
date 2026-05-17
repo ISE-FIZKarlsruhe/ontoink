@@ -1,0 +1,31 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# EID (Corcho/Roussey) — equivalent yet disjoint
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 7. Corcho/Roussey EID — EquivalenceIsDifference ──────────────────────
+# C1 ≡ C2  AND  Disjoint(C1, C2)
+#
+ap:EquivalenceIsDifferenceShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:equivalentClass ;
+    sh:sparql [
+        sh:message "EID (Corcho/Roussey): equivalent classes are also asserted disjoint — contradiction." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2002/07/owl#equivalentClass> ?c .
+                {
+                    $this <http://www.w3.org/2002/07/owl#disjointWith> ?c .
+                } UNION {
+                    ?c <http://www.w3.org/2002/07/owl#disjointWith> $this .
+                }
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#

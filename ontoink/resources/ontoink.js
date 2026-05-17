@@ -88,14 +88,21 @@ var ontoink = (function () {
     "rdf-type":        { l:"rdf:type",         c:"#9ca3af", dash:true,  fill:false, bold:false },
     "subclass":        { l:"rdfs:subClassOf",  c:"#374151", dash:false, fill:true,  bold:false },
     "shacl-constraint":{ l:"SHACL Constraint", c:"#0891b2", dash:true,  fill:true,  bold:true },
+    "owl-restriction": { l:"OWL Restriction",  c:"#a855f7", dash:true,  fill:true,  bold:false },
+    "inferred":        { l:"Inferred (OWL)",   c:"#a855f7", dash:true,  fill:true,  bold:false },
   };
 
   function drawLegendBox(ctx, data, x, y, s, domW, domH) {
     // s = pixel scale (e.g. 3 for hi-DPI), domW/domH = actual overlay size in CSS px
     var font = function(w, sz) { return w+" "+(sz*s)+"px Inter,Segoe UI,system-ui,sans-serif"; };
 
-    var usedTypes = {}, usedEdge = {};
-    data.nodes.forEach(function(n) { usedTypes[n.data.type] = n.data.color; });
+    var usedTypes = {}, usedEdge = {}, usedShapes = {};
+    var live = data._live || {};
+    data.nodes.forEach(function(n) {
+      var t = n.data.type;
+      usedTypes[t] = (live.typeColors && live.typeColors[t]) || n.data.color;
+      usedShapes[t] = (live.typeShapes && live.typeShapes[t]) || n.data.shape || "rectangle";
+    });
     data.edges.forEach(function(e) { usedEdge[e.data.edgeType] = true; });
     var nodeKeys = Object.keys(usedTypes), edgeKeys = Object.keys(usedEdge);
     var maxRows = Math.max(nodeKeys.length, edgeKeys.length);
@@ -117,43 +124,78 @@ var ontoink = (function () {
 
     var col1 = x+pad, col2 = x + boxW/2 + 4*s;
 
+    // Helper: draw a shape preview into the canvas (matches shapeIconSvg)
+    function drawShape(shape, cx, cy, w, h, fill, stroke, strokeWidth, dashed) {
+      ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = strokeWidth;
+      if (dashed) ctx.setLineDash([3*s,2*s]); else ctx.setLineDash([]);
+      var x = cx, y = cy;
+      ctx.beginPath();
+      switch (shape) {
+        case "ellipse":
+          ctx.ellipse(x+w/2, y+h/2, w/2, h/2, 0, 0, Math.PI*2); break;
+        case "triangle":
+          ctx.moveTo(x+w/2, y); ctx.lineTo(x+w, y+h); ctx.lineTo(x, y+h); ctx.closePath(); break;
+        case "diamond":
+          ctx.moveTo(x+w/2, y); ctx.lineTo(x+w, y+h/2); ctx.lineTo(x+w/2, y+h); ctx.lineTo(x, y+h/2); ctx.closePath(); break;
+        case "hexagon":
+          ctx.moveTo(x+w*0.25, y); ctx.lineTo(x+w*0.75, y); ctx.lineTo(x+w, y+h/2);
+          ctx.lineTo(x+w*0.75, y+h); ctx.lineTo(x+w*0.25, y+h); ctx.lineTo(x, y+h/2); ctx.closePath(); break;
+        case "octagon":
+          ctx.moveTo(x+w*0.3, y); ctx.lineTo(x+w*0.7, y); ctx.lineTo(x+w, y+h*0.3);
+          ctx.lineTo(x+w, y+h*0.7); ctx.lineTo(x+w*0.7, y+h); ctx.lineTo(x+w*0.3, y+h);
+          ctx.lineTo(x, y+h*0.7); ctx.lineTo(x, y+h*0.3); ctx.closePath(); break;
+        case "pentagon":
+          ctx.moveTo(x+w/2, y); ctx.lineTo(x+w, y+h*0.4); ctx.lineTo(x+w*0.8, y+h);
+          ctx.lineTo(x+w*0.2, y+h); ctx.lineTo(x, y+h*0.4); ctx.closePath(); break;
+        case "star": {
+          var cx2 = x+w/2, cy2 = y+h/2, R = w/2, r2 = w/4;
+          for (var i = 0; i < 10; i++) {
+            var ang = -Math.PI/2 + i * Math.PI/5;
+            var rr = i % 2 ? r2 : R;
+            var px = cx2 + Math.cos(ang)*rr, py = cy2 + Math.sin(ang)*rr;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.closePath(); break;
+        }
+        case "round-rectangle":
+          drawRoundRect(ctx, x, y, w, h, Math.min(w, h)*0.25); break;
+        case "rectangle":
+        default:
+          ctx.rect(x, y, w, h); break;
+      }
+      ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    var STROKE_BY_TYPE = { Class:"#555", Individual:"#999", Literal:"#6a9", Datatype:"#6a9", "SHACL Shape":"#0891b2" };
+
     // Nodes column — CSS: .ov-overlay-col-title 9px, .ov-oentry 11px
     ctx.font = font("700",9); ctx.fillStyle = "#9ca3af";
     ctx.fillText("NODES", col1, ty+9*s);
     var ny = ty + row*0.8;
     nodeKeys.forEach(function(t) {
       var c = usedTypes[t], ix = col1, iy = ny+1*s;
-      if (t === "Class") {
-        ctx.fillStyle = c; ctx.fillRect(ix, iy, iconSz, iconSz*0.65);
-        ctx.strokeStyle = "#555"; ctx.lineWidth = 1.5*s; ctx.strokeRect(ix, iy, iconSz, iconSz*0.65);
-      } else if (t === "Individual") {
-        ctx.fillStyle = c; ctx.strokeStyle = "#999"; ctx.lineWidth = 1*s;
-        ctx.beginPath(); ctx.arc(ix+iconSz/2, iy+iconSz*0.32, iconSz*0.32, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-      } else if (t === "Literal") {
-        ctx.fillStyle = c; ctx.strokeStyle = "#6a9"; ctx.lineWidth = 1*s;
-        ctx.setLineDash([3*s,2*s]);
-        ctx.beginPath(); ctx.ellipse(ix+iconSz/2, iy+iconSz*0.32, iconSz*0.45, iconSz*0.28, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.setLineDash([]);
-      } else {
-        ctx.fillStyle = c; ctx.fillRect(ix, iy, iconSz, iconSz*0.65);
-        ctx.strokeStyle = "#888"; ctx.lineWidth = 1*s; ctx.strokeRect(ix, iy, iconSz, iconSz*0.65);
-      }
+      var shape = usedShapes[t] || (t === "Class" ? "rectangle" : t === "Individual" || t === "Literal" ? "ellipse" : "rectangle");
+      var stroke = STROKE_BY_TYPE[t] || "#888";
+      drawShape(shape, ix, iy, iconSz, iconSz*0.7, c, stroke, 1.5*s, t === "Literal");
       ctx.font = font("400",11); ctx.fillStyle = "#374151";
       ctx.fillText(t, ix+iconSz+gap, ny+11*s);
       ny += row*0.85;
     });
 
-    // Edges column
+    // Edges column — use live edge styles when present
     ctx.font = font("700",9); ctx.fillStyle = "#9ca3af";
     ctx.fillText("EDGES", col2, ty+9*s);
     var ey = ty + row*0.8;
     edgeKeys.forEach(function(t) {
       var d = EDGE_DEFS_EXPORT[t] || {l:t,c:"#999",dash:false,fill:true,bold:false};
+      var color = (live.edgeColors && live.edgeColors[t]) || d.c;
+      var ls = (live.edgeLineStyles && live.edgeLineStyles[t]) || (d.dash ? "dashed" : "solid");
+      var isDashed = ls === "dashed" || ls === "dotted";
       var lx = col2, ly = ey+7*s, len = 24*s;
-      ctx.strokeStyle = d.c; ctx.lineWidth = (d.bold?2.5:1.5)*s;
-      if (d.dash) ctx.setLineDash([4*s,2*s]); else ctx.setLineDash([]);
+      ctx.strokeStyle = color; ctx.lineWidth = (d.bold?2.5:1.5)*s;
+      if (isDashed) ctx.setLineDash(ls === "dotted" ? [1*s,2*s] : [4*s,2*s]); else ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(lx+len,ly); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = d.fill ? d.c : "#fff"; ctx.strokeStyle = d.c; ctx.lineWidth = 1*s;
+      ctx.fillStyle = d.fill ? color : "#fff"; ctx.strokeStyle = color; ctx.lineWidth = 1*s;
       ctx.beginPath(); ctx.moveTo(lx+len,ly); ctx.lineTo(lx+len-5*s,ly-3.5*s); ctx.lineTo(lx+len-5*s,ly+3.5*s); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.font = font("400",11); ctx.fillStyle = "#374151";
       ctx.fillText(d.l, lx+len+gap+2*s, ey+11*s);
@@ -223,8 +265,8 @@ var ontoink = (function () {
   }
 
   function buildEdgePopup(d, cy) {
-    var edgeTypeLabels = { "object-property":"Object Property", "data-property":"Data Property", "rdf-type":"rdf:type", "subclass":"rdfs:subClassOf", "shacl-constraint":"SHACL Constraint" };
-    var edgeTypeColors = { "object-property":"#dbeafe", "data-property":"#dcfce7", "rdf-type":"#f3f4f6", "subclass":"#e5e7eb", "shacl-constraint":"#cffafe" };
+    var edgeTypeLabels = { "object-property":"Object Property", "data-property":"Data Property", "rdf-type":"rdf:type", "subclass":"rdfs:subClassOf", "shacl-constraint":"SHACL Constraint", "owl-restriction":"OWL Restriction" };
+    var edgeTypeColors = { "object-property":"#dbeafe", "data-property":"#dcfce7", "rdf-type":"#f3f4f6", "subclass":"#e5e7eb", "shacl-constraint":"#cffafe", "owl-restriction":"#f3e8ff" };
     var typeLabel = edgeTypeLabels[d.edgeType] || d.edgeType || "Edge";
     var typeBg = edgeTypeColors[d.edgeType] || "#eee";
     var html = '<div class="ov-popup-head"><span class="ov-popup-label">' + esc(d.label) + '</span><span class="ov-badge" style="background:' + typeBg + '">' + esc(typeLabel) + '</span><button class="ov-popup-close">&times;</button></div>';
@@ -235,6 +277,21 @@ var ontoink = (function () {
     html += '<div style="font-size:12px;color:#4b5563;margin:4px 0 0 8px;">' + esc(srcLabel) + ' <span style="color:#9ca3af;">\u2192</span> ' + esc(tgtLabel) + '</div>';
     if (d.cardinality) html += '<div class="ov-popup-meta">Cardinality: <strong>' + esc(d.cardinality) + '</strong></div>';
     if (d.message) html += '<div class="ov-popup-meta">Message: ' + esc(d.message) + '</div>';
+    // OWL restriction details: surface the operator + predicate + filler so the
+    // reader sees the Manchester-style rendering even after the bnode is hidden.
+    if (d.edgeType === "owl-restriction") {
+      var owlOp = d.owlOp || "";
+      var owlSym = d.owlOpSymbol || "";
+      var n = (d.owlCardinality != null) ? d.owlCardinality : "";
+      html += '<div class="ov-popup-section"><strong>OWL restriction:</strong></div>';
+      html += '<div style="font-size:12px;color:#4b5563;margin:4px 0 0 8px;font-family:monospace;">'
+            + esc(srcLabel) + ' &sqsubseteq; ' + esc(owlSym) + (n!==""?esc(String(n)):"")
+            + ' ' + esc(d.label.replace(/^[^ ]+\s+/, "")) + ' . ' + esc(tgtLabel === srcLabel ? "" : tgtLabel)
+            + '</div>';
+      html += '<div class="ov-popup-meta">Operator: <code>owl:' + esc(owlOp) + '</code></div>';
+      if (d.owlPredicate) html += '<div class="ov-popup-meta">On property: <a href="'+esc(d.owlPredicate)+'" target="_blank">'+esc(d.owlPredicate)+'</a></div>';
+      if (d.owlFiller) html += '<div class="ov-popup-meta">Filler: <a href="'+esc(d.owlFiller)+'" target="_blank">'+esc(d.owlFiller)+'</a></div>';
+    }
     html += '<div class="ov-popup-actions"><button class="ov-chip" data-action="copy-label">Copy Label</button>';
     if (d.iri) html += '<button class="ov-chip" data-action="copy-iri">Copy IRI</button>';
     if (d.iri) html += '<button class="ov-chip ov-deref-btn" data-iri="' + esc(d.iri) + '">More\u2026</button>';
@@ -670,6 +727,15 @@ var ontoink = (function () {
       var iri = e.data("iri"); if (iri) namespaces[getNamespaceBase(iri)] = true;
     });
 
+    // Also collect IRIs referenced by SHACL shapes (sh:path, sh:targetClass, sh:class, sh:datatype, sh:node)
+    if (inst.data && Array.isArray(inst.data.shacl)) {
+      inst.data.shacl.forEach(function(c) {
+        ["path", "targetClass", "class", "datatype", "node"].forEach(function(k) {
+          var v = c[k]; if (v && typeof v === "string" && v.indexOf("http") === 0) namespaces[getNamespaceBase(v)] = true;
+        });
+      });
+    }
+
     // Skip built-in namespaces (we don't need to fetch RDF/RDFS/OWL/XSD/SHACL)
     var skip = ["http://www.w3.org/1999/02/22-rdf-syntax-ns#", "http://www.w3.org/2000/01/rdf-schema#",
       "http://www.w3.org/2002/07/owl#", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/ns/shacl#"];
@@ -873,42 +939,108 @@ var ontoink = (function () {
 
   // ── Legend overlay (inside canvas) ──────────────────────────────────────
 
+  // Read live styles from the cytoscape instance for the given container.
+  // Returns null if no instance / no cytoscape — caller should fall back to data.
+  function getLiveStyles(container) {
+    var inst = container && container.id ? instances[container.id] : null;
+    if (!inst || !inst.cy) return null;
+    var typeColors = {}, typeShapes = {};
+    var edgeColors = {}, edgeLineStyles = {}, edgeArrows = {};
+    inst.cy.nodes().forEach(function(n) {
+      var d = n.data();
+      if (!d.type) return;
+      typeColors[d.type] = n.style("background-color") || d.color;
+      typeShapes[d.type] = n.style("shape") || d.shape || "rectangle";
+    });
+    inst.cy.edges().forEach(function(e) {
+      var et = e.data("edgeType"); if (!et) return;
+      edgeColors[et] = e.style("line-color");
+      edgeLineStyles[et] = e.style("line-style");
+      edgeArrows[et] = e.style("target-arrow-shape");
+    });
+    return { typeColors: typeColors, typeShapes: typeShapes,
+             edgeColors: edgeColors, edgeLineStyles: edgeLineStyles, edgeArrows: edgeArrows };
+  }
+
+  // SVG snippet for a node shape preview (18x13). Used in the legend.
+  function shapeIconSvg(shape, fill, stroke, extraAttrs) {
+    var attrs = ' fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.5"' + (extraAttrs || "");
+    switch (shape) {
+      case "round-rectangle": return '<rect x="1" y="1" width="16" height="11" rx="5"' + attrs + '/>';
+      case "ellipse":         return '<ellipse cx="9" cy="6.5" rx="7" ry="5"' + attrs + '/>';
+      case "triangle":        return '<polygon points="9,1 17,12 1,12"' + attrs + '/>';
+      case "diamond":         return '<polygon points="9,1 17,6.5 9,12 1,6.5"' + attrs + '/>';
+      case "hexagon":         return '<polygon points="5,1 13,1 17,6.5 13,12 5,12 1,6.5"' + attrs + '/>';
+      case "octagon":         return '<polygon points="6,1 12,1 17,5 17,8 12,12 6,12 1,8 1,5"' + attrs + '/>';
+      case "pentagon":        return '<polygon points="9,1 17,6 14,12 4,12 1,6"' + attrs + '/>';
+      case "star":            return '<polygon points="9,1 11,5 16,5 12,8 13,12 9,10 5,12 6,8 2,5 7,5"' + attrs + '/>';
+      case "vee":             return '<polygon points="1,1 9,12 17,1 13,1 9,7 5,1"' + attrs + '/>';
+      case "rectangle":
+      default:                return '<rect x="1" y="1" width="16" height="11" rx="2"' + attrs + '/>';
+    }
+  }
+
+  // Default style table for edge types (used when cytoscape isn't available)
+  var EDGE_LEGEND_DEFAULTS = {
+    "object-property": { l:"Object Property", c:"#2563eb", lineStyle:"solid",  filled:true,  bold:false },
+    "data-property":   { l:"Data Property",   c:"#16a34a", lineStyle:"solid",  filled:false, bold:false },
+    "rdf-type":        { l:"rdf:type",         c:"#9ca3af", lineStyle:"dashed", filled:false, bold:false },
+    "subclass":        { l:"rdfs:subClassOf",  c:"#374151", lineStyle:"solid",  filled:true,  bold:false },
+    "shacl-constraint":{ l:"SHACL Constraint", c:"#0891b2", lineStyle:"dashed", filled:true,  bold:true  },
+    "owl-restriction": { l:"OWL Restriction",  c:"#a855f7", lineStyle:"dashed", filled:true,  bold:false },
+    "inferred":        { l:"Inferred (OWL)",   c:"#a855f7", lineStyle:"dotted", filled:true,  bold:false },
+  };
+
   function buildLegendOverlay(container, data) {
     var el = container.querySelector(".ov-legend-overlay");
     if (!el) return;
     if (container.getAttribute("data-show-legend") === "false") { el.style.display = "none"; return; }
 
+    var live = getLiveStyles(container);
     var usedTypes = {}, usedEdge = {};
-    data.nodes.forEach(function(n) { usedTypes[n.data.type] = n.data.color; });
+    data.nodes.forEach(function(n) {
+      var t = n.data.type;
+      usedTypes[t] = (live && live.typeColors[t]) || n.data.color;
+    });
     data.edges.forEach(function(e) { usedEdge[e.data.edgeType] = true; });
+    // Also pick up dynamically-added edge types like "inferred" (added by the
+    // Show-inferences-on-graph overlay) — they're in cytoscape but not in data.edges.
+    var inst = instances[container.id];
+    if (inst && inst.cy) {
+      inst.cy.edges().forEach(function(e) {
+        var et = e.data("edgeType"); if (et) usedEdge[et] = true;
+      });
+    }
 
-    var icons = {
-      Class:        '<svg width="18" height="13"><rect x="1" y="1" width="16" height="11" rx="2" fill="'+(usedTypes.Class||"#FDFDC8")+'" stroke="#555" stroke-width="1.5"/></svg>',
-      Individual:   '<svg width="18" height="13"><ellipse cx="9" cy="6.5" rx="7" ry="5" fill="#E6E6E6" stroke="#999" stroke-width="1"/></svg>',
-      Literal:      '<svg width="18" height="13"><ellipse cx="9" cy="6.5" rx="7" ry="4" fill="#93D053" stroke="#6a9" stroke-width="1" stroke-dasharray="2,1"/></svg>',
-      Datatype:     '<svg width="18" height="13"><polygon points="9,1 17,6.5 9,12 1,6.5" fill="#93D053" stroke="#6a9" stroke-width="1"/></svg>',
-      "SHACL Shape":'<svg width="18" height="13"><rect x="1" y="1" width="16" height="11" rx="5" fill="#A5F3FC" stroke="#0891b2" stroke-width="1"/></svg>',
-    };
-    var edgeDefs = {
-      "object-property": { l:"Object Property", c:"#2563eb", d:"", f:true },
-      "data-property":   { l:"Data Property",   c:"#16a34a", d:"3,2", f:false },
-      "rdf-type":        { l:"rdf:type",         c:"#9ca3af", d:"4,2", f:false },
-      "subclass":        { l:"rdfs:subClassOf",  c:"#374151", d:"", f:true },
-      "shacl-constraint":{ l:"SHACL Constraint", c:"#0891b2", d:"4,2", f:true },
-    };
+    // Per-type stroke colors for the node icon outlines
+    var STROKE = { Class:"#555", Individual:"#999", Literal:"#6a9", Datatype:"#6a9", "SHACL Shape":"#0891b2" };
 
     var html = '<div class="ov-overlay-head"><span>Legend</span><button class="ov-overlay-close" onclick="this.closest(\'.ov-legend-overlay\').style.display=\'none\'">&times;</button></div>';
     html += '<div class="ov-overlay-body"><div class="ov-overlay-cols">';
 
+    // Nodes
     html += '<div class="ov-overlay-col"><div class="ov-overlay-col-title">Nodes</div>';
-    Object.keys(usedTypes).forEach(function(t) { html += '<div class="ov-oentry">' + (icons[t]||icons.Class) + '<span>' + esc(t) + '</span></div>'; });
+    Object.keys(usedTypes).forEach(function(t) {
+      var fill = usedTypes[t] || "#FDFDC8";
+      var stroke = STROKE[t] || "#555";
+      // Prefer live shape (from cytoscape) so Edit Layout customizations are reflected
+      var shape = (live && live.typeShapes[t]) || (t === "Class" ? "rectangle" : t === "Literal" || t === "Individual" ? "ellipse" : "rectangle");
+      var extra = (t === "Literal") ? ' stroke-dasharray="2,1"' : "";
+      html += '<div class="ov-oentry"><svg width="18" height="13">' + shapeIconSvg(shape, fill, stroke, extra) + '</svg><span>' + esc(t) + '</span></div>';
+    });
     html += '</div>';
 
+    // Edges — read color / dash / arrow from live styles when available
     html += '<div class="ov-overlay-col"><div class="ov-overlay-col-title">Edges</div>';
     Object.keys(usedEdge).forEach(function(t) {
-      var d = edgeDefs[t] || { l:t, c:"#999", d:"", f:true };
-      var da = d.d ? ' stroke-dasharray="'+d.d+'"' : '';
-      html += '<div class="ov-oentry"><svg width="34" height="12"><line x1="0" y1="6" x2="22" y2="6" stroke="'+d.c+'" stroke-width="'+(t==="shacl-constraint"?2.5:1.5)+'"'+da+'/><polygon points="22,2 32,6 22,10" fill="'+(d.f?d.c:"none")+'" stroke="'+d.c+'" stroke-width="0.8"/></svg><span>'+esc(d.l)+'</span></div>';
+      var def = EDGE_LEGEND_DEFAULTS[t] || { l:t, c:"#999", lineStyle:"solid", filled:true, bold:false };
+      var color = (live && live.edgeColors[t]) || def.c;
+      var ls = (live && live.edgeLineStyles[t]) || def.lineStyle;
+      var arrow = (live && live.edgeArrows[t]) || (def.filled ? "triangle" : "triangle");
+      var dash = ls === "dashed" ? "4,2" : ls === "dotted" ? "1,2" : "";
+      var da = dash ? ' stroke-dasharray="'+dash+'"' : '';
+      var fillArrow = def.filled ? color : "none";
+      html += '<div class="ov-oentry"><svg width="34" height="12"><line x1="0" y1="6" x2="22" y2="6" stroke="'+color+'" stroke-width="'+(def.bold?2.5:1.5)+'"'+da+'/><polygon points="22,2 32,6 22,10" fill="'+fillArrow+'" stroke="'+color+'" stroke-width="0.8"/></svg><span>'+esc(def.l)+'</span></div>';
     });
     html += '</div></div></div>';
     el.innerHTML = html;
@@ -952,7 +1084,17 @@ var ontoink = (function () {
     if (!container) return;
     var b64 = container.getAttribute("data-ontoink-graph");
     if (!b64) return;
-    var data; try { data = JSON.parse(atob(b64)); } catch(e) { return; }
+    // atob() returns a binary (Latin-1) string. Our JSON is UTF-8, so a
+    // raw atob() splits each multi-byte glyph (e.g. the ∃/∀/≥/≤ operators
+    // used in OWL restriction labels) into one tofu character per byte.
+    // Decode the byte sequence as UTF-8 before JSON.parse.
+    var data;
+    try {
+      var binStr = atob(b64);
+      var bytes = new Uint8Array(binStr.length);
+      for (var i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+      data = JSON.parse(new TextDecoder("utf-8").decode(bytes));
+    } catch(e) { return; }
     var canvas = container.querySelector(".ov-canvas");
     if (!canvas) return;
 
@@ -972,6 +1114,8 @@ var ontoink = (function () {
         { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction'][source = target]", style: { "curve-style":"bezier","control-point-step-size":40 }},
         { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
       ],
@@ -1045,7 +1189,18 @@ var ontoink = (function () {
   function toggleEditor(id) {
     var c=document.getElementById(id),p=c.querySelector(".ov-editor-panel"),inst=instances[id]; if(!p)return;
     var v=p.style.display!=="none"; p.style.display=v?"none":"block";
-    if(!v&&!inst.editor&&typeof CodeMirror!=="undefined"){inst.editor=CodeMirror.fromTextArea(c.querySelector(".ov-editor-textarea"),{mode:"turtle",lineNumbers:true,lineWrapping:true,theme:"default",viewportMargin:Infinity});inst.editor.setSize(null,"300px");}
+    if(!v){
+      // First-time open: seed the textarea with the current TTL so the
+      // playground path (which never runs the fence-side initialiser) and
+      // any other late-bound container shows real content. Skip if the
+      // textarea was pre-filled by the fence renderer.
+      var ta=c.querySelector(".ov-editor-textarea");
+      if(ta&&!ta.value&&inst&&inst.originalTtl) ta.value=inst.originalTtl;
+      if(!inst.editor&&typeof CodeMirror!=="undefined"){
+        inst.editor=CodeMirror.fromTextArea(ta,{mode:"turtle",lineNumbers:true,lineWrapping:true,theme:"default",viewportMargin:Infinity});
+        inst.editor.setSize(null,"300px");
+      }
+    }
   }
   function getEditorValue(id) { var i=instances[id]; if(!i)return""; if(i.editor)return i.editor.getValue(); var t=document.getElementById(id).querySelector(".ov-editor-textarea"); return t?t.value:""; }
 
@@ -1152,11 +1307,14 @@ var ontoink = (function () {
 
     // Collect edge type styles
     var edgeStyles={};
-    var edgeTypeLabels={"object-property":"Object Property","data-property":"Data Property","rdf-type":"rdf:type","subclass":"rdfs:subClassOf","shacl-constraint":"SHACL Constraint"};
+    var edgeTypeLabels={"object-property":"Object Property","data-property":"Data Property","rdf-type":"rdf:type","subclass":"rdfs:subClassOf","shacl-constraint":"SHACL Constraint","owl-restriction":"OWL Restriction","inferred":"Inferred (overlay)"};
     inst.cy.edges().forEach(function(e){
       var et=e.data("edgeType");
       if(et&&!edgeStyles[et])edgeStyles[et]={color:e.style("line-color"),lineStyle:e.style("line-style"),arrowShape:e.style("target-arrow-shape")};
     });
+    // Also surface "inferred" even when no overlay is currently on the graph,
+    // so the user can pre-style the color before toggling the overlay on.
+    if (!edgeStyles["inferred"]) edgeStyles["inferred"] = { color: "#a855f7", lineStyle: "dotted", arrowShape: "triangle" };
 
     var panel=document.createElement("div");panel.className="ov-color-panel";
     var h='<div class="ov-color-panel-head"><strong>Edit Layout</strong><button class="ov-popup-close" onclick="this.closest(\'.ov-color-panel\').remove()">&times;</button></div>';
@@ -1209,20 +1367,31 @@ var ontoink = (function () {
 
     panel.innerHTML=h;c.appendChild(panel);
 
+    // Re-render legend & namespace overlay after each Edit Layout change
+    function refreshLegend() { buildLegendOverlay(c, inst.data); buildNsOverlay(c, inst.data); }
+
     // Color inputs
     panel.querySelectorAll(".ov-color-input").forEach(function(inp){inp.addEventListener("input",function(){
       var kind=inp.dataset.kind,key=inp.dataset.key,col=inp.value;
       if(kind==="type") inst.cy.nodes().forEach(function(n){if(n.data("type")===key)n.data("color",col);});
       if(kind==="source") inst.cy.nodes().forEach(function(n){if(n.data("source")===key&&n.data("type")==="Class")n.data("color",col);});
       if(kind==="edge-color") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key){e.style({"line-color":col,"target-arrow-color":col,"source-arrow-color":col});}});
+      // Also propagate to inst.data so exports + future legend re-renders pick it up
+      if(kind==="type") inst.data.nodes.forEach(function(n){if(n.data.type===key)n.data.color=col;});
+      if(kind==="source") inst.data.nodes.forEach(function(n){if(n.data.source===key&&n.data.type==="Class")n.data.color=col;});
+      refreshLegend();
     });});
 
     // Shape selects
     panel.querySelectorAll(".ov-shape-select").forEach(function(sel){sel.addEventListener("change",function(){
       var kind=sel.dataset.kind,key=sel.dataset.key,val=sel.value;
-      if(kind==="node-shape") inst.cy.nodes().forEach(function(n){if(n.data("type")===key){n.data("shape",val);n.style("shape",val);}});
+      if(kind==="node-shape") {
+        inst.cy.nodes().forEach(function(n){if(n.data("type")===key){n.data("shape",val);n.style("shape",val);}});
+        inst.data.nodes.forEach(function(n){if(n.data.type===key)n.data.shape=val;});
+      }
       if(kind==="edge-line") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("line-style",val);});
       if(kind==="edge-arrow") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("target-arrow-shape",val);});
+      refreshLegend();
     });});
 
     // Prefix toggle checkboxes
@@ -1271,12 +1440,17 @@ var ontoink = (function () {
     var graphUrl=cy.png({scale:scale,bg:"#ffffff",full:true});
     if(minimap)minimap.style.visibility="";
 
-    // Build export data with live colors for legend
-    var live = getLiveColors(inst);
+    // Build export data with live colors / shapes / edge styles for the legend
+    var liveStyles = getLiveStyles(c);
     var exportData = JSON.parse(JSON.stringify(inst.data));
-    exportData.nodes.forEach(function(n) {
-      if (live.types[n.data.type]) n.data.color = live.types[n.data.type];
-    });
+    if (liveStyles) {
+      exportData.nodes.forEach(function(n) {
+        var t = n.data.type;
+        if (liveStyles.typeColors[t]) n.data.color = liveStyles.typeColors[t];
+        if (liveStyles.typeShapes[t]) n.data.shape = liveStyles.typeShapes[t];
+      });
+      exportData._live = liveStyles;
+    }
 
     var legendEl=c.querySelector(".ov-legend-overlay");
     var nsEl=c.querySelector(".ov-ns-overlay");
@@ -1338,9 +1512,13 @@ var ontoink = (function () {
       var origW=parseFloat(svgEl.getAttribute("width"))||800;
       var origH=parseFloat(svgEl.getAttribute("height"))||600;
 
-      var live = getLiveColors(inst);
-      var usedTypes={},usedEdge={};
-      inst.data.nodes.forEach(function(n){usedTypes[n.data.type]=live.types[n.data.type]||n.data.color;});
+      var live = getLiveStyles(c) || { typeColors:{}, typeShapes:{}, edgeColors:{}, edgeLineStyles:{}, edgeArrows:{} };
+      var usedTypes={},usedShapes={},usedEdge={};
+      inst.data.nodes.forEach(function(n){
+        var t=n.data.type;
+        usedTypes[t]=live.typeColors[t]||n.data.color;
+        usedShapes[t]=live.typeShapes[t]||n.data.shape||"rectangle";
+      });
       inst.data.edges.forEach(function(e){usedEdge[e.data.edgeType]=true;});
       var nodeKeys=Object.keys(usedTypes),edgeKeys=Object.keys(usedEdge);
       var ns=inst.data.activeNamespaces||{};var nsKeys=Object.keys(ns).sort();
@@ -1393,13 +1571,17 @@ var ontoink = (function () {
         var hdr2=doc.createElementNS("http://www.w3.org/2000/svg","text");hdr2.setAttribute("x",col2);hdr2.setAttribute("y",ty+9);hdr2.setAttribute("font-family","Inter,sans-serif");hdr2.setAttribute("font-size","9");hdr2.setAttribute("font-weight","700");hdr2.setAttribute("fill","#9ca3af");hdr2.textContent="EDGES";g.appendChild(hdr2);ty+=row*0.8;
         edgeKeys.forEach(function(t){
           var d=EDGE_DEFS_EXPORT[t]||{l:t,c:"#999",dash:false,fill:true,bold:false};
+          var color=live.edgeColors[t]||d.c;
+          var ls=live.edgeLineStyles[t]||(d.dash?"dashed":"solid");
           var line=doc.createElementNS("http://www.w3.org/2000/svg","line");
           line.setAttribute("x1",col2);line.setAttribute("y1",ty+7);line.setAttribute("x2",col2+24);line.setAttribute("y2",ty+7);
-          line.setAttribute("stroke",d.c);line.setAttribute("stroke-width",d.bold?"2.5":"1.5");
-          if(d.dash)line.setAttribute("stroke-dasharray","4,2");g.appendChild(line);
+          line.setAttribute("stroke",color);line.setAttribute("stroke-width",d.bold?"2.5":"1.5");
+          if(ls==="dashed")line.setAttribute("stroke-dasharray","4,2");
+          else if(ls==="dotted")line.setAttribute("stroke-dasharray","1,2");
+          g.appendChild(line);
           var arrow=doc.createElementNS("http://www.w3.org/2000/svg","polygon");
           arrow.setAttribute("points",(col2+24)+","+(ty+7)+" "+(col2+19)+","+(ty+3.5)+" "+(col2+19)+","+(ty+10.5));
-          arrow.setAttribute("fill",d.fill?d.c:"none");arrow.setAttribute("stroke",d.c);arrow.setAttribute("stroke-width","0.8");g.appendChild(arrow);
+          arrow.setAttribute("fill",d.fill?color:"none");arrow.setAttribute("stroke",color);arrow.setAttribute("stroke-width","0.8");g.appendChild(arrow);
           var lbl2=doc.createElementNS("http://www.w3.org/2000/svg","text");lbl2.setAttribute("x",col2+32);lbl2.setAttribute("y",ty+10);lbl2.setAttribute("font-family","Inter,sans-serif");lbl2.setAttribute("font-size","11");lbl2.setAttribute("fill","#374151");lbl2.textContent=d.l;g.appendChild(lbl2);
           ty+=row*0.85;
         });
@@ -1435,14 +1617,50 @@ var ontoink = (function () {
 
   // ── Reasoning ──────────────────────────────────────────────────────────
 
+  // Reasoning toggle — same interactive UI as the playground.
+  // If pre-computed inferences (from MkDocs build time) exist, show them first;
+  // the user can then re-run with any backend via the dropdown.
   function toggleReasoning(id) {
     var c = document.getElementById(id), inst = instances[id];
     if (!c || !inst) return;
     var panel = c.querySelector(".ov-reasoning-panel");
     if (!panel) return;
     var visible = panel.style.display !== "none";
-    panel.style.display = visible ? "none" : "block";
-    if (!visible) renderInferred(c, inst);
+    if (visible) { panel.style.display = "none"; return; }
+
+    // If the container has no reasoner dropdown yet, inject one in the toolbar
+    var selectEl = c.querySelector(".ov-reasoner-select");
+    if (!selectEl) {
+      var toolbar = c.querySelector(".ov-toolbar");
+      if (toolbar) {
+        var grp = document.createElement("div");
+        grp.className = "ov-toolbar-group";
+        grp.innerHTML = '<select class="ov-reasoner-select" title="Select reasoner backend"></select>';
+        toolbar.appendChild(grp);
+        selectEl = grp.querySelector(".ov-reasoner-select");
+        populateReasonerSelect(selectEl);
+      }
+    }
+
+    // Pre-fill the panel with any build-time inferences, before the user
+    // chooses to re-run with a different backend.
+    var pre = inst.data.inferred || [];
+    panel.style.display = "block";
+    if (pre.length) {
+      var rows = pre.map(function(t) {
+        return '<tr><td>' + esc(t.sLabel || t.s) + '</td><td>' + esc(t.pLabel || t.p) + '</td><td>' + esc(t.oLabel || t.o) + '</td></tr>';
+      }).join("");
+      panel.innerHTML =
+        '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+        '<div class="ov-reasoning-body">' +
+          '<div style="padding:8px 12px;color:#374151;font-size:13px;background:#f0fdf4;border-bottom:1px solid #d1d5db;"><strong>' + pre.length + '</strong> pre-computed inference' + (pre.length === 1 ? '' : 's') + ' from build time. <a href="#" onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\');ontoink.togglePlaygroundReasoning(\'' + id + '\');event.preventDefault();return false;">Re-run with selected backend ↻</a></div>' +
+          '<table class="ov-reasoning-table"><thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '</div>';
+    } else {
+      // No pre-computed inferences — go straight to interactive flow
+      panel.style.display = "none";  // togglePlaygroundReasoning will toggle it back on
+      togglePlaygroundReasoning(id);
+    }
   }
 
   function renderInferred(container, inst) {
@@ -1553,14 +1771,64 @@ var ontoink = (function () {
     var RT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     var SC = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
     var RL = "http://www.w3.org/2000/01/rdf-schema#label";
+    var SH_NS = "http://www.w3.org/ns/shacl#";
 
     tr.forEach(function(t) { if (t.p === RL && t.o[0] === '"') labels[t.s] = litVal(t.o); });
     tr.forEach(function(t) { if (t.p === RT) classes[t.o] = true; if (t.p === SC) { classes[t.s] = true; classes[t.o] = true; } });
+
+    // ── Parse SHACL shapes first (so constraint edges can overlay matching data triples) ──
+    var shacl = [];
+    var shapePrefixes = {};
+    if (shapeTtl) {
+      var sp = parseTtlMinimal(shapeTtl), str2 = sp.triples;
+      shapePrefixes = sp.prefixes;
+      var shapes = {};
+      str2.forEach(function(t) { if (t.p === SH_NS + "targetClass") shapes[t.s] = { targetClass: t.o }; });
+      var propNodes = {};
+      str2.forEach(function(t) { if (t.p === SH_NS + "property") { if (shapes[t.s]) propNodes[t.o] = shapes[t.s].targetClass; } });
+      var propData = {};
+      str2.forEach(function(t) {
+        if (propNodes[t.s]) {
+          if (!propData[t.s]) propData[t.s] = { targetClass: propNodes[t.s] };
+          if (t.p === SH_NS + "path") propData[t.s].path = t.o;
+          if (t.p === SH_NS + "minCount") propData[t.s].minCount = parseInt(litVal(t.o));
+          if (t.p === SH_NS + "maxCount") propData[t.s].maxCount = parseInt(litVal(t.o));
+          if (t.p === SH_NS + "message") propData[t.s].message = litVal(t.o);
+          if (t.p === SH_NS + "class") propData[t.s].class = t.o;
+          if (t.p === SH_NS + "datatype") propData[t.s].datatype = t.o;
+          if (t.p === SH_NS + "node") propData[t.s].node = t.o;
+          if (t.p === SH_NS + "nodeKind") propData[t.s].nodeKind = t.o;
+        }
+      });
+      Object.values(propData).forEach(function(c) {
+        if (c.path && c.targetClass) {
+          c.pathLabel = uriLabel(c.path, Object.assign({}, pf, sp.prefixes));
+          shacl.push(c);
+        }
+      });
+    }
+
+    // Index shapes by path for fast lookup during edge building
+    var shapesByPath = {};
+    shacl.forEach(function(c) { if (c.path) (shapesByPath[c.path] = shapesByPath[c.path] || []).push(c); });
 
     function en(u) {
       if (nodes[u] || u[0] === '"') return;
       var ic = classes[u] || false, s = detectSource(u);
       nodes[u] = { data: { id: u, label: labels[u] || uriLabel(u, pf), type: ic ? "Class" : "Individual", color: ic ? s.color : "#E6E6E6", shape: ic ? "rectangle" : "ellipse", iri: u, source: s.name, namespace: "" } };
+    }
+
+    // Helper: build a SHACL constraint edge if the source's rdf:type matches a shape's targetClass
+    function shaclEdgeFor(s, p, tgt) {
+      var candidates = shapesByPath[p]; if (!candidates) return null;
+      // Find subject's classes (from rdf:type triples)
+      var sClasses = {};
+      tr.forEach(function(tt) { if (tt.s === s && tt.p === RT) sClasses[tt.o] = true; });
+      var match = null;
+      candidates.forEach(function(c) { if (sClasses[c.targetClass]) match = c; });
+      if (!match) return null;
+      var cd = "[" + (match.minCount != null ? match.minCount : 0) + ".." + (match.maxCount != null ? match.maxCount : "*") + "]";
+      return { id: "e_" + edges.length, source: s, target: tgt, label: uriLabel(p, pf) + " " + cd, iri: p, edgeType: "shacl-constraint", cardinality: cd, message: match.message || "" };
     }
 
     tr.forEach(function(t) {
@@ -1574,44 +1842,42 @@ var ontoink = (function () {
       if (t.o[0] === '"') {
         var li2 = "lit_" + Math.abs(hashStr(t.s + t.p + t.o)) % 999999;
         if (!nodes[li2]) nodes[li2] = { data: { id: li2, label: litVal(t.o), type: "Literal", color: "#93D053", shape: "ellipse", iri: "", source: "", namespace: "" } };
-        edges.push({ data: { id: "e_" + edges.length, source: t.s, target: li2, label: uriLabel(t.p, pf), iri: t.p, edgeType: "data-property" } });
+        var se = shaclEdgeFor(t.s, t.p, li2);
+        edges.push({ data: se || { id: "e_" + edges.length, source: t.s, target: li2, label: uriLabel(t.p, pf), iri: t.p, edgeType: "data-property" } });
       } else {
         en(t.o);
         var et = t.p === RT ? "rdf-type" : t.p === SC ? "subclass" : "object-property";
-        edges.push({ data: { id: "e_" + edges.length, source: t.s, target: t.o, label: uriLabel(t.p, pf), iri: t.p, edgeType: et } });
+        var se2 = shaclEdgeFor(t.s, t.p, t.o);
+        edges.push({ data: se2 || { id: "e_" + edges.length, source: t.s, target: t.o, label: uriLabel(t.p, pf), iri: t.p, edgeType: et } });
       }
     });
 
-    // Parse SHACL shapes if provided
-    var shacl = [];
-    if (shapeTtl) {
-      var sp = parseTtlMinimal(shapeTtl), str2 = sp.triples;
-      // Extract basic sh:property constraints
-      var SH = "http://www.w3.org/ns/shacl#";
-      // Find shapes with targetClass
-      var shapes = {};
-      str2.forEach(function(t) { if (t.p === SH + "targetClass") shapes[t.s] = { targetClass: t.o }; });
-      // Find property nodes linked to shapes
-      var propNodes = {};
-      str2.forEach(function(t) { if (t.p === SH + "property") { if (shapes[t.s]) propNodes[t.o] = shapes[t.s].targetClass; } });
-      // Extract constraints from property nodes
-      var propData = {};
-      str2.forEach(function(t) {
-        if (propNodes[t.s]) {
-          if (!propData[t.s]) propData[t.s] = { targetClass: propNodes[t.s] };
-          if (t.p === SH + "path") propData[t.s].path = t.o;
-          if (t.p === SH + "minCount") propData[t.s].minCount = parseInt(litVal(t.o));
-          if (t.p === SH + "maxCount") propData[t.s].maxCount = parseInt(litVal(t.o));
-          if (t.p === SH + "message") propData[t.s].message = litVal(t.o);
-        }
-      });
-      Object.values(propData).forEach(function(c) {
-        if (c.path && c.targetClass) {
-          c.pathLabel = uriLabel(c.path, Object.assign({}, pf, sp.prefixes));
-          shacl.push(c);
-        }
-      });
-    }
+    // ── Render SHACL shapes that don't have matching data: targetClass → expected target (schema view) ──
+    shacl.forEach(function(c) {
+      // Skip if any data triple already produced a constraint edge for this (targetClass, path)
+      var hasData = false;
+      edges.forEach(function(e) { if (e.data.edgeType === "shacl-constraint" && e.data.iri === c.path) hasData = true; });
+      if (hasData) return;
+      // Ensure targetClass exists as a node
+      classes[c.targetClass] = true;
+      en(c.targetClass);
+      if (nodes[c.targetClass]) nodes[c.targetClass].data.type = "Class";
+      // Determine expected target: sh:class > sh:node > sh:datatype > literal placeholder
+      var tgt = c.class || c.node;
+      if (tgt) {
+        classes[tgt] = true; en(tgt);
+        if (nodes[tgt]) nodes[tgt].data.type = "Class";
+      } else if (c.datatype) {
+        tgt = "lit_dt_" + Math.abs(hashStr(c.path + c.datatype)) % 999999;
+        if (!nodes[tgt]) nodes[tgt] = { data: { id: tgt, label: uriLabel(c.datatype, Object.assign({}, pf, shapePrefixes)), type: "Literal", color: "#93D053", shape: "ellipse", iri: c.datatype, source: "", namespace: "" } };
+      } else {
+        // No target type — anchor on a generic literal placeholder
+        tgt = "lit_any_" + Math.abs(hashStr(c.path)) % 999999;
+        if (!nodes[tgt]) nodes[tgt] = { data: { id: tgt, label: "·", type: "Literal", color: "#93D053", shape: "ellipse", iri: "", source: "", namespace: "" } };
+      }
+      var cd = "[" + (c.minCount != null ? c.minCount : 0) + ".." + (c.maxCount != null ? c.maxCount : "*") + "]";
+      edges.push({ data: { id: "e_" + edges.length, source: c.targetClass, target: tgt, label: (c.pathLabel || uriLabel(c.path, pf)) + " " + cd, iri: c.path, edgeType: "shacl-constraint", cardinality: cd, message: c.message || "" } });
+    });
 
     var nodeList = Object.values(nodes), data = {
       nodes: nodeList, edges: edges, shacl: shacl,
@@ -1635,6 +1901,9 @@ var ontoink = (function () {
         { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+        { selector: "node[?inferred]", style: { "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
       ],
       layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, edgeSep: 20, animate: false, fit: true, padding: 30 },
       wheelSensitivity: 0.3, minZoom: 0.15, maxZoom: 5,
@@ -1690,6 +1959,9 @@ var ontoink = (function () {
 
     buildLegendOverlay(container, data);
     buildNsOverlay(container, data);
+
+    // Fire-and-forget: fetch labels/axioms for all IRIs (incl. SHACL shape targets)
+    setTimeout(function() { autoDerefNamespaces(instances[containerId]); }, 500);
   }
 
   // ── Search & Highlight (fuzzy) ───────────────────────────────────────
@@ -1738,6 +2010,9 @@ var ontoink = (function () {
     if (layoutName === "cose") { opts.nodeRepulsion = function() { return 8000; }; opts.idealEdgeLength = function() { return 80; }; }
     if (layoutName === "concentric") { opts.concentric = function(n) { return n.degree(); }; opts.levelWidth = function() { return 2; }; }
     inst.cy.layout(opts).run();
+    // Re-render legend & namespace overlays so they reflect the current graph state
+    var c = document.getElementById(id);
+    if (c && inst.data) { buildLegendOverlay(c, inst.data); buildNsOverlay(c, inst.data); }
   }
 
   // ── Neighborhood Focus ─────────────────────────────────────────────────
@@ -2251,7 +2526,9 @@ var ontoink = (function () {
       return;
     }
 
-    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">SPARQL Query <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;">Ctrl+Space for autocomplete</span><button class="ov-panel-close" onclick="this.closest(\'.ov-sparql-panel\').style.display=\'none\'">&times;</button></div>'
+    var isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    var acHint = isMac ? "⌥/ (Option-Slash) for autocomplete" : "Ctrl+Space or Alt+/ for autocomplete";
+    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">SPARQL Query <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;">' + acHint + '</span><button class="ov-panel-close" onclick="this.closest(\'.ov-sparql-panel\').style.display=\'none\'">&times;</button></div>'
       + '<div class="ov-sparql-body">'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
       + '<select class="ov-shape-select" onchange="ontoink.sparqlTemplate(\'' + id + '\',this.value)"><option value="">Template...</option><option value="all">All triples</option><option value="type">Instances of class</option><option value="props">Properties of class</option><option value="label">Find by label</option></select>'
@@ -2264,10 +2541,14 @@ var ontoink = (function () {
       + '<div class="ov-sparql-result"></div>'
       + '</div>';
 
-    // Wire Ctrl+Space autocomplete
+    // Wire autocomplete shortcuts. macOS reserves Cmd+Space (Spotlight) and
+    // by default Ctrl+Space (previous input source) — so we also accept Alt+/
+    // (Option+/ on Mac) as a universally-available trigger.
     var ta = panel.querySelector(".ov-sparql-textarea");
     ta.addEventListener("keydown", function(e) {
-      if (e.ctrlKey && e.key === " ") { e.preventDefault(); showSparqlAC(id, ta); }
+      var isCtrlSpace = (e.ctrlKey || e.metaKey) && e.key === " ";
+      var isAltSlash = e.altKey && e.key === "/";
+      if (isCtrlSpace || isAltSlash) { e.preventDefault(); showSparqlAC(id, ta); }
       if (e.key === "Escape") hideSparqlAC(id);
       if (e.key === "Tab") {
         var acEl = panel.querySelector(".ov-sparql-ac");
@@ -2510,7 +2791,496 @@ var ontoink = (function () {
 
   // ── Auto-init ──────────────────────────────────────────────────────────
 
+  // ── Playground browser reasoning ─────────────────────────────────────
+  //
+  // The playground page is pure-browser. We expose three reasoner sources:
+  //   - "browser"  → rdf-reasoner-konclude (Konclude WASM, needs cross-origin isolation)
+  //   - "server"   → POST /reason on the same origin (Docker `api` mode or self-hosted)
+  //   - "auto"     → browser first if isolated, else server, else error
+  //
+  // Each is enabled only if reachable (checked lazily, results cached).
+
+  var _wasmReasoner = null;        // memoized RdfReasoner instance
+  var _serverAvailable = null;     // tri-state: null = unknown, true/false
+  var _browserAvailable = null;
+
+  function isBrowserReasonerAvailable() {
+    return typeof window !== "undefined" && window.crossOriginIsolated === true;
+  }
+  function probeServerReasoner() {
+    if (_serverAvailable !== null) return Promise.resolve(_serverAvailable);
+    return fetch("/health", { method: "GET" })
+      .then(function(r) { _serverAvailable = r.ok; return _serverAvailable; })
+      .catch(function() { _serverAvailable = false; return false; });
+  }
+
+  function populateReasonerSelect(selectEl) {
+    if (!selectEl) return;
+    var browserOk = isBrowserReasonerAvailable();
+    _browserAvailable = browserOk;
+    var options = [
+      { value: "auto",            label: "Auto (best available)", enabled: true },
+      { value: "browser",         label: browserOk ? "Browser: Konclude WASM" : "Browser: Konclude WASM (needs cross-origin isolation)", enabled: browserOk },
+      { value: "server:auto",     label: "Server: Auto",                  enabled: true,  isServer: true },
+      { value: "server:konclude", label: "Server: Konclude (native)",     enabled: true,  isServer: true },
+      { value: "server:owlready2",label: "Server: HermiT (owlready2)",    enabled: true,  isServer: true },
+      { value: "server:konclude-wasm", label: "Server: Konclude (WASM CLI)", enabled: true, isServer: true },
+      { value: "server:owlrl",    label: "Server: OWL-RL (Python)",       enabled: true,  isServer: true },
+    ];
+    selectEl.innerHTML = options.map(function(o) {
+      return '<option value="' + o.value + '"' + (o.enabled ? "" : " disabled") + '>' + esc(o.label) + '</option>';
+    }).join("");
+    selectEl.value = browserOk ? "browser" : "auto";
+
+    // When the user changes the backend, run again immediately so the result
+    // reflects the new choice instead of keeping the previous cached output.
+    selectEl.addEventListener("change", function() {
+      var container = selectEl.closest(".ontoink-container");
+      if (!container) return;
+      var inst = instances[container.id];
+      if (!inst || inst._reasoningInFlight) return;
+      // Only auto-run if a result is already visible — otherwise wait for the user to click Reasoning
+      var panel = container.querySelector(".ov-reasoning-panel");
+      if (panel && panel.style.display === "block" && inst._lastReasoning) {
+        togglePlaygroundReasoning(container.id, true /* forceRerun */);
+      }
+    });
+
+    // Probe server in background and disable server-* options if offline
+    probeServerReasoner().then(function(ok) {
+      if (!ok) {
+        selectEl.querySelectorAll('option[value^="server"]').forEach(function(opt) {
+          opt.disabled = true;
+          if (!/offline/.test(opt.textContent)) opt.textContent = opt.textContent + " (offline)";
+        });
+      }
+    });
+  }
+
+  function loadBrowserReasoner() {
+    if (_wasmReasoner) return Promise.resolve(_wasmReasoner);
+    if (!isBrowserReasonerAvailable()) {
+      return Promise.reject(new Error("Browser reasoner needs cross-origin isolation (COOP/COEP). Add the coi-serviceworker, or use the Server option."));
+    }
+    // Prefer the same-origin vendored bundle (works around the cross-origin
+    // Worker restriction that fails for esm.sh). Fall back to esm.sh only if
+    // the bundle is not deployed (e.g. on GitHub Pages without the vendor copy).
+    function loadVendored() {
+      return import("/assets/reasoner/bundle.mjs").then(function(mod) {
+        // The bundle re-exports both rdf-reasoner-konclude AND n3 Store/Parser
+        return { Konclude: mod, N3: mod };
+      });
+    }
+    function loadCdn() {
+      return Promise.all([
+        import("https://esm.sh/rdf-reasoner-konclude@0.1.0"),
+        import("https://esm.sh/n3@1.22.0"),
+      ]).then(function(mods) { return { Konclude: mods[0], N3: mods[1] }; });
+    }
+    return loadVendored().catch(function() { return loadCdn(); }).then(function(ctx) {
+      var reasoner = new ctx.Konclude.RdfReasoner();
+      _wasmReasoner = { reasoner: reasoner, N3: ctx.N3, Konclude: ctx.Konclude };
+      return _wasmReasoner;
+    });
+  }
+
+  function reasonInBrowser(ttl, log) {
+    log = log || function() {};
+    return loadBrowserReasoner().then(function(ctx) {
+      log("WASM module loaded. Parsing TTL into N3 store…");
+      var store = new ctx.N3.Store();
+      var parser = new ctx.N3.Parser({ format: "Turtle" });
+      return new Promise(function(resolve, reject) {
+        parser.parse(ttl, function(err, quad) {
+          if (err) return reject(err);
+          if (quad) store.addQuad(quad);
+          else { log("Parsed " + store.size + " triples"); resolve(store); }
+        });
+      });
+    }).then(function(store) {
+      var ctx = _wasmReasoner;
+      log("Waiting for Konclude WASM to be ready…");
+      return ctx.reasoner.ready.catch(function(e) {
+        // "Worker error" comes from an internal Worker.onerror handler that
+        // strips detail. Capture what we can and rethrow with a clearer message.
+        var msg = (e && e.message) || String(e);
+        var origin = location.origin;
+        throw new Error(
+          msg + " — the WASM worker died during init. Likely cause: " +
+          "the reasoner bundle is being loaded cross-origin (browsers refuse " +
+          "to spawn cross-origin module workers even with COEP credentialless). " +
+          "Verify /assets/reasoner/bundle.mjs is reachable from " + origin + " — " +
+          "if it 404s, vendor the bundle (see TESTING.md §Reasoning), or use a Server reasoner instead."
+        );
+      }).then(function() {
+        log("Running classification + realization…");
+        return ctx.reasoner.reason(store);
+      }).then(function() {
+        log("Konclude finished. Collecting inferred quads…");
+        var inferred = store.getQuads(null, null, null, ctx.Konclude.INFERRED_GRAPH_IRI);
+        return inferred.map(function(q) {
+          var s = q.subject.value, p = q.predicate.value, o = q.object;
+          var isLit = o.termType === "Literal";
+          return {
+            s: s, p: p, o: o.value, isLiteral: isLit,
+            sLabel: s.split(/[#/]/).pop(),
+            pLabel: p.split(/[#/]/).pop(),
+            oLabel: isLit ? o.value : o.value.split(/[#/]/).pop(),
+          };
+        });
+      });
+    });
+  }
+
+  function reasonOnServer(ttl, reasoner, abortCtl) {
+    var opts = {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ttl: ttl, reasoner: reasoner || null }),
+    };
+    if (abortCtl) opts.signal = abortCtl.signal;
+    return fetch("/reason", opts).then(function(r) {
+      if (!r.ok) throw new Error("/reason returned HTTP " + r.status);
+      return r.json();
+    }).then(function(data) { return data.inferred || []; });
+  }
+
+  function togglePlaygroundReasoning(id, forceRerun) {
+    var c = document.getElementById(id); if (!c) return;
+    var panel = c.querySelector(".ov-reasoning-panel"); if (!panel) return;
+    var inst = instances[id]; if (!inst) { alert("Visualize a graph first."); return; }
+
+    // If reasoning is in flight, just surface the panel — never start a second run
+    if (inst._reasoningInFlight) {
+      panel.style.display = "block";
+      return;
+    }
+
+    // Determine current dropdown selection
+    var dd = c.querySelector(".ov-reasoner-select") || document.getElementById("pg-reasoner-select");
+    var currentChoice = dd ? dd.value : "auto";
+
+    // If we have a cached result AND the user hasn't changed the backend AND we're not forcing a re-run,
+    // show the cached panel. Otherwise re-run fresh so the user sees their selection actually applied.
+    if (inst._lastReasoning && !forceRerun && inst._lastReasoning.backend === currentChoice) {
+      panel.style.display = "block";
+      renderResultPanel(id, inst._lastReasoning);
+      return;
+    }
+
+    var ttl = inst.editor ? inst.editor.getValue() : (inst.originalTtl || "");
+    if (!ttl.trim()) { alert("No TTL data to reason over."); return; }
+
+    // Find the reasoner dropdown within this container, fall back to legacy id
+    var selectEl = c.querySelector(".ov-reasoner-select") || document.getElementById("pg-reasoner-select");
+    var choice = selectEl ? selectEl.value : "auto";
+    var t0 = performance.now();
+    var logs = [];
+    var abortCtl = ("AbortController" in window) ? new AbortController() : null;
+    // Lock the toolbar controls while reasoning is in flight
+    var reasonBtn = c.querySelector('.ov-toolbar button[onclick*="toggleReasoning"], .ov-toolbar button[onclick*="togglePlaygroundReasoning"]');
+    function setLock(locked) {
+      inst._reasoningInFlight = locked;
+      if (selectEl) selectEl.disabled = locked;
+      if (reasonBtn) { reasonBtn.disabled = locked; reasonBtn.style.opacity = locked ? "0.6" : ""; }
+    }
+    function log(msg) {
+      var t = (performance.now() - t0).toFixed(0);
+      logs.push("[" + t.padStart(5) + "ms] " + msg);
+      renderPanel("running");
+    }
+
+    function renderPanel(state, inferred, err) {
+      var statusHtml = "";
+      if (state === "running") {
+        var stopId = id + "-stop-reasoning";
+        statusHtml = '<div style="padding:10px 12px;color:#0891b2;display:flex;align-items:center;gap:10px;">' +
+          '<div class="ov-spinner"></div>' +
+          '<div>Reasoning… <span style="color:#6b7280;font-size:11px;">(' + esc(choice) + ')</span></div>' +
+          '<button id="' + stopId + '" class="ov-chip ov-chip-danger" style="margin-left:auto;">⏹ Stop</button>' +
+          '</div>';
+        setTimeout(function() {
+          var btn = document.getElementById(stopId);
+          if (btn) btn.addEventListener("click", function() {
+            if (abortCtl) abortCtl.abort();
+            inst._reasoningAborted = true;
+            log("User cancelled the reasoning request.");
+            renderPanel("error", null, new Error("Cancelled by user"));
+            setLock(false);
+          });
+        }, 0);
+      } else if (state === "error") {
+        var msg = String(err && err.message || err);
+        var stack = (err && err.stack) ? String(err.stack) : "";
+        statusHtml =
+          '<div style="padding:10px 12px;color:#b91c1c;">' +
+            '<strong>Reasoning failed:</strong> ' + esc(msg) +
+            ' <button class="ov-chip" onclick="ontoink.diagnoseReasoner(\'' + id + '\')" style="margin-left:8px;">Run diagnostic</button>' +
+            ' <button class="ov-chip" onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\')" style="margin-left:4px;">↻ Retry</button>' +
+          '</div>' +
+          (stack ? '<details style="padding:0 12px 8px;font-size:11px;color:#6b7280;" open><summary style="cursor:pointer;">Stack trace</summary><pre style="background:#111827;color:#fbbf24;padding:10px;border-radius:6px;overflow:auto;max-height:240px;font-family:\'JetBrains Mono\',\'Fira Code\',ui-monospace,monospace;font-size:11px;line-height:1.4;margin:6px 0 0 0;">' + esc(stack) + '</pre></details>' : '');
+      }
+
+      // Build the panel HTML
+      var headHtml = '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>';
+      var logsHtml = '<details class="ov-reasoning-logs"' + (state === "error" ? ' open' : '') + '><summary>Reasoning log (' + logs.length + ' entries)</summary><pre>' + esc(logs.join("\n")) + '</pre></details>';
+
+      if (state === "done") {
+        // Cache for re-display when user re-clicks Reasoning later
+        var elapsed = (performance.now() - t0).toFixed(0);
+        inst._lastReasoning = {
+          inferred: inferred,
+          backend: choice,
+          elapsedMs: Number(elapsed),
+          logs: logs.slice(),
+          inputTriples: ttl.split("\n").length,
+        };
+        renderResultPanel(id, inst._lastReasoning);
+        return;
+      }
+
+      panel.innerHTML = headHtml + '<div class="ov-reasoning-body">' + statusHtml + logsHtml + '</div>';
+    }
+
+    panel.style.display = "block";
+    setLock(true);
+    inst._reasoningAborted = false;
+    renderPanel("running");
+
+    log("Selected backend: " + choice);
+    log("Input size: " + ttl.length + " chars");
+
+    function resolveReasoner() {
+      if (choice === "browser") {
+        log("Loading rdf-reasoner-konclude (WASM, ~8 MB on first load)…");
+        return reasonInBrowser(ttl, log);
+      }
+      if (choice.indexOf("server:") === 0) {
+        var backend = choice.slice("server:".length);
+        log("Probing /health…");
+        return probeServerReasoner().then(function(ok) {
+          if (!ok) throw new Error("Server reasoner not reachable at /reason. Restart the container with ONTOINK_MODE=api or ONTOINK_MODE=all to enable the server endpoint.");
+          log("Server reachable. POST /reason with reasoner=" + (backend === "auto" ? "(server default)" : backend));
+          return reasonOnServer(ttl, backend === "auto" ? null : backend, abortCtl);
+        });
+      }
+      // auto: prefer browser if isolated, else server, else give a clear error
+      if (isBrowserReasonerAvailable()) {
+        log("Page is cross-origin isolated. Trying browser WASM reasoner first.");
+        return reasonInBrowser(ttl, log).catch(function(e) {
+          log("Browser reasoner failed: " + (e.message || e) + ". Falling back to server.");
+          return probeServerReasoner().then(function(ok) {
+            if (!ok) throw new Error("No reasoner available.");
+            return reasonOnServer(ttl, null, abortCtl);
+          });
+        });
+      }
+      log("Page is not cross-origin isolated. Routing to server.");
+      return probeServerReasoner().then(function(ok) {
+        if (!ok) throw new Error("No reasoner available. Reload the page once for the service worker to register (then pick 'Browser: Konclude WASM'), or restart the container with ONTOINK_MODE=api/all.");
+        return reasonOnServer(ttl, null, abortCtl);
+      });
+    }
+
+    resolveReasoner().then(function(inferred) {
+      if (inst._reasoningAborted) return;  // user cancelled; renderPanel already updated
+      log("Got " + inferred.length + " inferred triples");
+      inst.data.inferred = inferred;
+      inst._lastReasoning = { inferred: inferred, backend: choice, elapsedMs: performance.now() - t0 };
+      renderPanel("done", inferred);
+      setLock(false);
+    }).catch(function(err) {
+      if (inst._reasoningAborted) return;  // suppress error from aborted fetch
+      log("Error: " + (err && err.message || err));
+      renderPanel("error", null, err);
+      setLock(false);
+    });
+  }
+
+  // Render the result panel from a cached _lastReasoning record. Used both
+  // directly after a successful run and when the user re-opens the panel.
+  function renderResultPanel(id, last) {
+    var c = document.getElementById(id); if (!c) return;
+    var panel = c.querySelector(".ov-reasoning-panel"); if (!panel) return;
+    var inst = instances[id]; if (!inst) return;
+
+    var inferred = last.inferred || [];
+    var count = inferred.length;
+    var elapsed = last.elapsedMs;
+    var backend = last.backend || "auto";
+    var nodeCount = {}, edgeCount = {};
+    inferred.forEach(function(t) {
+      nodeCount[t.s] = true; if (!t.isLiteral) nodeCount[t.o] = true;
+      edgeCount[t.p] = (edgeCount[t.p] || 0) + 1;
+    });
+    var distinctSubjects = Object.keys(nodeCount).length;
+    var distinctProps = Object.keys(edgeCount).length;
+    var overlayOn = !!inst._inferredOverlay;
+
+    var statsHtml = '<div class="ov-reasoning-stats">' +
+      '<div class="ov-stat"><div class="ov-stat-val">' + count + '</div><div class="ov-stat-lbl">inferred triple' + (count === 1 ? '' : 's') + '</div></div>' +
+      '<div class="ov-stat"><div class="ov-stat-val">' + elapsed.toFixed(0) + ' ms</div><div class="ov-stat-lbl">reasoning time</div></div>' +
+      '<div class="ov-stat"><div class="ov-stat-val">' + distinctSubjects + '</div><div class="ov-stat-lbl">distinct subjects</div></div>' +
+      '<div class="ov-stat"><div class="ov-stat-val">' + distinctProps + '</div><div class="ov-stat-lbl">distinct predicates</div></div>' +
+      '<div class="ov-stat"><div class="ov-stat-val" style="text-transform:uppercase;font-size:11px;">' + esc(backend) + '</div><div class="ov-stat-lbl">backend</div></div>' +
+      '</div>';
+
+    var actionsHtml = '<div class="ov-reasoning-actions">' +
+      '<label class="ov-overlay-toggle"><input type="checkbox" ' + (overlayOn ? "checked" : "") + ' onchange="ontoink.setInferredOverlay(\'' + id + '\',this.checked)"> Show inferences on graph</label>' +
+      (count ? ' <button class="ov-chip" onclick="ontoink.downloadInferences(\'' + id + '\')">Download (N-Triples)</button>' +
+               ' <button class="ov-chip" onclick="ontoink.copyInferences(\'' + id + '\')">Copy JSON</button>' : '') +
+      ' <button class="ov-chip" onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\',true)" style="margin-left:auto;">↻ Re-run</button>' +
+      '</div>';
+
+    var resultHtml;
+    if (count) {
+      var rows = inferred.map(function(t) {
+        var typeBadge = t.isLiteral ? '<span class="ov-type-badge lit">lit</span>' : '';
+        return '<tr><td>' + esc(t.sLabel || t.s) + '</td><td>' + esc(t.pLabel || t.p) + '</td><td>' + esc(t.oLabel || t.o) + typeBadge + '</td></tr>';
+      }).join("");
+      resultHtml = '<table class="ov-reasoning-table">' +
+        '<thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>';
+    } else {
+      resultHtml = '<div style="padding:12px;color:#6b7280;">No new inferences derived. The reasoner ran but did not find any triples beyond what is already stated. Try richer OWL declarations (<code>owl:Class</code>, <code>owl:ObjectProperty</code>, instances with <code>rdf:type</code>) or pick a different backend.</div>';
+    }
+
+    var logsHtml = '<details class="ov-reasoning-logs"><summary>Reasoning log (' + (last.logs || []).length + ' entries)</summary><pre>' + esc((last.logs || []).join("\n")) + '</pre></details>';
+
+    panel.style.display = "block";
+    panel.innerHTML =
+      '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+      '<div class="ov-reasoning-body">' + statsHtml + actionsHtml + resultHtml + logsHtml + '</div>';
+
+    // If overlay was on previously, ensure it's still applied (e.g. after a Re-run replaced inferences)
+    if (overlayOn) setInferredOverlay(id, true);
+  }
+
+  // Show or hide inferred triples as overlay edges (and helper nodes) on the graph.
+  // Inferred elements get edgeType: "inferred" / data.inferred=true so the
+  // cytoscape style block colors them distinctly (configurable via Edit Layout).
+  function setInferredOverlay(id, show) {
+    var inst = instances[id]; if (!inst || !inst.cy || !inst._lastReasoning) return;
+    var cy = inst.cy;
+    inst._inferredOverlay = !!show;
+    // Always strip current overlay before reapplying
+    cy.elements("[?inferred]").remove();
+    if (!show) return;
+
+    var inferred = inst._lastReasoning.inferred || [];
+    var existingIds = {};
+    cy.nodes().forEach(function(n) { existingIds[n.data("id")] = true; });
+    inferred.forEach(function(t, i) {
+      if (t.isLiteral) return;  // Skip literal triples in the visual overlay
+      if (!existingIds[t.s] && !cy.getElementById(t.s).length) {
+        cy.add({ group: "nodes", data: { id: t.s, label: t.sLabel || t.s.split(/[#/]/).pop(), type: "Individual", color: "#E6E6E6", shape: "ellipse", iri: t.s, source: "", namespace: "", inferred: true }});
+        existingIds[t.s] = true;
+      }
+      if (!existingIds[t.o] && !cy.getElementById(t.o).length) {
+        cy.add({ group: "nodes", data: { id: t.o, label: t.oLabel || t.o.split(/[#/]/).pop(), type: "Individual", color: "#E6E6E6", shape: "ellipse", iri: t.o, source: "", namespace: "", inferred: true }});
+        existingIds[t.o] = true;
+      }
+      cy.add({ group: "edges", data: { id: "inf_" + i + "_" + Math.random().toString(36).slice(2,6), source: t.s, target: t.o, label: t.pLabel || t.p.split(/[#/]/).pop(), iri: t.p, edgeType: "inferred", inferred: true }});
+    });
+    cy.layout({ name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: true, animationDuration: 300, fit: false, padding: 30 }).run();
+    // Refresh the legend so the new "Inferred (OWL)" row appears (or disappears)
+    var container = document.getElementById(id);
+    if (container && inst.data) { buildLegendOverlay(container, inst.data); buildNsOverlay(container, inst.data); }
+  }
+
+  // Run a structured diagnostic and dump the result into the reasoning panel.
+  // Tells the user exactly why browser reasoning isn't working (if it isn't).
+  function diagnoseReasoner(id) {
+    var c = document.getElementById(id); if (!c) return;
+    var panel = c.querySelector(".ov-reasoning-panel");
+    if (!panel) return;
+
+    var lines = [];
+    function row(label, ok, value, hint) {
+      var icon = ok === true ? "✓" : ok === false ? "✗" : "?";
+      var color = ok === true ? "#15803d" : ok === false ? "#b91c1c" : "#6b7280";
+      lines.push(
+        '<tr><td style="padding:4px 8px;width:24px;color:' + color + ';font-weight:700;">' + icon + '</td>' +
+        '<td style="padding:4px 8px;font-weight:600;">' + esc(label) + '</td>' +
+        '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:#374151;">' + esc(String(value)) + '</td>' +
+        '<td style="padding:4px 8px;font-size:11px;color:#6b7280;">' + (hint ? esc(hint) : '') + '</td></tr>'
+      );
+    }
+
+    row("Secure context (HTTPS or localhost)", window.isSecureContext, window.isSecureContext,
+        window.isSecureContext ? "" : "Workers can only load same-origin scripts on non-secure origins");
+    row("crossOriginIsolated", window.crossOriginIsolated === true, window.crossOriginIsolated,
+        window.crossOriginIsolated ? "" : "Required for SharedArrayBuffer; check COOP/COEP response headers");
+    row("SharedArrayBuffer available", typeof SharedArrayBuffer !== "undefined", typeof SharedArrayBuffer !== "undefined",
+        typeof SharedArrayBuffer !== "undefined" ? "" : "Konclude WASM pthreads cannot start without it");
+    row("Service worker controller", !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+        !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+        navigator.serviceWorker && navigator.serviceWorker.controller ? "" : "coi-serviceworker not yet active — reload the page once");
+    row("Web Workers supported", typeof Worker !== "undefined", typeof Worker !== "undefined", "");
+    row("WebAssembly supported", typeof WebAssembly !== "undefined", typeof WebAssembly !== "undefined", "");
+
+    panel.style.display = "block";
+    var diagnosticHtml =
+      '<div class="ov-panel-head">Reasoner diagnostic <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+      '<div class="ov-reasoning-body"><div style="padding:8px 12px;color:#374151;font-size:12px;">Capability check for the browser WASM reasoner. If any row is red, browser reasoning will fail — use the <em>Server</em> option in the dropdown instead.</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;"><tbody>' + lines.join("") + '</tbody></table>' +
+      '<div style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:12px;"><strong>Try loading the WASM module now:</strong> <button class="ov-chip" id="' + id + '-probe-wasm">Probe</button> <span id="' + id + '-probe-result" style="margin-left:8px;color:#6b7280;"></span></div>' +
+      '<div style="padding:8px 12px;border-top:1px solid #e5e7eb;font-size:12px;"><strong>Probe server /health:</strong> <button class="ov-chip" id="' + id + '-probe-server">Probe</button> <span id="' + id + '-probe-server-result" style="margin-left:8px;color:#6b7280;"></span></div>' +
+      '</div>';
+    panel.innerHTML = diagnosticHtml;
+
+    // Wire the probe buttons
+    var wasmBtn = document.getElementById(id + "-probe-wasm");
+    var wasmOut = document.getElementById(id + "-probe-result");
+    if (wasmBtn) wasmBtn.addEventListener("click", function() {
+      wasmBtn.disabled = true; wasmOut.textContent = "loading…";
+      var t = performance.now();
+      loadBrowserReasoner().then(function() {
+        wasmOut.textContent = "✓ loaded in " + (performance.now() - t).toFixed(0) + " ms";
+        wasmOut.style.color = "#15803d";
+      }).catch(function(e) {
+        wasmOut.textContent = "✗ " + (e && e.message || e);
+        wasmOut.style.color = "#b91c1c";
+      }).finally(function() { wasmBtn.disabled = false; });
+    });
+    var srvBtn = document.getElementById(id + "-probe-server");
+    var srvOut = document.getElementById(id + "-probe-server-result");
+    if (srvBtn) srvBtn.addEventListener("click", function() {
+      srvBtn.disabled = true; srvOut.textContent = "checking…";
+      _serverAvailable = null;  // force re-probe
+      probeServerReasoner().then(function(ok) {
+        srvOut.textContent = ok ? "✓ /health responded" : "✗ /reason endpoint not reachable";
+        srvOut.style.color = ok ? "#15803d" : "#b91c1c";
+      }).finally(function() { srvBtn.disabled = false; });
+    });
+  }
+
+  // Download inferred triples as N-Triples (so they're loadable into any RDF tool)
+  function downloadInferences(id) {
+    var inst = instances[id]; if (!inst || !inst._lastReasoning) return;
+    var lines = inst._lastReasoning.inferred.map(function(t) {
+      var s = t.s.indexOf("http") === 0 ? "<" + t.s + ">" : "_:" + t.s;
+      var p = "<" + t.p + ">";
+      var o = t.isLiteral ? '"' + t.o.replace(/"/g, '\\"') + '"' : "<" + t.o + ">";
+      return s + " " + p + " " + o + " .";
+    });
+    var blob = new Blob([lines.join("\n") + "\n"], { type: "application/n-triples" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = id + "-inferred.nt"; a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function copyInferences(id) {
+    var inst = instances[id]; if (!inst || !inst._lastReasoning) return;
+    navigator.clipboard.writeText(JSON.stringify(inst._lastReasoning, null, 2)).catch(function() {});
+  }
+
+  // Populate any reasoner dropdowns once DOM is ready
+  document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll(".ov-reasoner-select").forEach(populateReasonerSelect);
+  });
+
   document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll(".ontoink-container").forEach(function(el){initGraph(el.id);});});
 
-  return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC, derefIriRemote:derefIriRemote };
+  return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC, derefIriRemote:derefIriRemote, togglePlaygroundReasoning:togglePlaygroundReasoning, downloadInferences:downloadInferences, copyInferences:copyInferences, diagnoseReasoner:diagnoseReasoner, setInferredOverlay:setInferredOverlay };
 })();

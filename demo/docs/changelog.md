@@ -8,6 +8,41 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased] — targeting 0.6.0
+
+### Added
+
+- **Browser-side reasoning in the playground** — Reasoning button with backend dropdown (Auto / Browser Konclude WASM / Server backends). Browser option enabled when cross-origin isolated; server options enabled when `/health` reachable
+- **COOP/COEP service worker** so the playground's WASM Konclude works on GitHub Pages without server-side header support
+- **Per-request `reasoner` override on `POST /reason`** — clients can choose the backend without restarting the server
+- **Playground parity** — Abstract View and reasoning panel match the MkDocs fence path
+- **Production Docker image** with `ONTOINK_MODE` env switch (`serve` / `build` / `api` / **`all`**) and `ONTOINK_REASONER` selector. The new `all` mode builds the docs once and serves them via FastAPI on the same origin as `/reason` — so the playground's "Server" reasoner works without a reverse proxy
+- **Konclude two-pass reasoning** — native Konclude wrapper runs both `classification` and `realization`. **Note**: Konclude expects OWL/XML input; for TTL input use `owlready2` or `konclude-wasm`
+- **Native Konclude reasoner** (`ONTOINK_REASONER=konclude`) — upstream Konclude C++ tableau binary, downloaded into the production Docker image
+- **rdf-reasoner-konclude** (`ONTOINK_REASONER=konclude-wasm`) — WASM Konclude port for **browsers and Node.js**, no Java required
+- **FastAPI mode** — `/reason`, `/validate`, `/health` endpoints when `ONTOINK_MODE=api`
+- **SHACL constraint edges in the playground** — shapes now render as cyan dashed cardinality-labelled edges, matching the MkDocs build path
+- **SHACL shape IRI dereferencing** — labels and axioms auto-fetched for `sh:path`, `sh:targetClass`, `sh:class`, `sh:datatype`, `sh:node` IRIs on graph load
+- **GitHub Actions workflow** to build & push the Docker image to GHCR on each `v*` tag
+- **TESTING.md** with end-to-end manual test plan (Python, JS, MkDocs, playground, Docker)
+- `.env.sample`, `NOTICE`, and `CITATION.cff` files for deployment config and third-party attribution
+
+### Fixed
+
+- **Reasoning UI lock state** — the Reasoning button and dropdown disable while reasoning runs, with a visible **Cancel** button. Server requests are aborted via `AbortController`
+- **SPARQL autocomplete on macOS** — added `Alt+/` as a universal trigger; macOS reserves `Ctrl+Space` for input source switching by default
+- **Browser WASM reasoner module loading** — switched from jsdelivr's `/+esm` to `esm.sh`
+- **Demo pages looked unstyled in `all` mode** — switched `Cross-Origin-Embedder-Policy` from `require-corp` to `credentialless`
+- **Legend and namespace overlay** now refresh when the layout is switched
+- **Edit Layout customizations propagate to the legend** — node color / node shape / edge color / line style / arrow shape changes immediately update the on-page legend
+- **PNG and SVG exports** now embed Edit Layout customizations in the legend (previously the export legend always showed default styles)
+
+### Changed
+
+- Reasoner selection is now user-configurable via env var
+
+---
+
 ## [0.5.2] — 2026-04-17
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.2/)

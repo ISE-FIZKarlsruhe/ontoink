@@ -1,0 +1,128 @@
+site_name: ontoink
+site_url: https://ise-fizkarlsruhe.github.io/ontoink/
+site_description: Interactive ontology visualization, SHACL validation & live TTL editing for MkDocs
+site_author: Ebrahim Norouzi
+repo_url: https://github.com/ISE-FIZKarlsruhe/ontoink
+repo_name: ISE-FIZKarlsruhe/ontoink
+edit_uri: ""
+
+copyright: >
+  Copyright &copy; 2026
+  <a href="https://www.fiz-karlsruhe.de/en/forschung/information-service-engineering" target="_blank">ISE &ndash; FIZ Karlsruhe</a>
+
+theme:
+  name: material
+  language: en
+  favicon: assets/logo.svg
+  logo: assets/logo.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Playground: playground.md
+  - SHACL Editor: shacl-editor.md
+  - SPARQL Explorer: sparql-explorer.md
+  - OntoSniff: ontosniff.md
+  - Anti-Patterns:
+    - Overview: anti-patterns.md
+    - 'OOPS!':
+      - '`is` used as a property name': anti-patterns/is-relationship.md
+      - Multiple `rdfs:domain`: anti-patterns/multiple-domain-range.md
+      - Inverse of self: anti-patterns/inverse-of-self.md
+      - Missing disjointness: anti-patterns/missing-disjointness.md
+      - Recursive definition: anti-patterns/recursive-definition.md
+    - Corcho / Roussey (logical):
+      - And is Or (AIO): anti-patterns/and-is-or.md
+      - Equivalence is Difference (EID): anti-patterns/equivalence-is-difference.md
+      - Onlyness is Loneliness (OIL): anti-patterns/onlyness-is-loneliness.md
+      - Universal Existence (UE): anti-patterns/universal-existence.md
+      - Sum of Some (SOS): anti-patterns/sum-of-some.md
+      - SOS never equal to one (SOSINETO): anti-patterns/sum-of-some-is-never-equal-to-one.md
+      - Some Means At Least One (SMALO): anti-patterns/some-means-at-least-one.md
+      - Synonym of Equivalence (SOE): anti-patterns/synonym-of-equivalence.md
+      - Disjointness of Complement (DOC): anti-patterns/disjointness-of-complement.md
+      - Min is Zero (MIZ): anti-patterns/min-is-zero.md
+    - SHACL-specific:
+      - Conflicting cardinality: anti-patterns/conflicting-cardinality.md
+      - Deactivated shape: anti-patterns/deactivated-shape.md
+      - Shape without target: anti-patterns/shape-without-target.md
+  - Getting Started: getting-started.md
+  - Examples:
+    - FOAF Person: examples/foaf-person.md
+    - Schema.org Article: examples/schema-article.md
+    - BFO Role Bearer: examples/role-bearer.md
+    - BFO Role Realization: examples/role-realization.md
+    - IAO Textual Entity: examples/textual-entity.md
+    - OWL Reasoning: examples/reasoning-demo.md
+  - Changelog: changelog.md
+  - Contributing: contributing.md
+  - Cite: cite.md
+
+plugins:
+  - search
+  - ontoink
+
+markdown_extensions:
+  - pymdownx.superfences:
+      preserve_tabs: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ISE-FIZKarlsruhe/ontoink
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/ontoink/
+  generator: false
+
+extra_css:
+  - assets/extra.css
+
+# COOP/COEP service worker so the playground's WASM Konclude reasoner
+# can use SharedArrayBuffer / pthreads on static hosts (GitHub Pages).
+# When self-hosting, headers from the server take precedence; this is a no-op.
+extra_javascript:
+  - assets/coi-serviceworker.js

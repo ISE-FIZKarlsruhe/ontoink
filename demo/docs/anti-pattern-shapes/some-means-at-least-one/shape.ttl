@@ -1,0 +1,31 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# SMALO (Corcho/Roussey) — redundant minCardinality 1 + ∃
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 12. Corcho/Roussey SMALO — Some Means At Least One ───────────────────
+# Redundant minCardinality 1 alongside someValuesFrom
+#
+ap:SomeMeansAtLeastOneShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "SMALO (Corcho/Roussey): redundant minCardinality 1 next to a someValuesFrom on the same property." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2 .
+                ?r1 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#someValuesFrom> ?c .
+                ?r2 <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#minCardinality> ?m .
+                FILTER(xsd:integer(?m) >= 1)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#

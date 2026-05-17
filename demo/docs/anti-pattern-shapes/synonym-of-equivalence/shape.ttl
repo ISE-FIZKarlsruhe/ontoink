@@ -1,0 +1,29 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# SOE (Corcho/Roussey) — equivalence used for synonymy
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 13. Corcho/Roussey SOE — Synonym Of Equivalence ──────────────────────
+#
+ap:SynonymOfEquivalenceShape a sh:NodeShape ;
+    sh:targetSubjectsOf owl:equivalentClass ;
+    sh:severity sh:Info ;
+    sh:sparql [
+        sh:message "SOE (Corcho/Roussey): two classes declared equivalent — usually meant as a lexical synonym (skos:altLabel)." ;
+        sh:select """
+            SELECT $this ?o WHERE {
+                $this a <http://www.w3.org/2002/07/owl#Class> ;
+                      <http://www.w3.org/2002/07/owl#equivalentClass> ?o .
+                ?o a <http://www.w3.org/2002/07/owl#Class> .
+                FILTER(isIRI($this) && isIRI(?o))
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#

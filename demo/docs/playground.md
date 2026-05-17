@@ -71,9 +71,15 @@ ex:acme a ex:Organization ;
     </div>
     <div class="ov-toolbar-group">
       <button class="ov-btn" onclick="ontoink.toggleColors('pg-container')">Edit Layout</button>
+      <button class="ov-btn" onclick="ontoink.abstractView('pg-container')" title="Show only classes and class-level edges">Abstract</button>
       <button class="ov-btn" onclick="ontoink.toggleStats('pg-container')">Stats</button>
       <button class="ov-btn" onclick="ontoink.togglePathFinder('pg-container')">Paths</button>
       <button class="ov-btn" onclick="ontoink.toggleSparql('pg-container')">SPARQL</button>
+    </div>
+    <div class="ov-toolbar-group">
+      <button class="ov-btn ov-btn-accent" onclick="ontoink.togglePlaygroundReasoning('pg-container')" title="Run OWL reasoning">Reasoning</button>
+      <select class="ov-reasoner-select" id="pg-reasoner-select" title="Select reasoner backend"></select>
+      <button class="ov-btn ov-btn-accent" onclick="ontoink.toggleEditor('pg-container')" title="Edit TTL &amp; Validate">Edit &amp; Validate</button>
     </div>
   </div>
   <div class="ov-canvas-wrap" style="position:relative;width:100%;height:600px;">
@@ -85,6 +91,25 @@ ex:acme a ex:Organization ;
   <div class="ov-stats-panel" style="display:none;"></div>
   <div class="ov-pathfinder-panel" style="display:none;"></div>
   <div class="ov-sparql-panel" style="display:none;"></div>
+  <div class="ov-reasoning-panel" style="display:none;"></div>
+  <div class="ov-editor-panel" style="display:none;">
+    <div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" onclick="this.closest('.ov-editor-panel').style.display='none'">&times;</button></div>
+    <div class="ov-editor-split">
+      <div class="ov-editor-left">
+        <div class="ov-editor-header">TTL Editor</div>
+        <textarea class="ov-editor-textarea"></textarea>
+      </div>
+      <div class="ov-editor-right">
+        <div class="ov-editor-header">Validation Results</div>
+        <div class="ov-validation-output"></div>
+      </div>
+    </div>
+    <div class="ov-editor-actions">
+      <button class="ov-btn ov-btn-primary" onclick="ontoink.validate('pg-container')">Validate</button>
+      <button class="ov-btn" onclick="ontoink.updateGraph('pg-container')">Update Graph</button>
+      <button class="ov-btn" onclick="ontoink.resetEditor('pg-container')">Reset</button>
+    </div>
+  </div>
 </div>
 
 </div>

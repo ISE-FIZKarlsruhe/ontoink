@@ -1,0 +1,32 @@
+@prefix :     <http://example.org/soe/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<http://example.org/soe> a owl:Ontology ;
+    rdfs:label "SynonymOfEquivalence example ontology"@en ;
+    rdfs:comment "Demonstrates the SOE anti-pattern (Corcho/Roussey 2009) -- using owl:equivalentClass to express a lexical synonym, which is what skos:altLabel is for."@en .
+
+# SOE -- Corcho/Roussey 2009.
+#
+# owl:equivalentClass(A, B) is a class-level identity: every instance
+# of A is also an instance of B and vice-versa. Asserting it between
+# two classes in the SAME ontology is almost always a smell -- the
+# modeller usually wanted a synonym, not a logical equivalence.
+# A synonym is a property of the LABEL, not of the class. SKOS gives
+# us skos:altLabel for exactly this case.
+
+:Water a owl:Class ;
+    rdfs:label "Water"@en .
+
+# ANTI-PATTERN: equivalence used for a synonymous label.
+:MassOfWater a owl:Class ;
+    rdfs:label "Mass of Water"@en ;
+    rdfs:comment "Anti-pattern SOE: asserted equivalent to :Water just to say 'mass of water is another name for water'."@en ;
+    owl:equivalentClass :Water .             # <- SOE
+
+# Recommended fix: drop :MassOfWater and add skos:altLabel to :Water.
+#
+#   :Water a owl:Class ;
+#       rdfs:label    "Water"@en ;
+#       skos:altLabel "Mass of Water"@en .

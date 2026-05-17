@@ -49,8 +49,6 @@ nav:
   - Home: index.md
   - Playground: playground.md
   - SHACL Editor: shacl-editor.md
-  - SPARQL Explorer: sparql-explorer.md
-  - OntoSniff: ontosniff.md
   - Getting Started: getting-started.md
   - Examples:
     - FOAF Person: examples/foaf-person.md
@@ -97,3 +95,9 @@ extra:
 
 extra_css:
   - assets/extra.css
+
+# COOP/COEP service worker so the playground's WASM Konclude reasoner
+# can use SharedArrayBuffer / pthreads on static hosts (GitHub Pages).
+# When self-hosting, headers from the server take precedence; this is a no-op.
+extra_javascript:
+  - assets/coi-serviceworker.js

@@ -74,6 +74,23 @@
   margin: 0 0 0.4rem;
   font-size: 1rem;
 }
+/* Defensive icon sizing on the landing page.
+ *
+ * Without this, the :material-*: SVGs rendered by pymdownx.emoji can fall
+ * back to their intrinsic 24x24 viewBox -- the well-known "huge icons on
+ * the home page" failure mode. Material's default `.md-typeset .twemoji`
+ * rule covers the typical case, but the home page is laid out inside
+ * custom div wrappers and that selector can be lost to specificity. Pin
+ * the size explicitly so every icon on the landing renders inline at
+ * heading-text height. */
+.ov-hero .twemoji,
+.ov-hero .twemoji svg,
+.ov-features .twemoji,
+.ov-features .twemoji svg {
+  height: 1.15em;
+  width: 1.15em;
+  vertical-align: -0.15em;
+}
 .ov-feature-card p {
   margin: 0;
   font-size: 0.88rem;

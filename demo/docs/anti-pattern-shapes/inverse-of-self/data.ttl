@@ -1,0 +1,25 @@
+@prefix :     <http://example.org/iof/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/iof> a owl:Ontology ;
+    rdfs:label "Inverse-of-self example ontology"@en ;
+    rdfs:comment "Demonstrates OOPS! pitfall P25 -- a property is declared owl:inverseOf itself, which is logically equivalent to owl:SymmetricProperty but expressed obscurely."@en .
+
+:Person a owl:Class ; rdfs:label "Person"@en .
+
+# ANTI-PATTERN: declaring a property to be its own inverse. Reasoners
+# infer that :friendOf is symmetric, but the axiom does not say so
+# directly; it forces a reasoner to derive symmetry instead of stating
+# it as a first-class fact.
+:friendOf a owl:ObjectProperty ;
+    rdfs:label "friend of"@en ;
+    rdfs:domain :Person ;
+    rdfs:range  :Person ;
+    owl:inverseOf :friendOf .       # <- P25
+
+# Recommended fix: use owl:SymmetricProperty.
+#
+#   :friendOf a owl:ObjectProperty, owl:SymmetricProperty ;
+#       rdfs:domain :Person ;
+#       rdfs:range  :Person .

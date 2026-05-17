@@ -1,0 +1,25 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# OOPS! P19 — multiple `rdfs:domain` axioms
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 2. OOPS! P19 — multiple rdfs:domain treated as conjunction ───────────
+#
+ap:MultipleDomainShape a sh:NodeShape ;
+    sh:targetSubjectsOf rdfs:domain ;
+    sh:sparql [
+        sh:message "OOPS! P19: a property has >1 rdfs:domain — interpreted as intersection, not union." ;
+        sh:select """
+            SELECT $this (COUNT(?d) AS ?n) WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#domain> ?d .
+            } GROUP BY $this HAVING (COUNT(?d) > 1)
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://oops.linkeddata.es/catalogue.jsp> .
+
+#

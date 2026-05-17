@@ -1,0 +1,40 @@
+@prefix :     <http://example.org/isrel/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/isrel> a owl:Ontology ;
+    rdfs:label "IsRelationship example ontology"@en ;
+    rdfs:comment "Demonstrates OOPS! pitfall P03 -- properties named 'is' / 'isA' shadow rdfs:subClassOf, rdf:type, and owl:sameAs."@en .
+
+# OOPS! P03 -- The property `:is` (and `:isA`) duplicates the meaning of
+# `rdfs:subClassOf`, `rdf:type`, or `owl:sameAs` depending on intent.
+# Such properties also collide with SPARQL's `a` keyword shortcut, which
+# already stands for `rdf:type`.
+
+:Person a owl:Class ; rdfs:label "Person"@en .
+:Dog    a owl:Class ; rdfs:label "Dog"@en .
+
+# ANTI-PATTERN: an under-specified `:is` property that could mean
+# subclass, instance-of, or identity.
+:is  a owl:ObjectProperty ;
+     rdfs:label "is"@en ;
+     rdfs:comment "Anti-pattern: ambiguous between rdfs:subClassOf, rdf:type, owl:sameAs."@en .
+
+:isA a owl:ObjectProperty ;
+     rdfs:label "isA"@en ;
+     rdfs:comment "Anti-pattern: same problem as :is."@en .
+
+# Contrast: a well-named domain property that does not duplicate a
+# built-in relation.
+:owns a owl:ObjectProperty ;
+      rdfs:label "owns"@en ;
+      rdfs:domain :Person ;
+      rdfs:range  :Dog .
+
+# Recommended fix: drop :is / :isA and use the built-in relation that
+# matches the actual intent.
+#
+#   :Fido      rdf:type        :Dog .              # instance-of
+#   :Dog       rdfs:subClassOf :Animal .           # subclass
+#   :Alice     owl:sameAs      :AliceFromBook .    # identity

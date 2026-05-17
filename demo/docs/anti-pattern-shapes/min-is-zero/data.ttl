@@ -1,0 +1,33 @@
+@prefix :     <http://example.org/miz/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/miz> a owl:Ontology ;
+    rdfs:label "MinIsZero example ontology"@en ;
+    rdfs:comment "Demonstrates the MIZ anti-pattern (Corcho/Roussey 2009) -- owl:minCardinality 0 imposes no constraint at all and should simply be removed."@en .
+
+# MIZ -- Corcho/Roussey 2009.
+#
+# `minCardinality(R) >= 0` is trivially satisfied by every individual,
+# including the empty set. It carries no logical content; it merely
+# clutters the axiom set and confuses readers into thinking some
+# minimum is being enforced.
+
+:fedBy a owl:ObjectProperty ;
+    rdfs:label "fed by"@en .
+
+# ANTI-PATTERN: minCardinality 0 on :fedBy. Logically a no-op.
+:SaltLagoon a owl:Class ;
+    rdfs:label "Salt Lagoon"@en ;
+    rdfs:comment "Anti-pattern MIZ: minCardinality 0 has no logical content."@en ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :fedBy ;
+        owl:minCardinality "0"^^xsd:nonNegativeInteger    # <- MIZ
+    ] .
+
+# Recommended fix: drop the restriction entirely.
+#
+#   :SaltLagoon a owl:Class ;
+#       rdfs:label "Salt Lagoon"@en .

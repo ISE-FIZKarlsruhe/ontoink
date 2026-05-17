@@ -1,0 +1,36 @@
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ap:    <http://ise.fiz-karlsruhe.de/ontoink/anti-patterns#> .
+
+# OIL (Corcho/Roussey) — onlyness is loneliness
+# Source bundle: demo/docs/anti-patterns/shacl-shapes.ttl
+
+# ── 8. Corcho/Roussey OIL — OnlynessIsLoneliness ─────────────────────────
+# C1 ⊑ ∀R.C2 ⊓ ∀R.C3   with Disjoint(C2, C3)
+#
+ap:OnlynessIsLonelinessShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:sparql [
+        sh:message "OIL (Corcho/Roussey): two ∀R restrictions on the same property with disjoint fillers." ;
+        sh:select """
+            SELECT DISTINCT $this WHERE {
+                $this <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?r1, ?r2 .
+                ?r1 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#allValuesFrom> ?c1 .
+                ?r2 a <http://www.w3.org/2002/07/owl#Restriction> ;
+                    <http://www.w3.org/2002/07/owl#onProperty> ?p ;
+                    <http://www.w3.org/2002/07/owl#allValuesFrom> ?c2 .
+                { ?c1 <http://www.w3.org/2002/07/owl#disjointWith> ?c2 . }
+                UNION
+                { ?c2 <http://www.w3.org/2002/07/owl#disjointWith> ?c1 . }
+                FILTER(?r1 != ?r2 && ?c1 != ?c2)
+            }
+        """ ;
+    ] ;
+    rdfs:seeAlso <https://liris.cnrs.fr/Documents/Liris-4441.pdf> .
+
+#

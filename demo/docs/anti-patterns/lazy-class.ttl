@@ -1,0 +1,16 @@
+@prefix :     <http://example.org/lazy/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# :UnusedConcept is a *lazy* class — declared but never used.
+# :Project is a healthy class with a label, comment, and one instance.
+
+:UnusedConcept a owl:Class .
+
+:Project a owl:Class ;
+    rdfs:label "Project"@en ;
+    rdfs:comment "An undertaking carried out by one or more people."@en .
+
+:proj42 a :Project ;
+    rdfs:label "Quantum Coffee Pot"@en .

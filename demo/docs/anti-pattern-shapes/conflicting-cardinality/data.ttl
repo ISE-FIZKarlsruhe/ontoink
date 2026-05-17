@@ -1,0 +1,35 @@
+@prefix :     <http://example.org/cc/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+
+<http://example.org/cc> a owl:Ontology ;
+    rdfs:label "Conflicting-cardinality SHACL example"@en ;
+    rdfs:comment "Demonstrates the anti-pattern of an unsatisfiable SHACL property shape with sh:minCount > sh:maxCount."@en .
+
+# Target class the shape applies to. SHACL needs nothing from this
+# class definition beyond its identity; it is declared here so that
+# users running the example see a complete RDF/OWL graph.
+:Book a owl:Class ;
+    rdfs:label "Book"@en .
+
+# ANTI-PATTERN: sh:minCount > sh:maxCount. No graph can ever satisfy
+# `at least 3 AND at most 1` authors -- the property shape vacuously
+# blocks every focus node it touches.
+:BookShape a sh:NodeShape ;
+    sh:targetClass :Book ;
+    rdfs:label "Book shape"@en ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path :author ;
+        sh:minCount 3 ;
+        sh:maxCount 1                   # <- conflicting cardinality
+    ] .
+
+# Recommended fix: align min and max -- e.g. require 1..3 authors.
+#
+#   :BookShape sh:property [
+#       sh:path :author ;
+#       sh:minCount 1 ;
+#       sh:maxCount 3
+#   ] .

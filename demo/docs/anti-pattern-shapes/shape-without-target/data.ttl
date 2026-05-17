@@ -1,0 +1,27 @@
+@prefix :     <http://example.org/swt/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+
+<http://example.org/swt> a owl:Ontology ;
+    rdfs:label "Shape-without-target SHACL example"@en ;
+    rdfs:comment "Demonstrates the anti-pattern of a SHACL node shape with no sh:targetClass / sh:targetNode / sh:targetSubjectsOf / sh:targetObjectsOf -- the shape is never applied to any focus node."@en .
+
+# ANTI-PATTERN: a SHACL NodeShape with no target predicate. The
+# property shape inside it never fires because SHACL has nothing to
+# evaluate it against. The shape can still be reached as a
+# `sh:node` value or via property-path `sh:property` references from
+# other shapes -- but standalone, it is dead code.
+:NoTargetShape a sh:NodeShape ;
+    rdfs:label "No-target shape"@en ;
+    rdfs:comment "Anti-pattern: no sh:targetClass / sh:targetNode / sh:targetSubjectsOf / sh:targetObjectsOf."@en ;
+    # missing: sh:targetClass / sh:targetNode / sh:targetSubjectsOf / sh:targetObjectsOf
+    sh:property [
+        sh:path :name ;
+        sh:minCount 1
+    ] .
+
+# Recommended fix: add a target predicate so the shape applies to
+# something.
+#
+#   :NoTargetShape sh:targetClass :Book .

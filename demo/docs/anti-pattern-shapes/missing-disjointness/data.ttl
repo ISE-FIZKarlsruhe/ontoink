@@ -1,0 +1,33 @@
+@prefix :     <http://example.org/md/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/md> a owl:Ontology ;
+    rdfs:label "Missing-disjointness example ontology"@en ;
+    rdfs:comment "Demonstrates OOPS! pitfall P10 -- sibling classes lacking owl:disjointWith axioms."@en .
+
+# OOPS! P10. Without owl:disjointWith, a DL reasoner cannot prove that
+# an individual cannot be both a Cat and a Dog. Most domain taxonomies
+# implicitly assume sibling classes partition their parent; OWL's
+# open-world semantics requires that intent to be made explicit.
+
+:Animal a owl:Class ; rdfs:label "Animal"@en .
+
+:Cat a owl:Class ;
+    rdfs:label "Cat"@en ;
+    rdfs:subClassOf :Animal .
+
+:Dog a owl:Class ;
+    rdfs:label "Dog"@en ;
+    rdfs:subClassOf :Animal .
+
+# ANTI-PATTERN: :Cat and :Dog share a parent but are not declared
+# disjoint, so an instance can legally be both.
+
+# Recommended fix: assert disjointness pairwise, or use
+# owl:AllDisjointClasses for n-ary cases.
+#
+#   :Cat owl:disjointWith :Dog .
+#
+#   [] a owl:AllDisjointClasses ;
+#      owl:members ( :Cat :Dog :Bird ) .
