@@ -790,7 +790,13 @@ var ontoink = (function () {
 
     if (Object.keys(info).length) {
       var h = "";
-      for (var k in info) h += '<div class="ov-popup-meta"><strong>' + esc(k) + ':</strong> ' + esc(info[k]) + '</div>';
+      for (var k in info) {
+        if (k.charAt(0) === '_') continue;   // private keys (e.g. _olsListUrl) rendered separately below
+        h += '<div class="ov-popup-meta"><strong>' + esc(k) + ':</strong> ' + esc(info[k]) + '</div>';
+      }
+      if (info._olsListUrl) {
+        h += '<div style="margin-top:4px;"><a href="' + esc(info._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(info._olsListText || "List ontologies reusing this IRI on OLS") + ' \u2197</a></div>';
+      }
       h += '<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
         + '<a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI \u2197</a>'
         + '<button class="ov-btn ov-deref-fetch-btn" style="font-size:10px;padding:2px 8px;" onclick="ontoink.derefIriRemote(\'' + esc(iri).replace(/'/g, "\\'") + '\',this)">Fetch from web</button>'
@@ -839,7 +845,7 @@ var ontoink = (function () {
       if (iri.indexOf("purl.obolibrary.org/obo/") >= 0) {
         return fetch("https://www.ebi.ac.uk/ols4/api/terms?iri=" + encodeURIComponent(iri))
           .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-          .then(function(data) { return parseOlsResponse(data); });
+          .then(function(data) { return parseOlsResponse(data, iri); });
       }
       // Wikidata
       if (iri.indexOf("wikidata.org/entity/") >= 0) {
@@ -861,7 +867,7 @@ var ontoink = (function () {
       return fetch("https://www.ebi.ac.uk/ols4/api/terms?iri=" + encodeURIComponent(iri))
         .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function(data) {
-          var result = parseOlsResponse(data);
+          var result = parseOlsResponse(data, iri);
           if (Object.keys(result).length) return result;
           throw new Error("no OLS data");
         });
@@ -896,7 +902,13 @@ var ontoink = (function () {
       el2.style.cssText = "max-height:180px;overflow-y:auto;";
       if (Object.keys(merged).length) {
         var h2 = '<div style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;"><span style="font-size:10px;color:#9ca3af;">From web:</span></div>';
-        for (var k2 in merged) h2 += '<div class="ov-popup-meta"><strong>' + esc(k2) + ':</strong> ' + esc(merged[k2]) + '</div>';
+        for (var k2 in merged) {
+          if (k2.charAt(0) === '_') continue;   // private keys (_olsListUrl, _olsListText) rendered separately below
+          h2 += '<div class="ov-popup-meta"><strong>' + esc(k2) + ':</strong> ' + esc(merged[k2]) + '</div>';
+        }
+        if (merged._olsListUrl) {
+          h2 += '<div style="margin-top:4px;"><a href="' + esc(merged._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(merged._olsListText || "List ontologies reusing this IRI on OLS") + ' \u2197</a></div>';
+        }
         h2 += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
         el2.innerHTML = h2;
       } else {
@@ -910,7 +922,13 @@ var ontoink = (function () {
           placeholder.style.cssText = "max-height:220px;overflow-y:auto;";
           var hReplace = "";
           var all = Object.assign({}, inst && inst._derefCache ? inst._derefCache[iri] || {} : {}, merged);
-          for (var kr in all) hReplace += '<div class="ov-popup-meta"><strong>' + esc(kr) + ':</strong> ' + esc(all[kr]) + '</div>';
+          for (var kr in all) {
+            if (kr.charAt(0) === '_') continue;   // private keys rendered separately below
+            hReplace += '<div class="ov-popup-meta"><strong>' + esc(kr) + ':</strong> ' + esc(all[kr]) + '</div>';
+          }
+          if (all._olsListUrl) {
+            hReplace += '<div style="margin-top:4px;"><a href="' + esc(all._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(all._olsListText || "List ontologies reusing this IRI on OLS") + ' \u2197</a></div>';
+          }
           hReplace += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
           placeholder.innerHTML = hReplace;
         } else {
@@ -924,13 +942,41 @@ var ontoink = (function () {
     });
   }
 
-  function parseOlsResponse(data) {
+  function parseOlsResponse(data, iri) {
     var info2 = {};
     if (data._embedded && data._embedded.terms && data._embedded.terms[0]) {
-      var term = data._embedded.terms[0];
+      var terms = data._embedded.terms;
+      var term  = terms[0];
+      var total = (data.page && data.page.totalElements) || terms.length;
       if (term.label) info2["Label"] = term.label;
       if (term.description && term.description[0]) info2["Description"] = term.description[0].substring(0, 400);
-      if (term.ontology_name) info2["Ontology"] = term.ontology_name.toUpperCase();
+      // OLS returns terms[0] from whichever ontology happened to come
+      // first in its index — often NOT the authoritative one (e.g.
+      // AGRO appears first for IAO_0000100 because it imports IAO).
+      // Don't show that single name as if it were canonical. When the
+      // IRI is in multiple ontologies, surface a count + a link to
+      // the cross-ontology list; otherwise the single name is safe.
+      if (total > 1) {
+        info2["Found in"] = total + " ontologies";
+        // Consumed by the popup renderer; rendered as a separate
+        // anchor below the key/value list (not HTML-escaped via the
+        // generic loop). OLS search returns "no results" for raw
+        // URL-encoded IRIs (the tokenizer doesn't index them), but
+        // matches reliably on the OBO short form like ``IAO:0000300``.
+        // Use the short form when the IRI is an OBO PURL; fall back to
+        // term.obo_id (always present in the OLS response) or the IRI.
+        var q = iri || term.iri || "";
+        var oboMatch = q.match(/purl\.obolibrary\.org\/obo\/([A-Za-z][A-Za-z0-9]*)_([0-9]+)/);
+        if (oboMatch) {
+          q = oboMatch[1] + ":" + oboMatch[2];
+        } else if (term.obo_id) {
+          q = term.obo_id;
+        }
+        info2["_olsListUrl"]  = "https://www.ebi.ac.uk/ols4/search?q=" + encodeURIComponent(q);
+        info2["_olsListText"] = "List " + total + " ontologies reusing this IRI on OLS";
+      } else if (term.ontology_name) {
+        info2["Ontology"] = term.ontology_name.toUpperCase();
+      }
       if (term.obo_id) info2["OBO ID"] = term.obo_id;
       if (term.synonyms && term.synonyms.length) info2["Synonyms"] = term.synonyms.slice(0, 3).join(", ");
     }
@@ -1178,6 +1224,11 @@ var ontoink = (function () {
 
     var ta = container.querySelector(".ov-editor-textarea");
     if (ta && data.rawTtl) ta.value = data.rawTtl;
+    // SHACL shapes editor (parallel to the data editor). The shapes file
+    // arrives via data.shapeTtl from parse_ttl_to_cytoscape; if there's
+    // no shapes file, leave the pane empty and let the user type some.
+    var sta = container.querySelector(".ov-editor-shapes-textarea");
+    if (sta && data.shapeTtl) sta.value = data.shapeTtl;
     if (data.validation) { var o=container.querySelector(".ov-validation-output"); if(o) renderValidation(o,data.validation); }
 
     // Auto-fetch ontology data for all namespaces used in the graph (fire-and-forget)
@@ -1190,39 +1241,117 @@ var ontoink = (function () {
     var c=document.getElementById(id),p=c.querySelector(".ov-editor-panel"),inst=instances[id]; if(!p)return;
     var v=p.style.display!=="none"; p.style.display=v?"none":"block";
     if(!v){
-      // First-time open: seed the textarea with the current TTL so the
-      // playground path (which never runs the fence-side initialiser) and
-      // any other late-bound container shows real content. Skip if the
-      // textarea was pre-filled by the fence renderer.
+      // First-time open: seed both textareas with the current TTL +
+      // shapes so the playground path (which never runs the fence-side
+      // initialiser) and any other late-bound container shows real
+      // content. Skip whichever textarea was pre-filled by the fence
+      // renderer.
       var ta=c.querySelector(".ov-editor-textarea");
       if(ta&&!ta.value&&inst&&inst.originalTtl) ta.value=inst.originalTtl;
-      if(!inst.editor&&typeof CodeMirror!=="undefined"){
-        inst.editor=CodeMirror.fromTextArea(ta,{mode:"turtle",lineNumbers:true,lineWrapping:true,theme:"default",viewportMargin:Infinity});
-        inst.editor.setSize(null,"300px");
+      var sta=c.querySelector(".ov-editor-shapes-textarea");
+      if(sta&&!sta.value&&inst&&(inst.originalShapeTtl||(inst.data&&inst.data.shapeTtl))) {
+        sta.value = inst.originalShapeTtl || inst.data.shapeTtl;
+      }
+      if(typeof CodeMirror!=="undefined"){
+        if(!inst.editor&&ta){
+          inst.editor=CodeMirror.fromTextArea(ta,{mode:"turtle",lineNumbers:true,lineWrapping:true,theme:"default",viewportMargin:Infinity});
+          inst.editor.setSize(null,"280px");
+        }
+        if(!inst.shapeEditor&&sta){
+          inst.shapeEditor=CodeMirror.fromTextArea(sta,{mode:"turtle",lineNumbers:true,lineWrapping:true,theme:"default",viewportMargin:Infinity});
+          inst.shapeEditor.setSize(null,"280px");
+        }
       }
     }
   }
   function getEditorValue(id) { var i=instances[id]; if(!i)return""; if(i.editor)return i.editor.getValue(); var t=document.getElementById(id).querySelector(".ov-editor-textarea"); return t?t.value:""; }
+  function getShapesValue(id) { var i=instances[id]; if(!i)return""; if(i.shapeEditor)return i.shapeEditor.getValue(); var t=document.getElementById(id).querySelector(".ov-editor-shapes-textarea"); return t?t.value:""; }
 
   // ── Validation ──────────────────────────────────────────────────────────
+
+  // Re-extract SHACL property constraints from a triple list. Supports
+  // the named-shape pattern: ``ex:Shape a sh:NodeShape ; sh:targetClass
+  // foo:Bar ; sh:property ex:PropShape . ex:PropShape sh:path foo:p ;
+  // sh:minCount 1 .`` Inline blank-node property shapes (``[ sh:path
+  // ... ]``) aren't supported because the minimal TTL parser doesn't
+  // expand brackets — but the fallback chain handles that case by
+  // returning the build-time ``inst.data.shacl`` array.
+  function extractShaclFromTriples(triples) {
+    var SH = "http://www.w3.org/ns/shacl#";
+    var bySubj = {};
+    function bag(s) { if (!bySubj[s]) bySubj[s] = { properties: [] }; return bySubj[s]; }
+    function lit(o) {
+      if (typeof o !== "string" || o[0] !== '"') return o;
+      var e = o.lastIndexOf('"'); return e > 0 ? o.substring(1, e) : o;
+    }
+    triples.forEach(function(t) {
+      if (t.p === SH + "targetClass") bag(t.s).targetClass = t.o;
+      else if (t.p === SH + "path")     bag(t.s).path = t.o;
+      else if (t.p === SH + "minCount") bag(t.s).minCount = parseInt(lit(t.o), 10);
+      else if (t.p === SH + "maxCount") bag(t.s).maxCount = parseInt(lit(t.o), 10);
+      else if (t.p === SH + "message")  bag(t.s).message = lit(t.o);
+      else if (t.p === SH + "property") bag(t.s).properties.push(t.o);
+    });
+    var out = [];
+    Object.keys(bySubj).forEach(function(s) {
+      var ns = bySubj[s];
+      if (!ns.targetClass) return;
+      // Case 1: target shape carries the property constraint itself.
+      if (ns.path) {
+        out.push({ targetClass: ns.targetClass, path: ns.path,
+                   minCount: ns.minCount != null ? ns.minCount : null,
+                   maxCount: ns.maxCount != null ? ns.maxCount : null,
+                   message: ns.message || "", pathLabel: ns.path });
+      }
+      // Case 2: indirection via sh:property → another (named) shape.
+      ns.properties.forEach(function(p) {
+        var ps = bySubj[p] || {};
+        if (!ps.path) return;
+        out.push({ targetClass: ns.targetClass, path: ps.path,
+                   minCount: ps.minCount != null ? ps.minCount : null,
+                   maxCount: ps.maxCount != null ? ps.maxCount : null,
+                   message: ps.message || "", pathLabel: ps.path });
+      });
+    });
+    return out;
+  }
 
   function validate(id) {
     var inst=instances[id]; if(!inst)return;
     var outEl=document.getElementById(id).querySelector(".ov-validation-output"); if(!outEl)return;
-    var ttl=getEditorValue(id), sc=inst.data.shacl||[];
-    if(!sc.length){renderValidation(outEl,{conforms:null,violations:[],report:"No SHACL shapes defined."});return;}
-    var parsed=parseTtlMinimal(ttl), triples=parsed.triples, violations=[];
+    var ttl = getEditorValue(id);
+    var shapes = getShapesValue(id);
+    // Combined parse: data triples come from the source pane, shape
+    // triples from the shapes pane. We pass both to parseTtlMinimal as
+    // one document so prefix declarations from either side apply.
+    var combinedTtl = (ttl || "") + "\n" + (shapes || "");
+    var parsed = parseTtlMinimal(combinedTtl), triples = parsed.triples;
+    // Try to re-extract constraints from the edited shapes; fall back
+    // to the build-time array if extraction yields nothing (e.g. when
+    // shapes use inline blank-node property syntax the minimal parser
+    // can't read).
+    var sc = extractShaclFromTriples(triples);
+    if (!sc.length) sc = inst.data.shacl || [];
+    if (!sc.length) {
+      renderValidation(outEl, { conforms: null, violations: [],
+        report: "No SHACL shapes defined. Add a sh:NodeShape with sh:targetClass + sh:property → sh:path/minCount/maxCount on the right." });
+      return;
+    }
+    var violations = [];
     sc.forEach(function(c){
       if(!c.targetClass||!c.path)return;
       var ti=[];
       triples.forEach(function(t){if(t.p==="http://www.w3.org/1999/02/22-rdf-syntax-ns#type"&&t.o===c.targetClass)ti.push(t.s);});
       if(!ti.length)triples.forEach(function(t){if(t.p==="http://www.w3.org/1999/02/22-rdf-syntax-ns#type")triples.forEach(function(t2){if(t2.s===t.o&&t2.p==="http://www.w3.org/2000/01/rdf-schema#subClassOf"&&t2.o===c.targetClass)ti.push(t.s);});});
-      ti.forEach(function(inst){var cnt=0;triples.forEach(function(t){if(t.s===inst&&t.p===c.path)cnt++;});
-        if(c.minCount!=null&&cnt<c.minCount)violations.push({focusNode:inst,path:c.path,message:c.message||("Expected min "+c.minCount+" for "+(c.pathLabel||c.path)+", found "+cnt)});
-        if(c.maxCount!=null&&cnt>c.maxCount)violations.push({focusNode:inst,path:c.path,message:c.message||("Expected max "+c.maxCount+" for "+(c.pathLabel||c.path)+", found "+cnt)});
+      ti.forEach(function(focus){var cnt=0;triples.forEach(function(t){if(t.s===focus&&t.p===c.path)cnt++;});
+        if(c.minCount!=null&&cnt<c.minCount)violations.push({focusNode:focus,path:c.path,message:c.message||("Expected min "+c.minCount+" for "+(c.pathLabel||c.path)+", found "+cnt)});
+        if(c.maxCount!=null&&cnt>c.maxCount)violations.push({focusNode:focus,path:c.path,message:c.message||("Expected max "+c.maxCount+" for "+(c.pathLabel||c.path)+", found "+cnt)});
       });
     });
-    renderValidation(outEl,{conforms:!violations.length,violations:violations,report:violations.length?violations.length+" violation(s) found.":"All constraints satisfied."});
+    var summary = violations.length
+      ? violations.length + " violation(s) found across " + sc.length + " constraint(s)."
+      : "All " + sc.length + " constraint(s) satisfied.";
+    renderValidation(outEl, { conforms: !violations.length, violations: violations, report: summary });
   }
   function renderValidation(el,r){
     if(r.conforms===null){el.innerHTML='<div class="ov-val-info">'+esc(r.report)+'</div>';return;}
@@ -1286,10 +1415,17 @@ var ontoink = (function () {
   }
 
   function resetEditor(id){var inst=instances[id];if(!inst)return;
-    if(inst.editor)inst.editor.setValue(inst.originalTtl);else{var ta=document.getElementById(id).querySelector(".ov-editor-textarea");if(ta)ta.value=inst.originalTtl;}
+    var c=document.getElementById(id);
+    if(inst.editor)inst.editor.setValue(inst.originalTtl);else{var ta=c.querySelector(".ov-editor-textarea");if(ta)ta.value=inst.originalTtl;}
+    // Reset the shapes pane too — pulls from inst.data.shapeTtl (set
+    // by parse_ttl_to_cytoscape at fence-render time, or by the
+    // playground entry point).
+    var originalShapes = inst.originalShapeTtl || (inst.data && inst.data.shapeTtl) || "";
+    if(inst.shapeEditor)inst.shapeEditor.setValue(originalShapes);
+    else{var sta=c.querySelector(".ov-editor-shapes-textarea");if(sta)sta.value=originalShapes;}
     inst.cy.elements().remove();inst.cy.add(inst.data.nodes.concat(inst.data.edges));
     inst.cy.layout({name:"dagre",rankDir:"BT",nodeSep:60,rankSep:80,animate:false,fit:true,padding:30}).run();
-    var c=document.getElementById(id);buildLegendOverlay(c,inst.data);buildNsOverlay(c,inst.data);
+    buildLegendOverlay(c,inst.data);buildNsOverlay(c,inst.data);
     var o=c.querySelector(".ov-validation-output");if(o&&inst.data.validation)renderValidation(o,inst.data.validation);
   }
 

@@ -1,6 +1,16 @@
 # Changelog
 
-## [Unreleased] — targeting 0.6.0
+## [0.6.1] - 2026-06-04
+
+### Added
+- **SHACL Shapes editor pane in *Edit & Validate*** — the panel is now a two-column editor: data TTL on the left, SHACL shapes on the right, validation report as its own row below. Both panes wire up CodeMirror with Turtle syntax highlighting. Edited shapes are re-extracted client-side on each `Validate` click via a minimal `extractShaclFromTriples()` helper covering the named NodeShape → `sh:property` → property-shape pattern; if extraction yields nothing (e.g. inline blank-node property syntax the minimal parser can't read), validation falls back to the build-time `inst.data.shacl` array so the button still does something useful. The report line now includes the constraint count, e.g. *"3 violation(s) found across 7 constraint(s)"*.
+- **Resizable popups** — the per-node / per-edge popup now uses CSS `resize: both` plus min (`240×140`) and max (`90vw × 80vh`) bounds, so the user can drag the bottom-right corner to enlarge a popup with a long IRI list or a dense validation report. A small chevron indicator marks the corner so the affordance is discoverable. The existing drag-the-header-to-move behaviour is unchanged.
+
+### Fixed
+- **"List N ontologies reusing this IRI on OLS" link returned zero results** — for an OBO PURL like `http://purl.obolibrary.org/obo/IAO_0000300`, the previous URL passed the full URL-encoded IRI to OLS search, which tokenises and returns nothing. The popup now derives the OBO short ID (`IAO:0000300`) when the IRI matches `purl.obolibrary.org/obo/<PREFIX>_<NUMBER>`, and falls back to `term.obo_id` from the OLS response for non-OBO IRIs; the resulting search consistently lists every ontology that reuses the IRI.
+- **Sticky toolbar bleeding over host-page chrome** — when the page hosting an ontoink diagram had its own fixed/sticky chrome (MkDocs Material's collapsible nav drawer, for example), the toolbar's `z-index: 100` competed with the host page in the same stacking context and drew over the drawer. `.ontoink-container` now sets `isolation: isolate`, which creates a self-contained stacking context so the toolbar's z-index is scoped to the container and can never escape over external UI. Internal layering (toolbar above canvas, popup above legend) is preserved.
+
+## [0.6.0] - 2026-05-17
 
 ### Added
 - **Unified interactive Reasoning UI on every ontoink graph** (not just the playground) — fence-rendered diagrams in the demo home and `/ontosniff/` now get the same reasoner dropdown with progress status, elapsed-ms timing, scrollable log panel, and Download / Copy buttons for inferred triples
