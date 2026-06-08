@@ -8,7 +8,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { exit, argv, stdin, stdout } from "node:process";
-import { Parser, Writer, Store } from "n3";
+import { Parser, Writer, Store, DataFactory } from "n3";
 import { RdfReasoner, INFERRED_GRAPH_IRI } from "rdf-reasoner-konclude";
 
 function usage() {
@@ -27,14 +27,28 @@ let input = null,
   output = null,
   mode = "classify";
 
+// Value-expecting flags fail loudly when given as the final token, instead of
+// silently binding `undefined` (which would e.g. make --input fall through to
+// reading stdin and hang).
+function valueFor(flag, i) {
+  if (i >= args.length) {
+    process.stderr.write(`Missing value for ${flag}\n`);
+    usage();
+    exit(2);
+  }
+  return args[i];
+}
+
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === "-h" || a === "--help") {
     usage();
     exit(0);
-  } else if (a === "-i" || a === "--input") input = args[++i];
-  else if (a === "-o" || a === "--output") output = args[++i];
-  else if (a === "-m" || a === "--mode") mode = args[++i];
+  } else if (a === "-i" || a === "--input") input = valueFor(a, ++i);
+  else if (a === "-o" || a === "--output") output = valueFor(a, ++i);
+  else if (a === "-m" || a === "--mode") mode = valueFor(a, ++i);
+  // Output is always N-Triples; accept and ignore --format for callers that pass it.
+  else if (a === "-f" || a === "--format") valueFor(a, ++i);
   else {
     process.stderr.write(`Unknown argument: ${a}\n`);
     usage();
@@ -75,9 +89,14 @@ if (mode === "consistency") {
 await reasoner.reason(store);
 
 const inferred = store.getQuads(null, null, null, INFERRED_GRAPH_IRI);
+// Konclude puts inferences in a named graph (urn:konclude:inferred). Re-emit
+// them as plain triples in the default graph, otherwise n3's N-Triples writer
+// serialises the 4th graph term — producing N-Quads that N-Triples parsers
+// (e.g. rdflib format="nt") reject with "Invalid line".
+const triples = inferred.map((q) => DataFactory.quad(q.subject, q.predicate, q.object));
 const writer = new Writer({ format: "N-Triples" });
 const nt = await new Promise((resolve, reject) => {
-  writer.addQuads(inferred);
+  writer.addQuads(triples);
   writer.end((err, result) => (err ? reject(err) : resolve(result)));
 });
 

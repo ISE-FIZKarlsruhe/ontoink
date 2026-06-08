@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.5.2 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.6.2 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -283,11 +283,18 @@ var ontoink = (function () {
       var owlOp = d.owlOp || "";
       var owlSym = d.owlOpSymbol || "";
       var n = (d.owlCardinality != null) ? d.owlCardinality : "";
+      var isEquiv = d.owlVia === "equivalentClass";
+      // necessary (⊑) vs necessary-and-sufficient definition (≡)
+      var viaSym = isEquiv ? "&equiv;" : "&sqsubseteq;";
+      // The label is "[≡ ]<opSym>[n] <pred>"; strip the optional ≡ marker and
+      // the operator token to leave just the on-property's short label.
+      var body = d.label.replace(/^≡\s+/, "").replace(/^[^ ]+\s+/, "");
       html += '<div class="ov-popup-section"><strong>OWL restriction:</strong></div>';
       html += '<div style="font-size:12px;color:#4b5563;margin:4px 0 0 8px;font-family:monospace;">'
-            + esc(srcLabel) + ' &sqsubseteq; ' + esc(owlSym) + (n!==""?esc(String(n)):"")
-            + ' ' + esc(d.label.replace(/^[^ ]+\s+/, "")) + ' . ' + esc(tgtLabel === srcLabel ? "" : tgtLabel)
+            + esc(srcLabel) + ' ' + viaSym + ' ' + esc(owlSym) + (n!==""?esc(String(n)):"")
+            + ' ' + esc(body) + ' . ' + esc(tgtLabel === srcLabel ? "" : tgtLabel)
             + '</div>';
+      html += '<div class="ov-popup-meta">Axiom: <strong>' + (isEquiv ? "definition (necessary &amp; sufficient)" : "necessary condition") + '</strong> &mdash; <code>' + (isEquiv ? "owl:equivalentClass" : "rdfs:subClassOf") + '</code></div>';
       html += '<div class="ov-popup-meta">Operator: <code>owl:' + esc(owlOp) + '</code></div>';
       if (d.owlPredicate) html += '<div class="ov-popup-meta">On property: <a href="'+esc(d.owlPredicate)+'" target="_blank">'+esc(d.owlPredicate)+'</a></div>';
       if (d.owlFiller) html += '<div class="ov-popup-meta">Filler: <a href="'+esc(d.owlFiller)+'" target="_blank">'+esc(d.owlFiller)+'</a></div>';
@@ -795,7 +802,7 @@ var ontoink = (function () {
         h += '<div class="ov-popup-meta"><strong>' + esc(k) + ':</strong> ' + esc(info[k]) + '</div>';
       }
       if (info._olsListUrl) {
-        h += '<div style="margin-top:4px;"><a href="' + esc(info._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(info._olsListText || "List ontologies reusing this IRI on OLS") + ' \u2197</a></div>';
+        h += '<div style="margin-top:4px;"><a href="' + esc(info._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(info._olsListText || "Ontologies using this IRI on OLS") + ' \u2197</a></div>';
       }
       h += '<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
         + '<a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI \u2197</a>'
@@ -907,7 +914,7 @@ var ontoink = (function () {
           h2 += '<div class="ov-popup-meta"><strong>' + esc(k2) + ':</strong> ' + esc(merged[k2]) + '</div>';
         }
         if (merged._olsListUrl) {
-          h2 += '<div style="margin-top:4px;"><a href="' + esc(merged._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(merged._olsListText || "List ontologies reusing this IRI on OLS") + ' \u2197</a></div>';
+          h2 += '<div style="margin-top:4px;"><a href="' + esc(merged._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(merged._olsListText || "Ontologies using this IRI on OLS") + ' \u2197</a></div>';
         }
         h2 += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
         el2.innerHTML = h2;
@@ -927,7 +934,7 @@ var ontoink = (function () {
             hReplace += '<div class="ov-popup-meta"><strong>' + esc(kr) + ':</strong> ' + esc(all[kr]) + '</div>';
           }
           if (all._olsListUrl) {
-            hReplace += '<div style="margin-top:4px;"><a href="' + esc(all._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(all._olsListText || "List ontologies reusing this IRI on OLS") + ' \u2197</a></div>';
+            hReplace += '<div style="margin-top:4px;"><a href="' + esc(all._olsListUrl) + '" target="_blank" style="font-size:11px;color:#2563eb;">' + esc(all._olsListText || "Ontologies using this IRI on OLS") + ' \u2197</a></div>';
           }
           hReplace += '<div style="margin-top:4px;"><a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI in browser \u2197</a></div>';
           placeholder.innerHTML = hReplace;
@@ -954,10 +961,9 @@ var ontoink = (function () {
       // first in its index — often NOT the authoritative one (e.g.
       // AGRO appears first for IAO_0000100 because it imports IAO).
       // Don't show that single name as if it were canonical. When the
-      // IRI is in multiple ontologies, surface a count + a link to
-      // the cross-ontology list; otherwise the single name is safe.
+      // IRI is in multiple ontologies, surface a link to the
+      // cross-ontology list; otherwise the single name is safe.
       if (total > 1) {
-        info2["Found in"] = total + " ontologies";
         // Consumed by the popup renderer; rendered as a separate
         // anchor below the key/value list (not HTML-escaped via the
         // generic loop). OLS search returns "no results" for raw
@@ -973,7 +979,7 @@ var ontoink = (function () {
           q = term.obo_id;
         }
         info2["_olsListUrl"]  = "https://www.ebi.ac.uk/ols4/search?q=" + encodeURIComponent(q);
-        info2["_olsListText"] = "List " + total + " ontologies reusing this IRI on OLS";
+        info2["_olsListText"] = "Ontologies using this IRI on OLS";
       } else if (term.ontology_name) {
         info2["Ontology"] = term.ontology_name.toUpperCase();
       }
@@ -1161,6 +1167,7 @@ var ontoink = (function () {
         { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
         { selector: "edge[edgeType='owl-restriction'][source = target]", style: { "curve-style":"bezier","control-point-step-size":40 }},
         { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
@@ -1392,21 +1399,142 @@ var ontoink = (function () {
   function litVal(r){if(r[0]==='"'){var e=r.lastIndexOf('"');if(e>0)return r.substring(1,e);}return r;}
   function hashStr(s){var h=0;for(var i=0;i<s.length;i++)h=((h<<5)-h+s.charCodeAt(i))|0;return h;}
 
+  // ── Blank-node-aware TTL parser + OWL restriction collapsing ─────────────
+  // Unlike parseTtlMinimal, this generates ids for `[ ]` blank nodes and `( )`
+  // collections and emits their inner triples, so owl:Restriction definitions
+  // survive a client-side re-render (Edit & Validate → Update Graph, playground)
+  // instead of exploding into stray `[`, `]`, owl:Restriction nodes. Mirrors the
+  // build-time Python parser (_extract_owl_restrictions in ttl_parser.py).
+  function tokenizeG(t){var tk=[],i=0;while(i<t.length){while(i<t.length&&/\s/.test(t[i]))i++;if(i>=t.length)break;var c=t[i];
+    if(c==="<"){var e=t.indexOf(">",i);if(e<0)e=t.length-1;tk.push(t.substring(i,e+1));i=e+1;}
+    else if(c==='"'){var j=i+1;while(j<t.length&&t[j]!=='"'){if(t[j]==="\\")j++;j++;}j++;while(j<t.length&&(t[j]==="@"||t[j]==="^")){if(t[j]==="@"){j++;while(j<t.length&&/[a-zA-Z-]/.test(t[j]))j++;}if(j<t.length&&t[j]==="^"&&t[j+1]==="^"){j+=2;if(t[j]==="<")j=t.indexOf(">",j)+1;else while(j<t.length&&/\S/.test(t[j])&&!/[;,\[\]()]/.test(t[j]))j++;}}tk.push(t.substring(i,j));i=j;}
+    else if(c===";"||c===","||c==="["||c==="]"||c==="("||c===")"){tk.push(c);i++;}
+    else{var s=i;while(i<t.length&&!/[\s;,\[\]()]/.test(t[i]))i++;tk.push(t.substring(s,i));}}return tk;}
+
+  function parseTtlGraph(ttl){
+    var RDFNS="http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    var RF=RDFNS+"first",RR=RDFNS+"rest",RN=RDFNS+"nil",RTYPE=RDFNS+"type";
+    var pf={},tr=[];var re=/@prefix\s+([\w-]*)\s*:\s*<([^>]+)>\s*\./g,m;while((m=re.exec(ttl))!==null)pf[m[1]]=m[2];
+    function res(t){t=t.trim();if(t[0]==="<"&&t[t.length-1]===">")return t.slice(1,-1);if(t==="a")return RTYPE;if(t.indexOf("_:")===0)return t;var ci=t.indexOf(":");if(ci>=0){var p=t.substring(0,ci);if(pf[p]!==undefined)return pf[p]+t.substring(ci+1);}return t;}
+    var lines=ttl.split("\n").map(function(l){var inA=false,inQ=false;for(var i=0;i<l.length;i++){if(l[i]==='"')inQ=!inQ;if(l[i]==="<"&&!inQ)inA=true;if(l[i]===">"&&!inQ)inA=false;if(l[i]==="#"&&!inA&&!inQ)return l.substring(0,i);}return l;});
+    var cl=lines.join("\n").replace(/@prefix[^.]*\.\s*/g,"").replace(/@base[^.]*\.\s*/g,"").replace(/^\s*PREFIX[^\n]*$/gim,"");
+    var stmts=[],cur="",inQ=false,esc=false;
+    for(var si=0;si<cl.length;si++){var ch=cl[si];if(esc){cur+=ch;esc=false;continue;}if(ch==="\\"&&inQ){cur+=ch;esc=true;continue;}if(ch==='"'){inQ=!inQ;cur+=ch;continue;}if(!inQ&&ch==="."&&(si===cl.length-1||/\s/.test(cl[si+1])||cl[si+1]===undefined)){if(cur.trim())stmts.push(cur.trim());cur="";continue;}cur+=ch;}
+    if(cur.trim())stmts.push(cur.trim());
+    var bn={n:0};function fresh(){return "_:b"+(bn.n++);}
+    function parseTerm(tk,pos){var t=tk[pos.i];if(t===undefined)return null;if(t==="["){pos.i++;var b=fresh();parsePO(b,tk,pos,"]");return b;}if(t==="("){pos.i++;return parseColl(tk,pos);}pos.i++;return res(t);}
+    function parsePO(subj,tk,pos,endTok){while(pos.i<tk.length){var t=tk[pos.i];if(endTok&&t===endTok){pos.i++;return;}if(t===";"||t===","){pos.i++;continue;}var p=res(t);pos.i++;while(pos.i<tk.length){var ot=tk[pos.i];if(ot===";"||(endTok&&ot===endTok))break;if(ot===","){pos.i++;continue;}var o=parseTerm(tk,pos);if(o==null)break;tr.push({s:subj,p:p,o:o});}}}
+    function parseColl(tk,pos){var head=null,prev=null;while(pos.i<tk.length&&tk[pos.i]!==")"){var item=parseTerm(tk,pos);if(item==null)break;var cell=fresh();tr.push({s:cell,p:RF,o:item});if(prev)tr.push({s:prev,p:RR,o:cell});else head=cell;prev=cell;}if(tk[pos.i]===")")pos.i++;if(prev)tr.push({s:prev,p:RR,o:RN});return head||RN;}
+    stmts.forEach(function(st){if(!st)return;var tk=tokenizeG(st);if(tk.length<2)return;var pos={i:0};var subj=parseTerm(tk,pos);if(subj==null)return;parsePO(subj,tk,pos,null);});
+    return{triples:tr,prefixes:pf};
+  }
+
+  function collapseOwlRestrictions(triples){
+    var OWLNS="http://www.w3.org/2002/07/owl#",RDFNS="http://www.w3.org/1999/02/22-rdf-syntax-ns#",RDFSNS="http://www.w3.org/2000/01/rdf-schema#";
+    var RTYPE=RDFNS+"type",SCOF=RDFSNS+"subClassOf",RREST=RDFNS+"rest",RFIRST=RDFNS+"first",RNIL=RDFNS+"nil";
+    var OPS={someValuesFrom:"∃",allValuesFrom:"∀",hasValue:"=",cardinality:"=",minCardinality:"≥",maxCardinality:"≤",qualifiedCardinality:"=",minQualifiedCardinality:"≥",maxQualifiedCardinality:"≤"};
+    var FILL=["someValuesFrom","allValuesFrom","hasValue","onClass","onDataRange"];
+    var CARD=["cardinality","minCardinality","maxCardinality","qualifiedCardinality","minQualifiedCardinality","maxQualifiedCardinality"];
+    function isB(x){return typeof x==="string"&&x.indexOf("_:")===0;}
+    function val(s,p){for(var i=0;i<triples.length;i++)if(triples[i].s===s&&triples[i].p===p)return triples[i].o;return null;}
+    function has(s,p,o){for(var i=0;i<triples.length;i++)if(triples[i].s===s&&triples[i].p===p&&triples[i].o===o)return true;return false;}
+    function listNodes(h){var c={},cur=h,g=0;while(cur&&cur!==RNIL&&!c[cur]&&g++<9999){if(isB(cur))c[cur]=true;cur=val(cur,RREST);}return Object.keys(c);}
+    function listItems(h){var out=[],cur=h,g=0;while(cur&&cur!==RNIL&&g++<9999){var f=val(cur,RFIRST);if(f!=null)out.push(f);cur=val(cur,RREST);}return out;}
+    var axioms=[];
+    [[OWLNS+"equivalentClass","equivalentClass"],[SCOF,"subClassOf"]].forEach(function(pair){
+      triples.forEach(function(t){
+        if(t.p!==pair[0]||!isB(t.o)||isB(t.s))return;
+        if(has(t.o,RTYPE,OWLNS+"Restriction")){axioms.push({cls:t.s,restr:t.o,via:pair[1],consumed:[]});return;}
+        var lst=val(t.o,OWLNS+"intersectionOf");
+        if(lst!=null){var cons=[t.o].concat(listNodes(lst));listItems(lst).forEach(function(mem){if(isB(mem)&&has(mem,RTYPE,OWLNS+"Restriction"))axioms.push({cls:t.s,restr:mem,via:"subClassOf",consumed:cons});});}
+      });
+    });
+    var seen={},edges=[],consumed={};
+    axioms.forEach(function(ax){
+      var key=ax.cls+"|"+ax.restr;if(seen[key])return;
+      var onProp=val(ax.restr,OWLNS+"onProperty");if(onProp==null)return;
+      var op=null,filler=null,card=null;
+      for(var i=0;i<FILL.length;i++){var o=val(ax.restr,OWLNS+FILL[i]);if(o==null)continue;if(FILL[i]==="onClass"||FILL[i]==="onDataRange"){filler=o;continue;}op=FILL[i];filler=o;break;}
+      for(var k=0;k<CARD.length;k++){var c=val(ax.restr,OWLNS+CARD[k]);if(c==null)continue;card=c;if(op==null)op=CARD[k];break;}
+      if(op==null)return;
+      seen[key]=true;ax.consumed.concat([ax.restr]).forEach(function(b){consumed[b]=true;});
+      edges.push({source:ax.cls,predicate:onProp,op:op,opSymbol:OPS[op]||"?",via:ax.via,filler:filler,cardinality:card,isCard:CARD.indexOf(op)>=0});
+    });
+    // Boolean-class wrappers: an anonymous owl:Class defined by intersectionOf /
+    // unionOf of NAMED classes → subClassOf edges to/from members (so the wrapper
+    // isn't a stray node). intersectionOf: cls ⊑ member; unionOf: member ⊑ cls.
+    var boolEdges=[];
+    [OWLNS+"equivalentClass",SCOF].forEach(function(via){
+      triples.forEach(function(t){
+        if(t.p!==via||!isB(t.o)||isB(t.s))return;
+        if(has(t.o,RTYPE,OWLNS+"Restriction"))return;
+        [[OWLNS+"intersectionOf","⊓",false],[OWLNS+"unionOf","⊔",true]].forEach(function(bp){
+          var lst=val(t.o,bp[0]);if(lst==null)return;
+          consumed[t.o]=true;listNodes(lst).forEach(function(c){consumed[c]=true;});
+          listItems(lst).forEach(function(m){
+            if(isB(m))return;
+            if(bp[2])boolEdges.push({sub:m,sup:t.s,op:bp[1]});
+            else boolEdges.push({sub:t.s,sup:m,op:bp[1]});
+          });
+        });
+      });
+    });
+    return{edges:edges,consumed:consumed,boolEdges:boolEdges};
+  }
+
+  // Push synthesized owl-restriction edges (from collapseOwlRestrictions) onto an
+  // edges array, creating any missing class/filler nodes via the caller's `en`.
+  function pushRestrictionEdges(rc,edges,en,pf){
+    rc.edges.forEach(function(re){
+      en(re.source);
+      var tgt=re.source,fillerIri="";
+      if(re.filler&&re.filler[0]!=='"'){fillerIri=re.filler;tgt=re.filler;en(tgt);}
+      var predLabel=uriLabel(re.predicate,pf);
+      var n=re.cardinality;var nClean=(n!=null&&typeof n==="string"&&n[0]==='"')?litVal(n):n;
+      var label=(re.isCard&&nClean!=null)?(re.opSymbol+nClean+" "+predLabel):(re.opSymbol+" "+predLabel);
+      var arrow="triangle";
+      if(re.via==="equivalentClass"){label="≡ "+label;arrow="diamond";}
+      edges.push({data:{id:"r_"+edges.length,source:re.source,target:tgt,label:label,iri:re.predicate,edgeType:"owl-restriction",owlOp:re.op,owlOpSymbol:re.opSymbol,owlVia:re.via,owlPredicate:re.predicate,owlFiller:fillerIri,owlCardinality:(nClean!=null?nClean:null),arrowShape:arrow}});
+    });
+    // Boolean-class member edges (owl:intersectionOf/unionOf) → subClassOf, labelled ⊓/⊔.
+    (rc.boolEdges||[]).forEach(function(be){
+      en(be.sub);en(be.sup);
+      edges.push({data:{id:"r_"+edges.length,source:be.sub,target:be.sup,label:be.op,iri:"http://www.w3.org/2000/01/rdf-schema#subClassOf",edgeType:"subclass",owlBoolean:be.op}});
+    });
+  }
+
+  // Meta-classes that should not become graph nodes (mirrors _IMPLICIT_TOPS in
+  // ttl_parser.py). `X rdf:type owl:Class` etc. marks X's kind, not an edge.
+  var OWL_CLASS_IRI = "http://www.w3.org/2002/07/owl#Class", RDFS_CLASS_IRI = "http://www.w3.org/2000/01/rdf-schema#Class";
+  var IMPLICIT_TOPS = {};
+  ["http://www.w3.org/2002/07/owl#Thing","http://www.w3.org/2000/01/rdf-schema#Resource",OWL_CLASS_IRI,RDFS_CLASS_IRI,"http://www.w3.org/2002/07/owl#NamedIndividual","http://www.w3.org/2002/07/owl#Ontology","http://www.w3.org/2002/07/owl#Restriction","http://www.w3.org/2002/07/owl#ObjectProperty","http://www.w3.org/2002/07/owl#DatatypeProperty","http://www.w3.org/2002/07/owl#AnnotationProperty","http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"].forEach(function(u){IMPLICIT_TOPS[u]=true;});
+
   // ── Update Graph ───────────────────────────────────────────────────────
 
-  function updateGraph(id){var inst=instances[id];if(!inst)return;var p=parseTtlMinimal(getEditorValue(id)),tr=p.triples,pf=p.prefixes;
+  function updateGraph(id){var inst=instances[id];if(!inst)return;var p=parseTtlGraph(getEditorValue(id)),tr=p.triples,pf=p.prefixes;
     var labels={},nodes={},edges=[],classes={};
     var RT="http://www.w3.org/1999/02/22-rdf-syntax-ns#type",SC="http://www.w3.org/2000/01/rdf-schema#subClassOf",RL="http://www.w3.org/2000/01/rdf-schema#label";
+    var rc=collapseOwlRestrictions(tr);
+    function isBn(x){return typeof x==="string"&&x.indexOf("_:")===0;}
     tr.forEach(function(t){if(t.p===RL&&t.o[0]==='"')labels[t.s]=litVal(t.o);});
-    tr.forEach(function(t){if(t.p===RT)classes[t.o]=true;if(t.p===SC){classes[t.s]=true;classes[t.o]=true;}});
+    tr.forEach(function(t){if(isBn(t.s)||isBn(t.o))return;if(t.p===RT){if(t.o===OWL_CLASS_IRI||t.o===RDFS_CLASS_IRI)classes[t.s]=true;classes[t.o]=true;}if(t.p===SC){classes[t.s]=true;classes[t.o]=true;}});
     function en(u){if(nodes[u]||u[0]==='"')return;var ic=classes[u]||false,s=detectSource(u);nodes[u]={data:{id:u,label:labels[u]||uriLabel(u,pf),type:ic?"Class":"Individual",color:ic?s.color:"#E6E6E6",shape:ic?"rectangle":"ellipse",iri:u,source:s.name,namespace:""}};}
     tr.forEach(function(t){
+      // Blank-node triples (owl:Restriction internals, collection cells) are
+      // rendered as collapsed restriction edges below, not as raw nodes/edges.
+      if(isBn(t.s)||isBn(t.o))return;
+      // owl:Class / owl:Ontology / owl:ObjectProperty etc. are kinds, not nodes.
+      // Skip the triple entirely; the subject still gets a node from any of its
+      // other (rendered) triples or, for restriction-defined classes, from
+      // pushRestrictionEdges below — matching the build-time Python parser.
+      if(t.p===RT&&IMPLICIT_TOPS[t.o])return;
       if(t.p===RL){var li="lit_"+Math.abs(hashStr(t.s+t.p+t.o))%999999;if(!nodes[li])nodes[li]={data:{id:li,label:litVal(t.o),type:"Literal",color:"#93D053",shape:"ellipse",iri:"",source:"",namespace:""}};en(t.s);edges.push({data:{id:"e_"+edges.length,source:t.s,target:li,label:uriLabel(t.p,pf),iri:t.p,edgeType:"data-property"}});return;}
       en(t.s);if(t.o[0]==='"'){var li2="lit_"+Math.abs(hashStr(t.s+t.p+t.o))%999999;if(!nodes[li2])nodes[li2]={data:{id:li2,label:litVal(t.o),type:"Literal",color:"#93D053",shape:"ellipse",iri:"",source:"",namespace:""}};edges.push({data:{id:"e_"+edges.length,source:t.s,target:li2,label:uriLabel(t.p,pf),iri:t.p,edgeType:"data-property"}});}
       else{en(t.o);var et=t.p===RT?"rdf-type":t.p===SC?"subclass":"object-property";var sm=null;(inst.data.shacl||[]).forEach(function(c){if(c.path===t.p)sm=c;});
         if(sm){var cd="["+(sm.minCount!=null?sm.minCount:0)+".."+(sm.maxCount!=null?sm.maxCount:"*")+"]";edges.push({data:{id:"e_"+edges.length,source:t.s,target:t.o,label:uriLabel(t.p,pf)+" "+cd,iri:t.p,edgeType:"shacl-constraint",cardinality:cd,message:sm.message||""}});}
         else edges.push({data:{id:"e_"+edges.length,source:t.s,target:t.o,label:uriLabel(t.p,pf),iri:t.p,edgeType:et}});}
     });
+    pushRestrictionEdges(rc,edges,en,pf);
     var cy=inst.cy;cy.elements().remove();cy.add(Object.values(nodes).concat(edges));
     cy.layout({name:"dagre",rankDir:"BT",nodeSep:60,rankSep:80,animate:false,fit:true,padding:30}).run();
     var c=document.getElementById(id);
@@ -1902,15 +2030,17 @@ var ontoink = (function () {
     var canvas = container.querySelector(".ov-canvas");
     if (!canvas) return;
 
-    var p = parseTtlMinimal(ttl), tr = p.triples, pf = p.prefixes;
+    var p = parseTtlGraph(ttl), tr = p.triples, pf = p.prefixes;
     var labels = {}, nodes = {}, edges = [], classes = {};
     var RT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     var SC = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
     var RL = "http://www.w3.org/2000/01/rdf-schema#label";
     var SH_NS = "http://www.w3.org/ns/shacl#";
+    var rc = collapseOwlRestrictions(tr);
+    function isBn(x) { return typeof x === "string" && x.indexOf("_:") === 0; }
 
     tr.forEach(function(t) { if (t.p === RL && t.o[0] === '"') labels[t.s] = litVal(t.o); });
-    tr.forEach(function(t) { if (t.p === RT) classes[t.o] = true; if (t.p === SC) { classes[t.s] = true; classes[t.o] = true; } });
+    tr.forEach(function(t) { if (isBn(t.s) || isBn(t.o)) return; if (t.p === RT) { if (t.o === OWL_CLASS_IRI || t.o === RDFS_CLASS_IRI) classes[t.s] = true; classes[t.o] = true; } if (t.p === SC) { classes[t.s] = true; classes[t.o] = true; } });
 
     // ── Parse SHACL shapes first (so constraint edges can overlay matching data triples) ──
     var shacl = [];
@@ -1968,6 +2098,11 @@ var ontoink = (function () {
     }
 
     tr.forEach(function(t) {
+      // Blank-node triples (owl:Restriction internals, collection cells) become
+      // collapsed restriction edges (pushRestrictionEdges below), not raw nodes.
+      if (isBn(t.s) || isBn(t.o)) return;
+      // owl:Class / owl:Ontology / owl:ObjectProperty etc. are kinds, not nodes.
+      if (t.p === RT && IMPLICIT_TOPS[t.o]) return;
       if (t.p === RL) {
         var li = "lit_" + Math.abs(hashStr(t.s + t.p + t.o)) % 999999;
         if (!nodes[li]) nodes[li] = { data: { id: li, label: litVal(t.o), type: "Literal", color: "#93D053", shape: "ellipse", iri: "", source: "", namespace: "" } };
@@ -2015,6 +2150,8 @@ var ontoink = (function () {
       edges.push({ data: { id: "e_" + edges.length, source: c.targetClass, target: tgt, label: (c.pathLabel || uriLabel(c.path, pf)) + " " + cd, iri: c.path, edgeType: "shacl-constraint", cardinality: cd, message: c.message || "" } });
     });
 
+    pushRestrictionEdges(rc, edges, en, pf);
+
     var nodeList = Object.values(nodes), data = {
       nodes: nodeList, edges: edges, shacl: shacl,
       namespaces: pf, activeNamespaces: pf,
@@ -2038,6 +2175,7 @@ var ontoink = (function () {
         { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
         { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
       ],
@@ -2966,7 +3104,18 @@ var ontoink = (function () {
     selectEl.innerHTML = options.map(function(o) {
       return '<option value="' + o.value + '"' + (o.enabled ? "" : " disabled") + '>' + esc(o.label) + '</option>';
     }).join("");
-    selectEl.value = browserOk ? "browser" : "auto";
+    // Per-diagram default from the fence `reasoner:` option (data-reasoner).
+    // Bare backend names (e.g. "owlrl") map to the matching "server:*" option;
+    // "auto"/"browser" are taken as-is. Falls back to the usual default when
+    // unset or unavailable.
+    var def = browserOk ? "browser" : "auto";
+    var container = selectEl.closest(".ontoink-container");
+    var preferred = container ? (container.getAttribute("data-reasoner") || "") : "";
+    if (preferred) {
+      var cand = (preferred === "auto" || preferred === "browser" || preferred.indexOf(":") >= 0) ? preferred : ("server:" + preferred);
+      if (options.some(function(o) { return o.value === cand && o.enabled; })) def = cand;
+    }
+    selectEl.value = def;
 
     // When the user changes the backend, run again immediately so the result
     // reflects the new choice instead of keeping the previous cached output.
@@ -3050,19 +3199,38 @@ var ontoink = (function () {
         );
       }).then(function() {
         log("Running classification + realization…");
-        return ctx.reasoner.reason(store);
-      }).then(function() {
-        log("Konclude finished. Collecting inferred quads…");
-        var inferred = store.getQuads(null, null, null, ctx.Konclude.INFERRED_GRAPH_IRI);
-        return inferred.map(function(q) {
-          var s = q.subject.value, p = q.predicate.value, o = q.object;
-          var isLit = o.termType === "Literal";
-          return {
-            s: s, p: p, o: o.value, isLiteral: isLit,
-            sLabel: s.split(/[#/]/).pop(),
-            pLabel: p.split(/[#/]/).pop(),
-            oLabel: isLit ? o.value : o.value.split(/[#/]/).pop(),
-          };
+        var unwound = false;
+        return ctx.reasoner.reason(store).catch(function(e) {
+          // Emscripten unwinds the WASM call stack on program exit by throwing a
+          // sentinel value ("unwind" / "Error: unwind"). The Node build swallows
+          // it; the esbuild browser bundle lets it escape. If Konclude already
+          // populated the inferred graph, the run actually succeeded — so treat
+          // an 'unwind' as non-fatal and let the collector below verify. Any
+          // other error is a real failure and is re-thrown.
+          var m = (e && (e.message || e.name)) || String(e);
+          if (!/unwind/i.test(m)) throw e;
+          unwound = true;
+          log("Konclude unwound the WASM stack on exit (Emscripten); checking for results…");
+        }).then(function() {
+          var inferred = store.getQuads(null, null, null, ctx.Konclude.INFERRED_GRAPH_IRI);
+          if (unwound && !inferred.length) {
+            throw new Error(
+              "Konclude WASM aborted with 'unwind' before producing any inferences — " +
+              "an Emscripten exit/Asyncify issue in the in-browser worker. Pick a " +
+              "Server reasoner in the dropdown (same Konclude engine, runs in Node and works)."
+            );
+          }
+          log("Konclude finished. Collecting " + inferred.length + " inferred quad(s)…");
+          return inferred.map(function(q) {
+            var s = q.subject.value, p = q.predicate.value, o = q.object;
+            var isLit = o.termType === "Literal";
+            return {
+              s: s, p: p, o: o.value, isLiteral: isLit,
+              sLabel: s.split(/[#/]/).pop(),
+              pLabel: p.split(/[#/]/).pop(),
+              oLabel: isLit ? o.value : o.value.split(/[#/]/).pop(),
+            };
+          });
         });
       });
     });

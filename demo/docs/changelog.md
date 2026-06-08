@@ -8,7 +8,47 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased] — targeting 0.6.0
+## [0.6.2] — 2026-06-08
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.2/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.2)
+
+### Fixed
+
+- **All four OWL reasoner backends now return inferences** — `owlready2`/HermiT, native `konclude`, and `konclude-wasm` each failed silently before (Turtle vs RDF/XML, OWL-XML output parsed as RDF/XML, N-Quads vs N-Triples), so only `owlrl` ever produced results. All four now work on OWL 2 property-restriction ontologies
+- **`owl:equivalentClass` (and `intersectionOf`-nested) restrictions are now visualised** — previously only `rdfs:subClassOf` restrictions were drawn. The two are distinguished: `⊑` (solid triangle) for a necessary condition vs `≡` (hollow diamond) for a definition
+- **Browser (in-page) Konclude WASM `Error: unwind`** — the Emscripten exit sentinel is now caught and the inferred graph harvested
+- **Edit & Validate → Update Graph (and the playground) no longer destroy restrictions** — a new blank-node-aware client-side parser collapses `owl:Restriction` into the same `⊑`/`≡` edges as the server-rendered diagrams, instead of exploding into raw `[ ]`/`owl:Restriction` nodes
+
+### Added
+
+- **`reasoner:` fence option** — set a diagram's default reasoner backend, e.g. `reasoner: owlrl`
+- **Comprehensive Reasoning & Inference demo** — [examples/reasoning-demo.md](examples/reasoning-demo.md) now walks every RDF/RDFS/OWL/OWL2 reasoning feature with a small self-contained example each
+
+### Changed
+
+- **OLS IRI-dereference link** — dropped the "Found in: N ontologies" line; the cross-ontology link now reads "Ontologies using this IRI on OLS"
+
+---
+
+## [0.6.1] — 2026-06-04
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.1/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.1)
+
+### Added
+
+- **SHACL Shapes editor pane in *Edit & Validate*** — two-column editor (data TTL + SHACL shapes) with CodeMirror Turtle highlighting and a constraint-count in the report line
+- **Resizable popups** — drag the bottom-right corner to enlarge a popup
+
+### Fixed
+
+- **"Ontologies reusing this IRI on OLS" link returned zero results** — now derives the OBO short ID (e.g. `IAO:0000300`) so OLS search matches
+- **Sticky toolbar bleeding over host-page chrome** — `.ontoink-container` now isolates its stacking context
+
+---
+
+## [0.6.0] — 2026-05-17
 
 ### Added
 

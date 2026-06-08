@@ -1,0 +1,19 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+ex:Italy  a owl:NamedIndividual .
+ex:bornIn a owl:ObjectProperty .
+
+# owl:hasValue — membership pinned to one specific value
+#   Italian ≡ things born in Italy
+ex:Italian a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ;
+        owl:onProperty ex:bornIn ; owl:hasValue ex:Italy ] .
+
+ex:mario ex:bornIn ex:Italy .
+
+# Inferred:
+#   ex:mario a ex:Italian   (matches the hasValue restriction)

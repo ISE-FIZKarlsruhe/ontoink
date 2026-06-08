@@ -65,6 +65,11 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
         show_ns = str(config.get("namespaces", "true")).lower() == "true"
 
         show_reasoning = str(config.get("reasoning", "true")).lower() == "true"
+        # Optional per-diagram default reasoner for the dropdown, e.g.
+        #   reasoner: owlrl            (→ Server: OWL-RL)
+        #   reasoner: server:owlready2 | browser | auto
+        # Bare backend names map to the matching Server: option.
+        default_reasoner = str(config.get("reasoner", "")).strip()
 
         editor_btn = ""
         if show_editor:
@@ -78,6 +83,7 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'<div id="{graph_id}" class="ontoink-container" '
             f'data-ontoink-graph="{b64_data}" '
             f'data-show-legend="{str(show_legend).lower()}" '
+            f'data-reasoner="{default_reasoner}" '
             f'data-show-ns="{str(show_ns).lower()}">\n'
             f'  <div class="ov-toolbar">\n'
             f'    <div class="ov-toolbar-group">\n'

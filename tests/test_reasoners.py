@@ -77,6 +77,63 @@ def test_konclude_wasm_skipped_if_no_binary():
     assert result is None or isinstance(result, list)
 
 
+# An OWL2 property-restriction ontology that forces a *derived* (not told)
+# class subsumption: NovelReader ≡ ∃reads.Novel, Reader ≡ ∃reads.Book, and
+# Novel ⊑ Book ⟹ NovelReader ⊑ Reader. Every OWL-DL backend (and owlrl) must
+# surface this. Regression guard: each backend's wrapper previously failed
+# silently (Turtle parse error / OWL-XML mis-parse / N-Quads output) and
+# returned 0 inferences.
+RESTRICTION_TTL = """
+@prefix ex: <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex: a owl:Ontology .
+ex:Book a owl:Class .
+ex:Novel a owl:Class ; rdfs:subClassOf ex:Book .
+ex:reads a owl:ObjectProperty .
+ex:Reader a owl:Class ; owl:equivalentClass
+    [ a owl:Restriction ; owl:onProperty ex:reads ; owl:someValuesFrom ex:Book ] .
+ex:NovelReader a owl:Class ; owl:equivalentClass
+    [ a owl:Restriction ; owl:onProperty ex:reads ; owl:someValuesFrom ex:Novel ] .
+ex:alice ex:reads ex:mobyDick .
+ex:mobyDick a ex:Novel .
+"""
+
+_SUBCLASS = "http://www.w3.org/2000/01/rdf-schema#subClassOf"
+_NOVELREADER = "http://example.org/NovelReader"
+_READER = "http://example.org/Reader"
+
+
+def _restriction_graph() -> Graph:
+    g = Graph()
+    g.parse(data=RESTRICTION_TTL, format="turtle")
+    return g
+
+
+@pytest.mark.parametrize(
+    "backend,skip_check",
+    [
+        ("_reason_with_owlready2", lambda: __import__("importlib").util.find_spec("owlready2") is None),
+        ("_reason_with_konclude_native", lambda: shutil.which(os.environ.get("ONTOINK_KONCLUDE_BIN", "konclude")) is None),
+        ("_reason_with_konclude_wasm", lambda: shutil.which(os.environ.get("ONTOINK_KONCLUDE_WASM_BIN", "owl-reason")) is None),
+        ("_reason_with_owlrl", lambda: __import__("importlib").util.find_spec("owlrl") is None),
+    ],
+)
+def test_backend_derives_restriction_subsumption(backend, skip_check):
+    """Each available OWL-DL/OWL-RL backend must derive NovelReader ⊑ Reader."""
+    if skip_check():
+        pytest.skip(f"{backend} dependency not available")
+    import ontoink.ttl_parser as tp
+    fn = getattr(tp, backend)
+    result = fn(_restriction_graph())
+    assert result is not None, f"{backend} returned None (silent failure)"
+    triples = {(s, p, o) for (s, p, o, _is_lit) in result}
+    assert (_NOVELREADER, _SUBCLASS, _READER) in triples, (
+        f"{backend} did not derive NovelReader rdfs:subClassOf Reader; got {len(triples)} triples"
+    )
+
+
 def test_run_reasoning_dispatches_by_env(monkeypatch):
     """ONTOINK_REASONER env var selects the backend."""
     from ontoink.ttl_parser import _run_reasoning

@@ -1,0 +1,29 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+# rdfs:subClassOf  — class taxonomy
+ex:Animal a owl:Class .
+ex:Dog    a owl:Class ; rdfs:subClassOf ex:Animal .
+
+# rdfs:subPropertyOf — property hierarchy
+ex:hasParent a owl:ObjectProperty .
+ex:hasMother a owl:ObjectProperty ; rdfs:subPropertyOf ex:hasParent .
+
+# rdfs:domain / rdfs:range — type from a relation's use
+ex:Person a owl:Class .
+ex:hasPet a owl:ObjectProperty ; rdfs:domain ex:Person ; rdfs:range ex:Animal .
+
+# Facts (types/links below are NOT stated; the reasoner derives them)
+ex:rex   a ex:Dog .
+ex:alice ex:hasMother ex:berta .
+ex:alice ex:hasPet    ex:rex .
+
+# Inferred:
+#   ex:rex   a ex:Animal             (subClassOf)
+#   ex:alice ex:hasParent ex:berta   (subPropertyOf)
+#   ex:alice a ex:Person             (rdfs:domain of hasPet)
+#   ex:rex   a ex:Animal             (rdfs:range of hasPet)

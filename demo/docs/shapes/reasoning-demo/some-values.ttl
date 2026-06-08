@@ -1,0 +1,28 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+ex:Book  a owl:Class .
+ex:Novel a owl:Class ; rdfs:subClassOf ex:Book .       # every Novel is a Book
+ex:reads a owl:ObjectProperty .
+
+# owl:someValuesFrom (∃) as a definition:
+#   Reader      ≡ reads at least one Book
+#   NovelReader ≡ reads at least one Novel
+ex:Reader a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ;
+        owl:onProperty ex:reads ; owl:someValuesFrom ex:Book ] .
+ex:NovelReader a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ;
+        owl:onProperty ex:reads ; owl:someValuesFrom ex:Novel ] .
+
+ex:alice    ex:reads ex:mobyDick .
+ex:mobyDick a ex:Novel .
+
+# Inferred:
+#   ex:NovelReader rdfs:subClassOf ex:Reader   (∃reads.Novel ⊑ ∃reads.Book)
+#   ex:mobyDick a ex:Book                       (subClassOf)
+#   ex:alice a ex:Reader , ex:NovelReader       (classified by the restriction)

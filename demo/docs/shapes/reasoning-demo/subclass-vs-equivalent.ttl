@@ -1,0 +1,31 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+ex:Book     a owl:Class .
+ex:mobyDick a ex:Book .
+ex:reads    a owl:ObjectProperty .
+
+# The SAME restriction body — ∃reads.Book — attached two ways:
+
+# (1) rdfs:subClassOf  → NECESSARY condition (drawn ⊑, triangle arrow):
+#     every Subscriber reads a Book, but a book-reader is NOT inferred to be one.
+ex:Subscriber a owl:Class ;
+    rdfs:subClassOf [ a owl:Restriction ;
+        owl:onProperty ex:reads ; owl:someValuesFrom ex:Book ] .
+
+# (2) owl:equivalentClass → DEFINITION (drawn ≡, diamond arrow):
+#     a BookLover is EXACTLY something that reads a Book, so any book-reader is one.
+ex:BookLover a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ;
+        owl:onProperty ex:reads ; owl:someValuesFrom ex:Book ] .
+
+ex:alice ex:reads ex:mobyDick .
+
+# Inferred:
+#   ex:alice a ex:BookLover              ← from the ≡ DEFINITION (sufficient direction)
+#   ex:Subscriber rdfs:subClassOf ex:BookLover
+#   …but NOT  ex:alice a ex:Subscriber   — ⊑ is one-way (necessary only)

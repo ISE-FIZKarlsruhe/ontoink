@@ -1,0 +1,20 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+# owl:FunctionalProperty — at most one value, so two stated values must coincide
+ex:hasBirthMother a owl:ObjectProperty, owl:FunctionalProperty .
+ex:tom ex:hasBirthMother ex:mary .
+ex:tom ex:hasBirthMother ex:maria .          # ⇒ ex:mary owl:sameAs ex:maria
+
+# owl:InverseFunctionalProperty — a value identifies its subject (a "key")
+ex:hasEmail a owl:ObjectProperty, owl:InverseFunctionalProperty .
+ex:p1 ex:hasEmail ex:e1 .
+ex:p2 ex:hasEmail ex:e1 .                     # ⇒ ex:p1 owl:sameAs ex:p2
+
+# owl:sameAs — identity transfers every assertion
+ex:knows a owl:ObjectProperty .
+ex:alice owl:sameAs ex:alicia .
+ex:alice ex:knows ex:bob .                    # ⇒ ex:alicia ex:knows ex:bob

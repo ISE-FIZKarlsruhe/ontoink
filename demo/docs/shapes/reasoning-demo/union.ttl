@@ -1,0 +1,21 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+ex:Mother a owl:Class .
+ex:Father a owl:Class .
+
+# owl:unionOf — a defined class equal to a disjunction
+#   Parent ≡ Mother OR Father
+ex:Parent a owl:Class ;
+    owl:equivalentClass [ a owl:Class ;
+        owl:unionOf ( ex:Mother ex:Father ) ] .
+
+ex:mary a ex:Mother .
+
+# Inferred:
+#   ex:Mother rdfs:subClassOf ex:Parent
+#   ex:Father rdfs:subClassOf ex:Parent
+#   ex:mary a ex:Parent            (a Mother is a Parent)

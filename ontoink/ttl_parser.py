@@ -202,25 +202,96 @@ _CARD_PREDS = (
 )
 
 
+# Class axioms that can attach an owl:Restriction blank node to a named class.
+# rdfs:subClassOf states a *necessary* condition (the class is a subclass of the
+# restriction, ⊑); owl:equivalentClass states a *necessary & sufficient*
+# definition (the class IS the restriction, ≡). Both are rendered, tagged with
+# `via` so the visualization can distinguish them. equivalentClass is listed
+# FIRST so that, when the SAME restriction bnode is attached to a class via both
+# axioms, the (stronger) definitional edge wins the (cls, restr) dedup and the
+# redundant subClassOf duplicate is dropped.
+_RESTRICTION_VIA = (
+    (OWL.equivalentClass, "equivalentClass"),
+    (RDFS.subClassOf, "subClassOf"),
+)
+
+
+def _iter_restriction_axioms(g: Graph):
+    """Yield ``(cls, restr, via_name, consumed)`` for each class axiom pointing a
+    named class at an owl:Restriction via owl:equivalentClass or rdfs:subClassOf.
+
+    A restriction attached *directly* keeps the axiom's `via` (⊑ for subClassOf,
+    ≡ for equivalentClass). A restriction nested one level inside an
+    ``owl:intersectionOf`` of an anonymous ``owl:Class`` — the common "defined
+    class" idiom, e.g. ``Mother ≡ Woman ⊓ ∃hasChild.Person`` — is surfaced as a
+    **subClassOf** (necessary, ⊑) edge: the class is a subclass of *each*
+    conjunct regardless of whether the wrapper was attached via ≡ or ⊑, so ≡
+    would overstate it. ``owl:unionOf`` is intentionally NOT descended: there the
+    member is a *subclass* of the class (reversed direction), which the
+    class→filler edge model would draw backwards.
+
+    `consumed` is the set of blank nodes the restriction occupied (the wrapper
+    owl:Class node and its RDF-list cells) so the caller can suppress them.
+    """
+    for via_pred, via_name in _RESTRICTION_VIA:
+        for cls, _, target in g.triples((None, via_pred, None)):
+            if not isinstance(target, BNode):
+                continue
+            if (target, RDF.type, OWL.Restriction) in g:
+                yield cls, target, via_name, frozenset()
+                continue
+            # Defined class: (equivalentClass|subClassOf) → [owl:Class ; owl:intersectionOf (... restriction ...)]
+            lst = g.value(target, OWL.intersectionOf)
+            if lst is None:
+                continue
+            consumed = frozenset({target} | _rdf_list_nodes(g, lst))
+            for member in g.items(lst):
+                if isinstance(member, BNode) and (member, RDF.type, OWL.Restriction) in g:
+                    yield cls, member, "subClassOf", consumed
+
+
+def _rdf_list_nodes(g: Graph, lst) -> Set:
+    """Return the set of list-cell blank nodes spanning an RDF collection, so
+    the caller can suppress the now-internal rdf:first/rdf:rest plumbing."""
+    cells: Set = set()
+    cur = lst
+    while cur is not None and cur != RDF.nil and cur not in cells:
+        if isinstance(cur, BNode):
+            cells.add(cur)
+        cur = g.value(cur, RDF.rest)
+    return cells
+
+
 def _extract_owl_restrictions(g: Graph) -> List[dict]:
-    """Walk every `?C rdfs:subClassOf ?r` where ?r is an owl:Restriction
-    blank node, and return one dict per restriction describing how it
-    should be rendered as a synthetic edge.
+    """Walk every `?C (rdfs:subClassOf|owl:equivalentClass) ?r` where ?r is an
+    owl:Restriction blank node, and return one dict per restriction describing
+    how it should be rendered as a synthetic edge.
 
     Each returned dict carries the source class IRI, the on-property IRI,
     the operator key (e.g. "someValuesFrom"), an optional filler IRI
     (the someValuesFrom / allValuesFrom / hasValue / onClass target), an
-    optional cardinality `n`, and the original restriction bnode (so the
-    caller can suppress it during the main triple walk).
+    optional cardinality `n`, how the restriction is attached (`via`:
+    "subClassOf" | "equivalentClass"), the original restriction bnode, and
+    `consumed` — the set of blank nodes (restriction + any intersection/union
+    wrapper and its list cells) the caller must suppress during the main walk.
+
+    The (cls, restr) dedup is intentionally `via`-agnostic: when the same
+    restriction bnode is attached to a class via both axioms, the first hit
+    wins. equivalentClass is iterated first (see _RESTRICTION_VIA), so the
+    stronger definition is kept and the redundant subClassOf edge dropped.
     """
     out: List[dict] = []
-    for cls, _, restr in g.triples((None, RDFS.subClassOf, None)):
+    seen: Set[Tuple[str, BNode]] = set()
+    for cls, restr, via_name, extra in _iter_restriction_axioms(g):
         if not isinstance(restr, BNode):
             continue
         if (restr, RDF.type, OWL.Restriction) not in g:
             continue
         if not isinstance(cls, URIRef):
-            continue  # bnode-on-bnode subClassOf is not a restriction we render
+            continue  # bnode-on-bnode axiom is not a restriction we render
+        key = (str(cls), restr)
+        if key in seen:
+            continue
 
         on_property = g.value(restr, OWL.onProperty)
         if not isinstance(on_property, URIRef):
@@ -233,7 +304,9 @@ def _extract_owl_restrictions(g: Graph) -> List[dict]:
             "filler_iri": None,
             "filler_label": None,
             "cardinality": None,
+            "via": via_name,
             "bnode": restr,
+            "consumed": set(extra) | {restr},
         }
 
         # Filler-bearing restrictions take priority over plain cardinality.
@@ -271,9 +344,52 @@ def _extract_owl_restrictions(g: Graph) -> List[dict]:
         if record["op"] is None:
             continue  # unknown shape -- nothing to render
 
+        seen.add(key)
         out.append(record)
 
     return out
+
+
+def _extract_boolean_class_members(g: Graph) -> Tuple[List[dict], Set[BNode]]:
+    """Collapse an anonymous ``owl:Class`` defined by ``owl:intersectionOf`` /
+    ``owl:unionOf`` — attached to a NAMED class via rdfs:subClassOf or
+    owl:equivalentClass — into rdfs:subClassOf edges to/from its NAMED members,
+    so the anonymous wrapper doesn't render as a disconnected node.
+
+    intersectionOf : the defined class is below each conjunct (``cls ⊑ member``, ⊓).
+    unionOf        : each disjunct is below the defined class (``member ⊑ cls``, ⊔).
+
+    Restriction members of the same wrapper are rendered by
+    ``_extract_owl_restrictions``; here we wire only the *named* members.
+    Returns ``(edges, consumed_bnodes)`` where each edge dict carries
+    ``sub_iri`` / ``super_iri`` / ``op`` (the operator symbol), and
+    ``consumed_bnodes`` is the wrapper plus its RDF-list cells to suppress.
+    """
+    out: List[dict] = []
+    consumed: Set[BNode] = set()
+    for via_pred, _via_name in _RESTRICTION_VIA:
+        for cls, _, target in g.triples((None, via_pred, None)):
+            if not isinstance(cls, URIRef) or not isinstance(target, BNode):
+                continue
+            if (target, RDF.type, OWL.Restriction) in g:
+                continue  # a property restriction — handled elsewhere
+            for list_pred, op_sym, members_below in (
+                (OWL.intersectionOf, "⊓", False),  # cls ⊑ each member
+                (OWL.unionOf, "⊔", True),           # each member ⊑ cls
+            ):
+                lst = g.value(target, list_pred)
+                if lst is None:
+                    continue
+                consumed.add(target)
+                consumed |= _rdf_list_nodes(g, lst)
+                for member in g.items(lst):
+                    if not isinstance(member, URIRef):
+                        continue  # nested restriction / bnode member handled elsewhere
+                    if members_below:
+                        out.append({"sub_iri": str(member), "super_iri": str(cls), "op": op_sym})
+                    else:
+                        out.append({"sub_iri": str(cls), "super_iri": str(member), "op": op_sym})
+    return out, consumed
 
 
 # ---------------------------------------------------------------------------
@@ -323,14 +439,23 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
             classes.add(str(o))
 
     # -----------------------------------------------------------------------
-    # Step 1b: Extract owl:Restriction bnodes attached via rdfs:subClassOf.
+    # Step 1b: Extract owl:Restriction bnodes attached via rdfs:subClassOf or owl:equivalentClass.
     # Each becomes a synthetic edge with edgeType="owl-restriction" later.
     # We also collect the restriction bnode IRIs so the main triple loop
     # (step 2) can skip the now-internal `cls subClassOf restr` and
     # `restr onProperty / someValuesFrom / …` triples.
     # -----------------------------------------------------------------------
     restrictions = _extract_owl_restrictions(g)
-    restriction_bnodes: Set[BNode] = {r["bnode"] for r in restrictions}
+    # Anonymous boolean-class wrappers (owl:intersectionOf / owl:unionOf of named
+    # classes) collapse into subClassOf edges to/from their members (step 2b').
+    bool_members, bool_consumed = _extract_boolean_class_members(g)
+    # Suppress every blank node a restriction or boolean wrapper consumed: the
+    # restriction/wrapper itself plus the RDF-list cells. Drop those from
+    # `classes` too so an anonymous wrapper can't leak in as a stray node.
+    restriction_bnodes: Set[BNode] = set(bool_consumed)
+    for r in restrictions:
+        restriction_bnodes |= r["consumed"]
+    classes -= {str(b) for b in restriction_bnodes}
 
     # -----------------------------------------------------------------------
     # Step 2: Collect nodes and edges
@@ -495,9 +620,38 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
         }
 
     # -----------------------------------------------------------------------
+    # Step 2b': Wire boolean-class members. The anonymous owl:intersectionOf /
+    # owl:unionOf wrapper was suppressed above; connect its NAMED members as
+    # rdfs:subClassOf edges (cls ⊑ member for ⊓, member ⊑ cls for ⊔), labelled
+    # with the operator so a reader sees the defined-class structure instead of
+    # a disconnected blank node.
+    # -----------------------------------------------------------------------
+    _bool_style = EDGE_STYLES["subclass"]
+    for be in bool_members:
+        sub_id = _node_id(URIRef(be["sub_iri"]))
+        sup_id = _node_id(URIRef(be["super_iri"]))
+        if sub_id not in nodes or sup_id not in nodes:
+            continue  # endpoints are named classes, materialised in step 2b
+        edges.append({
+            "data": {
+                "id": f"be_{len(edges)}",
+                "source": sub_id,
+                "target": sup_id,
+                "label": be["op"],
+                "iri": str(RDFS.subClassOf),
+                "edgeType": "subclass",
+                "owlBoolean": be["op"],
+                "lineStyle": _bool_style[0],
+                "lineColor": _bool_style[1],
+                "arrowShape": _bool_style[2],
+                "edgeWidth": _bool_style[3],
+            }
+        })
+
+    # -----------------------------------------------------------------------
     # Step 2c: Materialise one synthetic edge per OWL restriction.
     #
-    # Each restriction `:C rdfs:subClassOf [Restriction; onProperty p; <op> F]`
+    # Each restriction `:C (rdfs:subClassOf|owl:equivalentClass) [Restriction; onProperty p; <op> F]`
     # becomes a single dashed magenta edge from :C to F (or to :C itself
     # when the restriction is cardinality-only with no filler). The edge
     # label encodes the operator using OWL ManchExpr-style symbols, so a
@@ -575,7 +729,19 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
         else:
             label = f"{op_symbol} {pred_label}"
 
+        # How the restriction is attached changes its meaning *and* its look:
+        #   rdfs:subClassOf    → necessary condition (⊑); directed triangle arrow
+        #   owl:equivalentClass → defines the class (necessary & sufficient, ≡);
+        #                          prefix the label and use a diamond arrow so a
+        #                          reader can tell a definition from a constraint.
+        via = r.get("via", "subClassOf")
         style = EDGE_STYLES["owl-restriction"]
+        if via == "equivalentClass":
+            label = "≡ " + label
+            arrow_shape = "diamond"
+        else:
+            arrow_shape = style[2]
+
         edges.append({
             "data": {
                 "id": f"r_{len(edges)}",
@@ -586,12 +752,13 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
                 "edgeType": "owl-restriction",
                 "owlOp": r["op"],
                 "owlOpSymbol": op_symbol,
+                "owlVia": via,
                 "owlCardinality": n,
                 "owlPredicate": r["predicate_iri"],
                 "owlFiller": filler_iri or "",
                 "lineStyle": style[0],
                 "lineColor": style[1],
-                "arrowShape": style[2],
+                "arrowShape": arrow_shape,
                 "edgeWidth": style[3],
             }
         })
@@ -821,24 +988,50 @@ def _run_reasoning(g: Graph, namespaces: Dict[str, str]) -> List[dict]:
     return inferred
 
 
+def _serialize_for_owlready2(g: Graph) -> str:
+    """Write *g* to a temp file owlready2 can load, returning its path.
+
+    Prefers RDF/XML (owlready2's bundled Turtle parser is unreliable on rdflib's
+    output), but falls back to N-Triples when RDF/XML serialization raises — e.g.
+    an IRI that is not a valid XML QName would otherwise make
+    ``serialize(format="xml")`` throw and silently drop every inference. Caller
+    owns the returned path and must unlink it.
+    """
+    import os
+    import tempfile
+
+    last_exc: Optional[Exception] = None
+    for fmt, suffix in (("xml", ".owl"), ("ntriples", ".nt")):
+        tf = tempfile.NamedTemporaryFile(suffix=suffix, delete=False, mode="w", encoding="utf-8")
+        try:
+            g.serialize(tf.name, format=fmt)
+            tf.close()
+            return tf.name
+        except Exception as exc:  # noqa: BLE001 - fall through to the next format
+            last_exc = exc
+            tf.close()
+            try:
+                os.unlink(tf.name)
+            except OSError:
+                pass
+    raise RuntimeError(f"could not serialize graph for owlready2: {last_exc}")
+
+
 def _reason_with_owlready2(g: Graph) -> Optional[List[tuple]]:
     """Try reasoning with owlready2 (HermiT). Returns list of (s, p, o, is_literal) or None."""
     try:
         import owlready2
-        import tempfile
         import os
     except ImportError:
         return None
 
     # Serialize the rdflib graph to a temp file, load in owlready2
-    tmpfile = None
+    tmpfile_path = None
     try:
-        tmpfile = tempfile.NamedTemporaryFile(suffix=".ttl", delete=False, mode="w", encoding="utf-8")
-        g.serialize(tmpfile.name, format="turtle")
-        tmpfile.close()
+        tmpfile_path = _serialize_for_owlready2(g)
 
         world = owlready2.World()
-        onto = world.get_ontology(f"file://{tmpfile.name}").load()
+        onto = world.get_ontology(f"file://{tmpfile_path}").load()
 
         # Collect triples before reasoning
         before = set()
@@ -847,9 +1040,16 @@ def _reason_with_owlready2(g: Graph) -> Optional[List[tuple]]:
                 continue
             before.add((str(s), str(p), str(o)))
 
-        # Run HermiT reasoner
+        # Run HermiT reasoner. Older owlready2 builds' sync_reasoner_hermit()
+        # don't accept infer_data_property_values — fall back without it so a
+        # TypeError doesn't silently swallow all inferences.
         with onto:
-            owlready2.sync_reasoner(world, infer_property_values=True, infer_data_property_values=True)
+            try:
+                owlready2.sync_reasoner(
+                    world, infer_property_values=True, infer_data_property_values=True
+                )
+            except TypeError:
+                owlready2.sync_reasoner(world, infer_property_values=True)
 
         # Collect new triples
         result = []
@@ -864,11 +1064,61 @@ def _reason_with_owlready2(g: Graph) -> Optional[List[tuple]]:
     except Exception:
         return None
     finally:
-        if tmpfile:
+        if tmpfile_path:
             try:
-                os.unlink(tmpfile.name)
+                os.unlink(tmpfile_path)
             except OSError:
                 pass
+
+
+def _add_konclude_owlxml_inferences(path: str, out: Graph) -> None:
+    """Translate Konclude's OWL/XML result file into triples on ``out``.
+
+    Konclude's ``classification`` / ``realization`` subcommands emit OWL 2 XML
+    (an ``<Ontology>`` document with ``<SubClassOf>`` / ``<ClassAssertion>`` /
+    ``<EquivalentClasses>`` / ``<ObjectPropertyAssertion>`` elements), NOT
+    RDF/XML — so ``rdflib.Graph.parse(format="xml")`` cannot read it. We extract
+    the axiom shapes that carry inferences over *named* entities.
+    """
+    import xml.etree.ElementTree as ET
+
+    OWL_NS = "http://www.w3.org/2002/07/owl#"
+
+    def _local(tag: str) -> str:
+        return tag.rsplit("}", 1)[-1]
+
+    def _iri(el) -> Optional[str]:
+        return el.get("IRI") or el.get("abbreviatedIRI") or el.get("{%s}IRI" % OWL_NS)
+
+    root = ET.parse(path).getroot()
+    for node in root:
+        tag = _local(node.tag)
+        kids = list(node)
+        if tag == "SubClassOf" and len(kids) == 2 \
+                and _local(kids[0].tag) == "Class" and _local(kids[1].tag) == "Class":
+            sub, sup = _iri(kids[0]), _iri(kids[1])
+            if sub and sup:
+                out.add((URIRef(sub), RDFS.subClassOf, URIRef(sup)))
+        elif tag == "ClassAssertion":
+            cls = ind = None
+            for c in kids:
+                lt = _local(c.tag)
+                if lt == "Class":
+                    cls = _iri(c)
+                elif lt == "NamedIndividual":
+                    ind = _iri(c)
+            if cls and ind:
+                out.add((URIRef(ind), RDF.type, URIRef(cls)))
+        elif tag == "EquivalentClasses":
+            iris = [i for i in (_iri(c) for c in kids if _local(c.tag) == "Class") if i]
+            for a in range(len(iris)):
+                for b in range(a + 1, len(iris)):
+                    out.add((URIRef(iris[a]), OWL.equivalentClass, URIRef(iris[b])))
+        elif tag == "ObjectPropertyAssertion" and len(kids) == 3 \
+                and _local(kids[0].tag) == "ObjectProperty":
+            prop, s, o = _iri(kids[0]), _iri(kids[1]), _iri(kids[2])
+            if prop and s and o:
+                out.add((URIRef(s), URIRef(prop), URIRef(o)))
 
 
 def _reason_with_konclude_native(g: Graph) -> Optional[List[tuple]]:
@@ -878,15 +1128,13 @@ def _reason_with_konclude_native(g: Graph) -> Optional[List[tuple]]:
     Invokes both ``classification`` and ``realization`` subcommands and merges
     the inferred triples.
 
-    IMPORTANT — input format requirement:
-        Konclude 0.7.x expects **OWL/XML** (a non-RDF XML schema). rdflib's RDF/XML
-        serializer produces a different format that Konclude reports as
-        ``OWL2/XML Ontology node not found`` — Konclude reads only its declarations,
-        which won't include rdflib's standard triples.
-
-        For best results, give Konclude an OWL/XML ontology produced by Protégé,
-        the OWL API, or ROBOT. Other backends in this module (owlready2,
-        konclude-wasm, owlrl) accept rdflib graphs directly without conversion.
+    I/O format notes:
+        Konclude reads RDF/XML on input as long as the document carries an
+        ``owl:Ontology`` declaration (we add a transient one if the graph lacks
+        it). On output it writes **OWL 2 XML** (``<Ontology>`` with
+        ``<SubClassOf>`` / ``<ClassAssertion>`` elements), which is NOT RDF/XML
+        — so we translate it via ``_add_konclude_owlxml_inferences`` rather than
+        ``rdflib.parse(format="xml")`` (which silently yields nothing).
 
     Reference:
         Liebig, T., Jaeger, M., Möller, R., & Möller, B. (2014).
@@ -906,9 +1154,19 @@ def _reason_with_konclude_native(g: Graph) -> Optional[List[tuple]]:
     tmpin = None
     tmpouts = []
     try:
-        # Konclude takes OWL/RDF input — RDF/XML is the most portable.
+        # Konclude reads RDF/XML, but only if the document declares an ontology.
+        # Add a transient owl:Ontology header when the input graph has none, so
+        # arbitrary playground TTL still classifies.
+        konclude_g = g
+        if (None, RDF.type, OWL.Ontology) not in g:
+            konclude_g = Graph()
+            for ns_prefix, ns_uri in g.namespaces():
+                konclude_g.bind(ns_prefix, ns_uri)
+            for t in g:
+                konclude_g.add(t)
+            konclude_g.add((URIRef("urn:ontoink:konclude-input"), RDF.type, OWL.Ontology))
         tmpin = tempfile.NamedTemporaryFile(suffix=".owl", delete=False, mode="w", encoding="utf-8")
-        g.serialize(tmpin.name, format="xml")
+        konclude_g.serialize(tmpin.name, format="xml")
         tmpin.close()
 
         # Run both classification (class hierarchy) and realization (instance types).
@@ -927,7 +1185,7 @@ def _reason_with_konclude_native(g: Graph) -> Optional[List[tuple]]:
                 # keep going — the other may still produce results
                 continue
             try:
-                inferred_g.parse(tmpout.name, format="xml")
+                _add_konclude_owlxml_inferences(tmpout.name, inferred_g)
             except Exception:
                 continue
 
@@ -2549,19 +2807,16 @@ def _check_consistency(g: Graph) -> dict:
     """Check ontology consistency using owlready2/HermiT."""
     try:
         import owlready2
-        import tempfile
         import os
     except ImportError:
         return {"status": "unknown", "message": "owlready2 not installed"}
 
-    tmpfile = None
+    tmpfile_path = None
     try:
-        tmpfile = tempfile.NamedTemporaryFile(suffix=".ttl", delete=False, mode="w", encoding="utf-8")
-        g.serialize(tmpfile.name, format="turtle")
-        tmpfile.close()
+        tmpfile_path = _serialize_for_owlready2(g)
 
         world = owlready2.World()
-        onto = world.get_ontology(f"file://{tmpfile.name}").load()
+        onto = world.get_ontology(f"file://{tmpfile_path}").load()
 
         with onto:
             try:
@@ -2580,8 +2835,8 @@ def _check_consistency(g: Graph) -> dict:
     except Exception as e:
         return {"status": "error", "message": str(e)[:200]}
     finally:
-        if tmpfile:
+        if tmpfile_path:
             try:
-                os.unlink(tmpfile.name)
+                os.unlink(tmpfile_path)
             except OSError:
                 pass

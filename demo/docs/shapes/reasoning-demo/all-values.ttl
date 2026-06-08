@@ -1,0 +1,28 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+ex:VegetarianFood a owl:Class .
+ex:VeganFood      a owl:Class ; rdfs:subClassOf ex:VegetarianFood .   # every VeganFood is VegetarianFood
+ex:ingredient     a owl:ObjectProperty .
+
+# owl:allValuesFrom (∀) as a definition:
+#   VegetarianDish ≡ all ingredients are VegetarianFood
+#   VeganDish      ≡ all ingredients are VeganFood
+ex:VegetarianDish a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ;
+        owl:onProperty ex:ingredient ; owl:allValuesFrom ex:VegetarianFood ] .
+ex:VeganDish a owl:Class ;
+    owl:equivalentClass [ a owl:Restriction ;
+        owl:onProperty ex:ingredient ; owl:allValuesFrom ex:VeganFood ] .
+
+ex:buddhaBowl a ex:VeganDish ; ex:ingredient ex:tofu .
+ex:tofu       a ex:VeganFood .
+
+# Inferred:
+#   ex:VeganDish rdfs:subClassOf ex:VegetarianDish   (∀ is monotone in the filler)
+#   ex:buddhaBowl a ex:VegetarianDish                (via the subsumption)
+#   ex:tofu a ex:VegetarianFood                       (subClassOf)

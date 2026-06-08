@@ -25,7 +25,7 @@ from rdflib import Graph
 from .ttl_parser import _run_reasoning, _extract_namespaces
 
 
-app = FastAPI(title="ontoink", version="0.6.0", description="OWL reasoning & SHACL validation")
+app = FastAPI(title="ontoink", version="0.6.2", description="OWL reasoning & SHACL validation")
 
 
 # Cross-origin isolation headers — enable SharedArrayBuffer (required by the
@@ -58,7 +58,7 @@ def health() -> Dict[str, Any]:
     return {
         "status": "ok",
         "reasoner": os.environ.get("ONTOINK_REASONER", "auto"),
-        "version": "0.6.0",
+        "version": "0.6.2",
     }
 
 

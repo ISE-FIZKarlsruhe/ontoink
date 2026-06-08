@@ -1,0 +1,25 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+# owl:inverseOf — a relation implies its converse
+ex:hasChild a owl:ObjectProperty .
+ex:childOf  a owl:ObjectProperty ; owl:inverseOf ex:hasChild .
+
+# owl:SymmetricProperty — the relation holds both ways
+ex:marriedTo a owl:ObjectProperty, owl:SymmetricProperty .
+
+# owl:TransitiveProperty — chains collapse
+ex:ancestorOf a owl:ObjectProperty, owl:TransitiveProperty .
+
+ex:alice ex:hasChild   ex:bob .
+ex:alice ex:marriedTo  ex:carol .
+ex:alice ex:ancestorOf ex:bob .
+ex:bob   ex:ancestorOf ex:dan .
+
+# Inferred:
+#   ex:bob   ex:childOf    ex:alice   (inverseOf)
+#   ex:carol ex:marriedTo  ex:alice   (SymmetricProperty)
+#   ex:alice ex:ancestorOf ex:dan     (TransitiveProperty)

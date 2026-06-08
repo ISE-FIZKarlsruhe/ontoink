@@ -1,0 +1,20 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+ex:Woman  a owl:Class .
+ex:Parent a owl:Class .
+
+# owl:intersectionOf — a defined class equal to a conjunction
+#   Mother ≡ Woman AND Parent
+ex:Mother a owl:Class ;
+    owl:equivalentClass [ a owl:Class ;
+        owl:intersectionOf ( ex:Woman ex:Parent ) ] .
+
+ex:mary a ex:Woman, ex:Parent .
+
+# Inferred:
+#   ex:mary a ex:Mother            (satisfies both conjuncts)
+#   ex:Mother rdfs:subClassOf ex:Woman , ex:Parent   (an intersection is below each part)

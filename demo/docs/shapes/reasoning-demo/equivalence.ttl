@@ -1,0 +1,20 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+# owl:equivalentClass — two named classes share all members
+ex:Human  a owl:Class .
+ex:Person a owl:Class ; owl:equivalentClass ex:Human .
+
+# owl:equivalentProperty — two properties share all links
+ex:likes  a owl:ObjectProperty .
+ex:enjoys a owl:ObjectProperty ; owl:equivalentProperty ex:likes .
+
+ex:alice a ex:Human .
+ex:alice ex:likes ex:coffee .
+
+# Inferred:
+#   ex:alice a ex:Person          (equivalentClass — Human ≡ Person)
+#   ex:alice ex:enjoys ex:coffee  (equivalentProperty — likes ≡ enjoys)

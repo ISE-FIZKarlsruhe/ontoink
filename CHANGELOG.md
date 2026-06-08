@@ -1,5 +1,89 @@
 # Changelog
 
+## [0.6.2] - 2026-06-08
+
+### Fixed
+- **The three OWL-DL reasoner backends never returned inferences** through the
+  `/reason` API — each failed silently (their wrappers catch exceptions and
+  return `None`/empty), so only `owlrl` ever produced results and `auto` always
+  fell through to it. Three independent bugs:
+  1. **owlready2 / HermiT** — the graph was serialised to **Turtle**, but
+     owlready2's bundled RDF parser rejects rdflib's Turtle output
+     (`NTriples parsing error (or unrecognized file format)`). Now serialised as
+     **RDF/XML**. Additionally `sync_reasoner(..., infer_data_property_values=True)`
+     raised `TypeError` on owlready2 builds whose `sync_reasoner_hermit()` lacks
+     that keyword; the call now falls back to `infer_property_values=True` only.
+  2. **native Konclude** — Konclude emits **OWL 2 XML** on output
+     (`<Ontology>` with `<SubClassOf>` / `<ClassAssertion>` elements), but the
+     wrapper parsed it as **RDF/XML** via `rdflib.parse(format="xml")`, which
+     silently yields nothing. Output is now translated by a dedicated
+     `_add_konclude_owlxml_inferences` helper. A transient `owl:Ontology`
+     declaration is also added to the RDF/XML input when the source graph lacks
+     one, so arbitrary TTL classifies.
+  3. **konclude-wasm** (`owl-reason` Node CLI) — the wrapper wrote the
+     inferences as **N-Quads** (each line carried the `urn:konclude:inferred`
+     graph term), which `rdflib.parse(format="nt")` rejects with
+     `Invalid line`; and the Python caller passed `--format nt`, an argument the
+     wrapper didn't accept (`Unknown argument: --format`). The wrapper now
+     re-emits the inferences as default-graph triples (valid N-Triples) and
+     tolerates `--format`.
+
+  With these fixes all four backends (`owlready2`, `konclude`, `konclude-wasm`,
+  `owlrl`) return inferences from OWL2 property-restriction ontologies; the
+  OWL-DL reasoners additionally derive class subsumptions (e.g.
+  `∃reads.Novel ⊑ ∃reads.Book`) that `owlrl` does not.
+- **`owl:equivalentClass` property restrictions were never visualized** — the
+  graph builder only walked `?C rdfs:subClassOf [owl:Restriction …]`, so a class
+  *defined* by a restriction (e.g. `VegetarianDish ≡ ∀ingredient.VegetarianFood`)
+  drew no restriction edge at all. `_extract_owl_restrictions` now also walks
+  `owl:equivalentClass`, and the diagram distinguishes the two: a necessary
+  `rdfs:subClassOf` restriction draws as **`⊑`** (solid triangle arrow), an
+  `owl:equivalentClass` definition draws as **`≡`** (hollow diamond arrow, label
+  prefixed with `≡`). Each edge carries `owlVia`, and the popup labels the axiom
+  a "necessary condition" vs a "definition (necessary & sufficient)".
+- **Anonymous boolean-class wrappers rendered as a disconnected blank node** — a
+  class defined by `owl:intersectionOf` / `owl:unionOf` of *named* classes (e.g.
+  `Mother ≡ Woman ⊓ Parent`) left a stray, unconnected anonymous `owl:Class` node.
+  The wrapper is now collapsed into labelled `rdfs:subClassOf` edges (`⊓` — the
+  class is below each conjunct; `⊔` — each disjunct is below the class) to/from
+  its members, both at build time and in the client-side re-render.
+- **Browser (in-page) Konclude WASM reasoner died with `Error: unwind`** — the
+  Emscripten runtime unwinds the WASM stack on program exit by throwing an
+  `unwind` sentinel. The Node CLI swallows it, but the esbuild browser bundle let
+  it escape, killing an otherwise-successful run. `reasonInBrowser` now treats an
+  `unwind` rejection as non-fatal and harvests the inferred graph, re-throwing
+  only when nothing was produced.
+- **Client-side re-render (Edit & Validate → Update Graph, and the playground)
+  destroyed restrictions** — the JS parsers rendered owl:Restriction blank nodes
+  as raw `[`, `]`, `owl:Restriction`, `owl:someValuesFrom` nodes/edges
+  (`parseTtlMinimal`) or dropped them silently (`parseTtlRobust`), because neither
+  understood Turtle `[ ]` blank-node / `( )` collection syntax. Added a
+  blank-node-aware `parseTtlGraph` plus `collapseOwlRestrictions` (a JS mirror of
+  the build-time `_extract_owl_restrictions`) and switched `updateGraph` and the
+  playground builder to them, so restrictions now collapse into the same
+  `⊑`/`≡` edges as the server-rendered diagrams. Both JS builders also now drop
+  `owl:Class` / `owl:Ontology` / `owl:ObjectProperty` meta-nodes (mirroring
+  `_IMPLICIT_TOPS`), matching the build-time render.
+
+### Added
+- **`reasoner:` fence option** — an ` ```ontoink ` block can now set the default
+  reasoner backend for its dropdown, e.g. `reasoner: owlrl` (bare names map to the
+  matching `Server:` option; `auto`/`browser`/`server:*` are taken as-is). Falls
+  back to the usual default when unset or unavailable.
+- **Comprehensive Reasoning & Inference demo** — `examples/reasoning-demo.md` now
+  walks every RDF/RDFS/OWL/OWL2 reasoning feature with a small, self-contained
+  example each (RDFS subClassOf/subPropertyOf/domain/range; OWL inverseOf,
+  Symmetric/Transitive, Functional/InverseFunctional, sameAs, equivalentClass/
+  Property; OWL2 someValuesFrom/allValuesFrom/hasValue, intersectionOf/unionOf,
+  propertyChainAxiom; subClassOf-vs-equivalentClass; and reasoning+SHACL). New
+  ontologies under `demo/docs/shapes/reasoning-demo/`. Blocks default to
+  `reasoner: owlrl` (the most complete materialiser).
+
+### Changed
+- **OLS IRI-dereference link** — the popup no longer shows a "Found in: N
+  ontologies" line, and the cross-ontology link now reads "Ontologies using this
+  IRI on OLS" (no count).
+
 ## [0.6.1] - 2026-06-04
 
 ### Added

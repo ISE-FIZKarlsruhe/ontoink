@@ -1,0 +1,18 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix ex:   <http://example.org/> .
+
+ex: a owl:Ontology .
+
+ex:hasParent a owl:ObjectProperty .
+
+# owl:propertyChainAxiom (OWL2) — compose properties along a path
+#   hasParent ∘ hasParent  ⟹  hasGrandparent
+ex:hasGrandparent a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( ex:hasParent ex:hasParent ) .
+
+ex:anna ex:hasParent ex:bob .
+ex:bob  ex:hasParent ex:carl .
+
+# Inferred:
+#   ex:anna ex:hasGrandparent ex:carl   (chained over the two hasParent steps)
