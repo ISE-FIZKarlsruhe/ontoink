@@ -1825,8 +1825,9 @@ var ontoink = (function () {
     // Hide minimap during export
     var minimap=c.querySelector(".ov-minimap"); if(minimap)minimap.style.visibility="hidden";
 
-    // full:true = tight crop, no whitespace, no minimap
-    var graphUrl=cy.png({scale:scale,bg:"#ffffff",full:true});
+    // full:false = the current viewport (WYSIWYG) so the export matches the
+    // browser and the legend/prefixes boxes line up with their on-screen spots.
+    var graphUrl=cy.png({scale:scale,bg:"#ffffff",full:false});
     if(minimap)minimap.style.visibility="";
 
     // Build export data with live colors / shapes / edge styles for the legend
@@ -1848,35 +1849,32 @@ var ontoink = (function () {
 
     var graphImg=new Image();
     graphImg.onload=function(){
-      var pad=12*scale, gap=10*scale;
-      // Measure overlay heights
+      // Measure each box at the size it will actually be drawn (offsetWidth/Height).
       var tc=document.createElement("canvas");tc.width=1;tc.height=1;
-      var lH=showLegend?drawLegendBox(tc.getContext("2d"),exportData,0,0,scale):0;
-      var nH=showNs?drawNsBox(tc.getContext("2d"),exportData,0,0,scale):0;
       var lW=showLegend?legendEl.offsetWidth*scale:0;
       var nW=showNs?nsEl.offsetWidth*scale:0;
-      var sideBySide=showLegend&&showNs&&(lW+gap+nW+pad*2<=graphImg.width);
-      var overlayH=0;
-      if(showLegend||showNs){
-        overlayH=pad+(sideBySide?Math.max(lH,nH):(showLegend?lH+gap:0)+(showNs?nH:0))+pad;
-      }
+      var lH=showLegend?drawLegendBox(tc.getContext("2d"),exportData,0,0,scale,legendEl.offsetWidth,legendEl.offsetHeight):0;
+      var nH=showNs?drawNsBox(tc.getContext("2d"),exportData,0,0,scale,nsEl.offsetWidth,nsEl.offsetHeight):0;
 
       var finalCanvas=document.createElement("canvas");
       finalCanvas.width=graphImg.width;
-      finalCanvas.height=graphImg.height+overlayH;
+      finalCanvas.height=graphImg.height;   // boxes sit ON the graph, not a strip below
       var ctx=finalCanvas.getContext("2d");
       ctx.fillStyle="#fff";ctx.fillRect(0,0,finalCanvas.width,finalCanvas.height);
       ctx.drawImage(graphImg,0,0);
 
-      if(showLegend||showNs){
-        var by=graphImg.height+pad;
-        if(showLegend)drawLegendBox(ctx,exportData,pad,by,scale,legendEl.offsetWidth,legendEl.offsetHeight);
-        if(showNs){
-          var nsX=sideBySide?pad+lW+gap:pad;
-          var nsY=sideBySide?by:by+(showLegend?lH+gap:0);
-          drawNsBox(ctx,exportData,nsX,nsY,scale,nsEl.offsetWidth,nsEl.offsetHeight);
-        }
+      // Place each box at its exact on-screen position within the canvas
+      // (scaled to export px), so the export matches the browser 1:1.
+      var wrap=c.querySelector(".ov-canvas-wrap");
+      var wrapRect=wrap?wrap.getBoundingClientRect():null;
+      function pos(el,bw,bh){
+        if(!wrapRect)return {x:12*scale,y:Math.max(0,graphImg.height-bh-12*scale)};
+        var r=el.getBoundingClientRect();
+        var x=(r.left-wrapRect.left)*scale, y=(r.top-wrapRect.top)*scale;
+        return {x:Math.max(0,Math.min(x,Math.max(0,graphImg.width-bw))),y:Math.max(0,Math.min(y,Math.max(0,graphImg.height-bh)))};
       }
+      if(showLegend){var lp=pos(legendEl,lW,lH);drawLegendBox(ctx,exportData,lp.x,lp.y,scale,legendEl.offsetWidth,legendEl.offsetHeight);}
+      if(showNs){var np=pos(nsEl,nW,nH);drawNsBox(ctx,exportData,np.x,np.y,scale,nsEl.offsetWidth,nsEl.offsetHeight);}
 
       var a=document.createElement("a");a.href=finalCanvas.toDataURL("image/png");a.download=id+".png";a.click();
     };
@@ -1893,8 +1891,9 @@ var ontoink = (function () {
     var showNs = nsEl && nsEl.style.display !== "none";
 
     try{
-      // full:true = tight crop, no minimap, no whitespace
-      var svgStr=cy.svg({scale:1,full:true,bg:"#fff"});
+      // full:false = the current viewport (WYSIWYG), matching the browser so the
+      // legend/prefixes boxes line up with their on-screen positions.
+      var svgStr=cy.svg({scale:1,full:false,bg:"#fff"});
       var parser=new DOMParser();
       var doc=parser.parseFromString(svgStr,"image/svg+xml");
       var svgEl=doc.querySelector("svg");
@@ -1918,25 +1917,24 @@ var ontoink = (function () {
       var nW=(showNs&&nsKeys.length)?nsEl.offsetWidth:0;
       var legendH=pad*2+row*(Math.max(nodeKeys.length,edgeKeys.length)+2);
       var nsH=nsKeys.length?pad*2+row*(nsKeys.length+1):0;
-      var sideBySide=showLegend&&showNs&&nsKeys.length&&(lW+8+nW+pad*2<=origW);
-      var overlayH=0;
-      if(showLegend||(showNs&&nsKeys.length)){
-        overlayH=pad+(sideBySide?Math.max(legendH,nsH):(showLegend?legendH+8:0)+(nsKeys.length?nsH:0))+pad;
+      // Boxes sit ON the graph at the corner they occupy on screen (to match the
+      // browser), so the SVG keeps its original size — no strip appended below.
+      var wrap=c.querySelector(".ov-canvas-wrap");
+      var wrapRect=wrap?wrap.getBoundingClientRect():null;
+      function svgCorner(el,bw,bh){
+        if(!wrapRect)return {x:pad,y:Math.max(0,origH-bh-pad)};
+        var r=el.getBoundingClientRect();
+        var x=r.left-wrapRect.left, y=r.top-wrapRect.top;
+        return {x:Math.max(0,Math.min(x,Math.max(0,origW-bw))),y:Math.max(0,Math.min(y,Math.max(0,origH-bh)))};
       }
-      var totalH=origH+overlayH;
+      var legendBoxW=Math.min(lW,origW-pad*2), nsBoxW=Math.min(nW,origW-pad*2);
+      var lp=showLegend?svgCorner(legendEl,legendBoxW,legendH):{x:pad,y:0};
+      var np=(showNs&&nsKeys.length)?svgCorner(nsEl,nsBoxW,nsH):{x:pad,y:0};
 
-      svgEl.setAttribute("height",totalH);
-      var vb=svgEl.getAttribute("viewBox");
-      if(vb){var parts=vb.split(/[\s,]+/);parts[3]=totalH;svgEl.setAttribute("viewBox",parts.join(" "));}
-      var bgRect=svgEl.querySelector("rect");
-      if(bgRect&&bgRect.getAttribute("fill")==="#fff")bgRect.setAttribute("height",totalH);
-
-      var by=origH+pad;
-
-      // Legend below graph
+      // Legend box (overlaid on the graph at its on-screen corner)
       if(showLegend){
         var g=doc.createElementNS("http://www.w3.org/2000/svg","g");
-        g.setAttribute("transform","translate("+pad+","+by+")");
+        g.setAttribute("transform","translate("+lp.x+","+lp.y+")");
         var rect=doc.createElementNS("http://www.w3.org/2000/svg","rect");
         rect.setAttribute("x","0");rect.setAttribute("y","0");rect.setAttribute("width",Math.min(lW,origW-pad*2));rect.setAttribute("height",legendH);
         rect.setAttribute("rx","10");rect.setAttribute("fill","rgba(255,255,255,0.93)");rect.setAttribute("stroke","#d1d5db");rect.setAttribute("stroke-width","1");
@@ -1977,12 +1975,10 @@ var ontoink = (function () {
         svgEl.appendChild(g);
       }
 
-      // Prefixes below or beside legend
+      // Prefixes box (overlaid on the graph at its on-screen corner)
       if(showNs&&nsKeys.length){
-        var nsX=sideBySide?pad+lW+8:pad;
-        var nsY=sideBySide?by:by+(showLegend?legendH+8:0);
         var g2=doc.createElementNS("http://www.w3.org/2000/svg","g");
-        g2.setAttribute("transform","translate("+nsX+","+nsY+")");
+        g2.setAttribute("transform","translate("+np.x+","+np.y+")");
         var r3=doc.createElementNS("http://www.w3.org/2000/svg","rect");r3.setAttribute("x","0");r3.setAttribute("y","0");r3.setAttribute("width",Math.min(nW,origW-pad*2));r3.setAttribute("height",nsH);r3.setAttribute("rx","10");r3.setAttribute("fill","rgba(255,255,255,0.93)");r3.setAttribute("stroke","#d1d5db");r3.setAttribute("stroke-width","1");g2.appendChild(r3);
         var t3=doc.createElementNS("http://www.w3.org/2000/svg","text");t3.setAttribute("x",pad);t3.setAttribute("y",pad+12);t3.setAttribute("font-family","Inter,sans-serif");t3.setAttribute("font-size","12");t3.setAttribute("font-weight","700");t3.setAttribute("fill","#1f2937");t3.textContent="Prefixes";g2.appendChild(t3);
         var ny2=pad+row+2;
