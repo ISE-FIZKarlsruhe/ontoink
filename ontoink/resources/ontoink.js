@@ -110,7 +110,7 @@ var ontoink = (function () {
     var boxW = domW ? domW*s : 300*s;
     // Match CSS: .ov-overlay-head font 12px, .ov-oentry font 11px, .ov-overlay-col-title 9px
     var pad = 12*s, row = 22*s, iconSz = 16*s, gap = 8*s, r = 10*s;
-    var boxH = domH ? domH*s : pad*2 + row*(maxRows+2);
+    var boxH = domH ? domH*s : pad*2 + row*(maxRows+2) + row*0.6;
 
     // Background
     drawRoundRect(ctx, x, y, boxW, boxH, r);
@@ -1520,6 +1520,10 @@ var ontoink = (function () {
 
   var OC=[["purl.obolibrary.org/obo/BFO_","BFO","#F556CB"],["purl.obolibrary.org/obo/IAO_","IAO","#F6A252"],["purl.obolibrary.org/obo/RO_","RO","#F43F5E"],["purl.obolibrary.org/obo/OBI_","OBI","#F5D5B1"],["nfdi.fiz-karlsruhe.de/ontology/","nfdicore","#7777BB"],["w3id.org/pmd/","PMD","#46CAD3"],["qudt.org/","QUDT","#C9DBFE"],["schema.org/","schema","#E8D44D"],["xmlns.com/foaf/","FOAF","#4682B4"]];
   function detectSource(u){for(var i=0;i<OC.length;i++)if(u.indexOf(OC[i][0])>=0)return{name:OC[i][1],color:OC[i][2]};return{name:"",color:"#FDFDC8"};}
+  // Prefix (e.g. "ex", "ex2", "foaf") for an IRI, by longest-matching @prefix
+  // namespace. Used so EVERY declared namespace — not just known ontologies —
+  // is colourable in Edit Layout.
+  function nsPrefix(u,pf){if(!u||u[0]==='"'||u.indexOf("http")!==0||!pf)return"";var best="",bl=-1;for(var p in pf){var ns=pf[p];if(ns&&u.indexOf(ns)===0&&ns.length>bl){best=p;bl=ns.length;}}return best;}
   function uriLabel(u,pf){if(pf){var bp="",bu="";for(var p in pf)if(u.indexOf(pf[p])===0&&pf[p].length>bu.length){bp=p;bu=pf[p];}if(bu)return bp?(bp+":"+u.substring(bu.length)):u.substring(bu.length);}var l=u.indexOf("#")>=0?u.split("#").pop():u.split("/").pop();var s=detectSource(u);return s.name?(s.name.toLowerCase()+":"+l):l;}
   function litVal(r){if(r[0]==='"'){var e=r.lastIndexOf('"');if(e>0)return r.substring(1,e);}return r;}
   function hashStr(s){var h=0;for(var i=0;i<s.length;i++)h=((h<<5)-h+s.charCodeAt(i))|0;return h;}
@@ -1643,7 +1647,7 @@ var ontoink = (function () {
     function isBn(x){return typeof x==="string"&&x.indexOf("_:")===0;}
     tr.forEach(function(t){if(t.p===RL&&t.o[0]==='"')labels[t.s]=litVal(t.o);});
     tr.forEach(function(t){if(isBn(t.s)||isBn(t.o))return;if(t.p===RT){if(t.o===OWL_CLASS_IRI||t.o===RDFS_CLASS_IRI)classes[t.s]=true;classes[t.o]=true;}if(t.p===SC){classes[t.s]=true;classes[t.o]=true;}});
-    function en(u){if(nodes[u]||u[0]==='"')return;var ic=classes[u]||false,s=detectSource(u);nodes[u]={data:{id:u,label:labels[u]||uriLabel(u,pf),type:ic?"Class":"Individual",color:ic?s.color:"#E6E6E6",shape:ic?"rectangle":"ellipse",iri:u,source:s.name,namespace:""}};}
+    function en(u){if(nodes[u]||u[0]==='"')return;var ic=classes[u]||false,s=detectSource(u),np=nsPrefix(u,pf);nodes[u]={data:{id:u,label:labels[u]||uriLabel(u,pf),type:ic?"Class":"Individual",color:ic?s.color:"#E6E6E6",shape:ic?"rectangle":"ellipse",iri:u,source:s.name||np,namespace:np}};}
     tr.forEach(function(t){
       // Blank-node triples (owl:Restriction internals, collection cells) are
       // rendered as collapsed restriction edges below, not as raw nodes/edges.
@@ -1692,7 +1696,7 @@ var ontoink = (function () {
     var c=document.getElementById(id),ex=c.querySelector(".ov-color-panel");if(ex){ex.remove();return;}
     var inst=instances[id];if(!inst)return;
     var sources={},types={},typeShapes={};
-    inst.cy.nodes().forEach(function(n){var d=n.data();if(d.source)sources[d.source]=d.color;types[d.type]=d.color;typeShapes[d.type]=n.style("shape");});
+    inst.cy.nodes().forEach(function(n){var d=n.data();if(d.source&&(sources[d.source]===undefined||d.type==="Class"))sources[d.source]=d.color;types[d.type]=d.color;typeShapes[d.type]=n.style("shape");});
 
     // Collect edge type styles
     var edgeStyles={};
@@ -1763,11 +1767,11 @@ var ontoink = (function () {
     panel.querySelectorAll(".ov-color-input").forEach(function(inp){inp.addEventListener("input",function(){
       var kind=inp.dataset.kind,key=inp.dataset.key,col=inp.value;
       if(kind==="type") inst.cy.nodes().forEach(function(n){if(n.data("type")===key)n.data("color",col);});
-      if(kind==="source") inst.cy.nodes().forEach(function(n){if(n.data("source")===key&&n.data("type")==="Class")n.data("color",col);});
+      if(kind==="source") inst.cy.nodes().forEach(function(n){if(n.data("source")===key)n.data("color",col);});
       if(kind==="edge-color") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key){e.style({"line-color":col,"target-arrow-color":col,"source-arrow-color":col});}});
       // Also propagate to inst.data so exports + future legend re-renders pick it up
       if(kind==="type") inst.data.nodes.forEach(function(n){if(n.data.type===key)n.data.color=col;});
-      if(kind==="source") inst.data.nodes.forEach(function(n){if(n.data.source===key&&n.data.type==="Class")n.data.color=col;});
+      if(kind==="source") inst.data.nodes.forEach(function(n){if(n.data.source===key)n.data.color=col;});
       refreshLegend();
     });});
 
@@ -1825,9 +1829,9 @@ var ontoink = (function () {
     // Hide minimap during export
     var minimap=c.querySelector(".ov-minimap"); if(minimap)minimap.style.visibility="hidden";
 
-    // full:false = the current viewport (WYSIWYG) so the export matches the
-    // browser and the legend/prefixes boxes line up with their on-screen spots.
-    var graphUrl=cy.png({scale:scale,bg:"#ffffff",full:false});
+    // full:true = the whole graph (nothing cut). The legend/prefixes are then
+    // placed in a clean margin BELOW so they never cover any nodes.
+    var graphUrl=cy.png({scale:scale,bg:"#ffffff",full:true});
     if(minimap)minimap.style.visibility="";
 
     // Build export data with live colors / shapes / edge styles for the legend
@@ -1849,32 +1853,38 @@ var ontoink = (function () {
 
     var graphImg=new Image();
     graphImg.onload=function(){
+      var pad=12*scale;
       // Measure each box at the size it will actually be drawn (offsetWidth/Height).
       var tc=document.createElement("canvas");tc.width=1;tc.height=1;
       var lW=showLegend?legendEl.offsetWidth*scale:0;
       var nW=showNs?nsEl.offsetWidth*scale:0;
-      var lH=showLegend?drawLegendBox(tc.getContext("2d"),exportData,0,0,scale,legendEl.offsetWidth,legendEl.offsetHeight):0;
-      var nH=showNs?drawNsBox(tc.getContext("2d"),exportData,0,0,scale,nsEl.offsetWidth,nsEl.offsetHeight):0;
+      // Measure with the computed (row-based) height — offsetHeight can
+      // under-measure and clip the last legend row.
+      var lH=showLegend?drawLegendBox(tc.getContext("2d"),exportData,0,0,scale,legendEl.offsetWidth):0;
+      var nH=showNs?drawNsBox(tc.getContext("2d"),exportData,0,0,scale,nsEl.offsetWidth):0;
+
+      // Keep each box on the side it sits on screen (legend bottom-left,
+      // prefixes bottom-right by default), but place them in a margin BELOW the
+      // graph so they never cover any nodes.
+      var wrap=c.querySelector(".ov-canvas-wrap"),wr=wrap?wrap.getBoundingClientRect():null;
+      function onRight(el){if(!wr)return false;var r=el.getBoundingClientRect();return ((r.left+r.right)/2-wr.left)>wr.width/2;}
+      var legendRight=showLegend&&onRight(legendEl),nsRight=showNs&&onRight(nsEl);
+      // Side-by-side only if on opposite sides AND both fit across the graph
+      // width; otherwise stack on two rows so the boxes never overlap each other.
+      var sideBySide=showLegend&&showNs&&(legendRight!==nsRight)&&(lW+nW+pad*3<=graphImg.width);
+      var stack=showLegend&&showNs&&!sideBySide;
+      var margin=(showLegend||showNs)?((stack?lH+nH+pad:Math.max(lH,nH))+pad*2):0;
 
       var finalCanvas=document.createElement("canvas");
       finalCanvas.width=graphImg.width;
-      finalCanvas.height=graphImg.height;   // boxes sit ON the graph, not a strip below
+      finalCanvas.height=graphImg.height+margin;
       var ctx=finalCanvas.getContext("2d");
       ctx.fillStyle="#fff";ctx.fillRect(0,0,finalCanvas.width,finalCanvas.height);
       ctx.drawImage(graphImg,0,0);
 
-      // Place each box at its exact on-screen position within the canvas
-      // (scaled to export px), so the export matches the browser 1:1.
-      var wrap=c.querySelector(".ov-canvas-wrap");
-      var wrapRect=wrap?wrap.getBoundingClientRect():null;
-      function pos(el,bw,bh){
-        if(!wrapRect)return {x:12*scale,y:Math.max(0,graphImg.height-bh-12*scale)};
-        var r=el.getBoundingClientRect();
-        var x=(r.left-wrapRect.left)*scale, y=(r.top-wrapRect.top)*scale;
-        return {x:Math.max(0,Math.min(x,Math.max(0,graphImg.width-bw))),y:Math.max(0,Math.min(y,Math.max(0,graphImg.height-bh)))};
-      }
-      if(showLegend){var lp=pos(legendEl,lW,lH);drawLegendBox(ctx,exportData,lp.x,lp.y,scale,legendEl.offsetWidth,legendEl.offsetHeight);}
-      if(showNs){var np=pos(nsEl,nW,nH);drawNsBox(ctx,exportData,np.x,np.y,scale,nsEl.offsetWidth,nsEl.offsetHeight);}
+      var by=graphImg.height+pad;
+      if(showLegend){var lx=legendRight?(finalCanvas.width-lW-pad):pad;drawLegendBox(ctx,exportData,lx,by,scale,legendEl.offsetWidth);}
+      if(showNs){var nx=nsRight?(finalCanvas.width-nW-pad):pad;var ny=(stack&&showLegend)?(by+lH+pad):by;drawNsBox(ctx,exportData,nx,ny,scale,nsEl.offsetWidth);}
 
       var a=document.createElement("a");a.href=finalCanvas.toDataURL("image/png");a.download=id+".png";a.click();
     };
@@ -1917,19 +1927,26 @@ var ontoink = (function () {
       var nW=(showNs&&nsKeys.length)?nsEl.offsetWidth:0;
       var legendH=pad*2+row*(Math.max(nodeKeys.length,edgeKeys.length)+2);
       var nsH=nsKeys.length?pad*2+row*(nsKeys.length+1):0;
-      // Boxes sit ON the graph at the corner they occupy on screen (to match the
-      // browser), so the SVG keeps its original size — no strip appended below.
-      var wrap=c.querySelector(".ov-canvas-wrap");
-      var wrapRect=wrap?wrap.getBoundingClientRect():null;
-      function svgCorner(el,bw,bh){
-        if(!wrapRect)return {x:pad,y:Math.max(0,origH-bh-pad)};
-        var r=el.getBoundingClientRect();
-        var x=r.left-wrapRect.left, y=r.top-wrapRect.top;
-        return {x:Math.max(0,Math.min(x,Math.max(0,origW-bw))),y:Math.max(0,Math.min(y,Math.max(0,origH-bh)))};
-      }
+      // Place the boxes in a clean margin BELOW the graph (legend on its side,
+      // prefixes on its side — left/right by default) so they never cover nodes.
+      var wrap=c.querySelector(".ov-canvas-wrap"),wr=wrap?wrap.getBoundingClientRect():null;
+      function onRight(el){if(!wr)return false;var r=el.getBoundingClientRect();return ((r.left+r.right)/2-wr.left)>wr.width/2;}
+      var hasNs=showNs&&nsKeys.length;
+      var legendRight=showLegend&&onRight(legendEl), nsRight=hasNs&&onRight(nsEl);
       var legendBoxW=Math.min(lW,origW-pad*2), nsBoxW=Math.min(nW,origW-pad*2);
-      var lp=showLegend?svgCorner(legendEl,legendBoxW,legendH):{x:pad,y:0};
-      var np=(showNs&&nsKeys.length)?svgCorner(nsEl,nsBoxW,nsH):{x:pad,y:0};
+      // Side-by-side only if on opposite sides AND both fit; else stack on two rows.
+      var sideBySide=showLegend&&hasNs&&(legendRight!==nsRight)&&(legendBoxW+nsBoxW+pad*3<=origW);
+      var stack=showLegend&&hasNs&&!sideBySide;
+      var margin=(showLegend||hasNs)?((stack?legendH+nsH+pad:Math.max(showLegend?legendH:0,hasNs?nsH:0))+pad*2):0;
+      var totalH=origH+margin;
+      svgEl.setAttribute("height",totalH);
+      var vb=svgEl.getAttribute("viewBox");
+      if(vb){var parts=vb.split(/[\s,]+/);parts[3]=totalH;svgEl.setAttribute("viewBox",parts.join(" "));}
+      var bgRect=svgEl.querySelector("rect");
+      if(bgRect&&bgRect.getAttribute("fill")==="#fff")bgRect.setAttribute("height",totalH);
+      var by=origH+pad;
+      var lp={x:legendRight?(origW-legendBoxW-pad):pad, y:by};
+      var np={x:nsRight?(origW-nsBoxW-pad):pad, y:(stack&&showLegend)?(by+legendH+pad):by};
 
       // Legend box (overlaid on the graph at its on-screen corner)
       if(showLegend){
@@ -2186,7 +2203,8 @@ var ontoink = (function () {
     function en(u) {
       if (nodes[u] || u[0] === '"') return;
       var ic = classes[u] || false, s = detectSource(u);
-      nodes[u] = { data: { id: u, label: labels[u] || uriLabel(u, pf), type: ic ? "Class" : "Individual", color: ic ? s.color : "#E6E6E6", shape: ic ? "rectangle" : "ellipse", iri: u, source: s.name, namespace: "" } };
+      var np = nsPrefix(u, pf);
+      nodes[u] = { data: { id: u, label: labels[u] || uriLabel(u, pf), type: ic ? "Class" : "Individual", color: ic ? s.color : "#E6E6E6", shape: ic ? "rectangle" : "ellipse", iri: u, source: s.name || np, namespace: np } };
     }
 
     // Helper: build a SHACL constraint edge if the source's rdf:type matches a shape's targetClass
