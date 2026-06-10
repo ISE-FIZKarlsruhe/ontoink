@@ -7,11 +7,17 @@ of ontoink does not require FastAPI.
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict, Optional
 
 try:
     from fastapi import FastAPI, HTTPException
+    from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
 except ImportError as exc:
@@ -25,7 +31,7 @@ from rdflib import Graph
 from .ttl_parser import _run_reasoning, _extract_namespaces
 
 
-app = FastAPI(title="ontoink", version="0.6.2", description="OWL reasoning & SHACL validation")
+app = FastAPI(title="ontoink", version="0.6.3", description="OWL reasoning & SHACL validation")
 
 
 # Cross-origin isolation headers — enable SharedArrayBuffer (required by the
@@ -58,7 +64,7 @@ def health() -> Dict[str, Any]:
     return {
         "status": "ok",
         "reasoner": os.environ.get("ONTOINK_REASONER", "auto"),
-        "version": "0.6.2",
+        "version": "0.6.3",
     }
 
 
@@ -142,6 +148,125 @@ def validate(req: TtlRequest) -> Dict[str, Any]:
         data_g, shacl_graph=shacl_g, inference="rdfs", abort_on_first=False,
     )
     return {"conforms": conforms, "report": report_text}
+
+
+# ── Ontology dereference proxy ────────────────────────────────────────────
+#
+# Generic alternative to the client-side _KNOWN_ONTOLOGY_URLS registry in
+# ontoink.js. Browsers cannot follow the CORS-less 30x redirects that canonical
+# ontology IRIs use (purl.obolibrary.org, nfdi.fiz-karlsruhe.de, …), so the
+# playground hard-codes per-namespace mirror URLs that rot and need version
+# bumps. The server has no CORS constraint: it can dereference *any* IRI with
+# content negotiation and relay the RDF back with permissive CORS. The
+# playground prefers this endpoint whenever a same-origin server is reachable
+# and falls back to the registry only on serverless (GitHub Pages) deploys.
+
+_DEREF_ACCEPT = (
+    "text/turtle, application/rdf+xml;q=0.9, application/ld+json;q=0.8, "
+    "application/n-triples;q=0.5, */*;q=0.1"
+)
+_DEREF_MAX_BYTES = 25 * 1024 * 1024
+_DEREF_MAX_REDIRECTS = 6
+_DEREF_TIMEOUT = 20
+
+
+class _DerefError(Exception):
+    def __init__(self, message: str, status: int = 502) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def _deref_host_is_safe(url: str) -> bool:
+    """SSRF guard: reject non-public hosts (loopback, private, link-local, …).
+
+    Every redirect hop is re-checked, so a public URL cannot bounce to an
+    internal address (e.g. cloud metadata at 169.254.169.254).
+    """
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return False
+    try:
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        infos = socket.getaddrinfo(parts.hostname, port)
+    except (socket.gaierror, ValueError):
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    return True
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Disable urllib's automatic redirect following so we can validate hops."""
+
+    def redirect_request(self, *args, **kwargs):  # type: ignore[override]
+        return None
+
+
+def _deref_fetch(iri: str):
+    """Fetch `iri` with conneg, following redirects manually with per-hop checks.
+
+    Returns (body_text, content_type, final_url).
+    """
+    current = iri
+    opener = urllib.request.build_opener(_NoRedirect)
+    for _ in range(_DEREF_MAX_REDIRECTS + 1):
+        if not _deref_host_is_safe(current):
+            raise _DerefError(f"refused to fetch non-public URL: {current}", status=400)
+        req = urllib.request.Request(current, headers={
+            "Accept": _DEREF_ACCEPT,
+            "User-Agent": "ontoink-deref/0.6.3 (+https://github.com/ISE-FIZKarlsruhe/ontoink)",
+        })
+        try:
+            resp = opener.open(req, timeout=_DEREF_TIMEOUT)
+        except urllib.error.HTTPError as exc:
+            loc = exc.headers.get("Location") if exc.headers else None
+            if exc.code in (301, 302, 303, 307, 308) and loc:
+                current = urllib.parse.urljoin(current, loc)
+                continue
+            raise _DerefError(f"upstream returned HTTP {exc.code}", status=502) from exc
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            raise _DerefError(f"fetch failed: {exc}", status=502) from exc
+        with resp:
+            raw = resp.read(_DEREF_MAX_BYTES + 1)
+            if len(raw) > _DEREF_MAX_BYTES:
+                raise _DerefError("ontology exceeds size limit", status=413)
+            ctype = resp.headers.get("Content-Type", "") or ""
+            final_url = resp.geturl() or current
+        return raw.decode("utf-8", errors="replace"), ctype, final_url
+    raise _DerefError("too many redirects", status=502)
+
+
+def _detect_rdf_format(ctype: str, body: str) -> str:
+    """Mirror the client's format sniffing (Content-Type first, then body)."""
+    c = (ctype or "").lower()
+    head = body.lstrip()[:1]
+    if "rdf+xml" in c or "/xml" in c or (head == "<" and "rdf:RDF" in body):
+        return "rdfxml"
+    if "json" in c or head in ("{", "["):
+        return "jsonld"
+    return "turtle"
+
+
+@app.get("/deref")
+def deref(iri: str):
+    """Dereference an ontology IRI server-side and relay the RDF.
+
+    Returns ``{body, format, url, contentType}`` so the playground can reuse its
+    existing client-side parsers (parseRdfResponse). Read-only GET; SSRF-guarded.
+    """
+    try:
+        body, ctype, final_url = _deref_fetch(iri)
+    except _DerefError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+    return JSONResponse(
+        {"body": body, "format": _detect_rdf_format(ctype, body),
+         "url": final_url, "contentType": ctype},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 # Optionally serve a pre-built MkDocs site at the root path.

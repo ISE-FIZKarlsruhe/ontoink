@@ -1,5 +1,78 @@
 # Changelog
 
+## [0.6.3] - 2026-06-10
+
+### Added
+- **Full in-browser SHACL validation** — the playground's interactive "Validate"
+  (and "Validate with Inferences") now runs a standards-compliant SHACL engine
+  (`rdf-validate-shacl`) entirely in the browser, replacing the previous
+  hand-rolled checker that only understood `sh:targetClass` + `sh:minCount`/
+  `sh:maxCount` (named-shape pattern). It now covers full SHACL **Core** —
+  `sh:datatype`, `sh:class`, `sh:nodeKind`, `sh:pattern`, value
+  ranges, `sh:in`/`sh:hasValue`/`closed`, logical/shape-based constraints,
+  property paths, inline blank-node property shapes, severity, etc. — and was
+  verified to match pyshacl on `sh:datatype`/`sh:pattern`/`sh:in`/`sh:class`/
+  `sh:minInclusive` fixtures the old checker silently passed. The engine is a
+  vendored same-origin ESM bundle at `demo/docs/assets/shacl/shacl.mjs` (built
+  by `scripts/build-shacl-bundle.mjs`, committed to the repo) so it works on the
+  static GitHub Pages demo with no server or WASM/cross-origin-isolation. If the
+  bundle ever fails to load, `validate()` degrades to the cardinality-only
+  checker (`validateMinimal`). Known gaps vs pyshacl (both need a SPARQL engine
+  the browser bundle doesn't include): **SHACL-SPARQL constraints** (`sh:sparql`)
+  and **SHACL-AF rules** (`sh:rule`/`sh:SPARQLRule`). A shape using `sh:sparql`
+  currently throws inside the engine and falls back to the cardinality checker;
+  `sh:rule` inferences are silently not applied. The build-time and `/validate`
+  (pyshacl) reports remain the exact references for those.
+- **Asset base path for sub-path deploys** — `plugin.py` now injects
+  `window.ONTOINK_ASSET_BASE` (a per-page relative `…/assets/` prefix) so
+  dynamically-imported same-origin ESM (the SHACL bundle) resolves correctly
+  both at the site root (Docker `all`) and under a sub-path (GitHub Pages,
+  `/ontoink/…`).
+- **Server-side ontology dereference proxy (`GET /deref`)** — a generic
+  alternative to the client-side `_KNOWN_ONTOLOGY_URLS` registry. Browsers
+  cannot follow the CORS-less 30x redirects that canonical ontology IRIs use
+  (`purl.obolibrary.org`, `nfdi.fiz-karlsruhe.de`, …), so the playground had to
+  hard-code per-namespace mirror URLs that rot and need manual version bumps.
+  The server has no CORS constraint: `/deref?iri=<iri>` dereferences any IRI
+  with content negotiation, follows redirects, and relays the RDF back with
+  permissive CORS as `{body, format, url}` for the existing client parsers to
+  consume. The playground's `fetchOntology` now prefers `/deref` whenever a
+  same-origin server (`api`/`all` mode) answers `/health`, and falls back to the
+  registry + direct content negotiation only on serverless GitHub Pages. This
+  makes the "More…" dereference work for *any* ontology — including FOAF, which
+  has no reliable client-side CORS mirror. The endpoint is read-only and
+  SSRF-guarded: it rejects private/loopback/link-local/reserved hosts
+  (re-checked on every redirect hop), non-HTTP(S) schemes, and caps redirects
+  (6) and body size (25 MB).
+
+### Fixed
+- **Three `_KNOWN_ONTOLOGY_URLS` mirror entries were dead**, so dereferencing
+  those namespaces silently failed in the browser:
+  - **BFO** pointed at `BFO-2020/master/src/owl/bfo-2020.owl` (404 — the file
+    moved); now `release-2024-01-29/src/owl/bfo-core.owl`.
+  - **IAO** pointed at `IAO/master/src/ontology/iao.owl` (404); now the
+    release-tagged `IAO/v2026-03-30/iao.owl`.
+  - **nfdicore** was pinned to `…/nfdicore/3.0.4/ontology.ttl`; now prefers the
+    version-less `…/nfdicore/ontology.ttl` (no manual version bumps) with the
+    pinned copy as a fallback.
+  FOAF is annotated as having no client-side CORS mirror (xmlns.com sends no
+  CORS header) — it now works via the `/deref` proxy instead.
+- **The legend edge arrowhead always drew a triangle**, ignoring the pointer
+  shape chosen in Edit Layout. `buildLegendOverlay` read the live
+  `target-arrow-shape` into a variable but then rendered a hardcoded triangle
+  `<polygon>`, so changing an edge type's arrow to tee / vee / diamond / circle
+  updated the graph but not the legend. A new `arrowIconSvg` helper renders the
+  actual shape. (The PNG/SVG *export* legends still draw a fixed triangle — a
+  separate code path, not yet addressed.)
+- **Playground "Edit & Validate" had no SHACL Shapes pane** — the playground
+  page hand-codes its own container, and its editor panel omitted the
+  `.ov-editor-shapes-textarea`, so the shapes file (including one passed via
+  `?shape=`) was never shown and validation ran against empty shapes. The panel
+  now mirrors the fence-rendered editor (Source | SHACL Shapes + a Validation
+  Report row); the existing editor logic already seeds the pane from
+  `data.shapeTtl`. The page's "Simplified SHACL" note was updated to reflect the
+  full SHACL Core engine.
+
 ## [0.6.2] - 2026-06-08
 
 ### Fixed

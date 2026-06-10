@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.6.2 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.6.3 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -419,10 +419,18 @@ var ontoink = (function () {
   // 302 redirects WITHOUT CORS headers, so browser fetch() fails. These mappings let us
   // skip the redirect and fetch the ontology file directly from the final host.
   var _KNOWN_ONTOLOGY_URLS = [
-    { ns: "https://nfdi.fiz-karlsruhe.de/ontology/", urls: ["https://ise-fizkarlsruhe.github.io/nfdicore/3.0.4/ontology.ttl"] },
-    { ns: "http://purl.obolibrary.org/obo/BFO_", urls: ["https://raw.githubusercontent.com/BFO-ontology/BFO-2020/master/src/owl/bfo-2020.owl"] },
-    { ns: "http://purl.obolibrary.org/obo/IAO_", urls: ["https://raw.githubusercontent.com/information-artifact-ontology/IAO/master/src/ontology/iao.owl"] },
+    // nfdicore: prefer the version-less "latest" on GitHub Pages (no manual
+    // version bumps); keep the pinned copy as a fallback if latest 404s.
+    { ns: "https://nfdi.fiz-karlsruhe.de/ontology/", urls: ["https://ise-fizkarlsruhe.github.io/nfdicore/ontology.ttl", "https://ise-fizkarlsruhe.github.io/nfdicore/3.0.4/ontology.ttl"] },
+    // OBO ontologies: must pin a release tag — the version-less PURL
+    // (purl.obolibrary.org/obo/*.owl) 302-redirects WITHOUT CORS on the 30x
+    // hop, so a browser can't follow it. Bump these tags when OBO releases.
+    { ns: "http://purl.obolibrary.org/obo/BFO_", urls: ["https://raw.githubusercontent.com/BFO-ontology/BFO-2020/release-2024-01-29/src/owl/bfo-core.owl"] },
+    { ns: "http://purl.obolibrary.org/obo/IAO_", urls: ["https://raw.githubusercontent.com/information-artifact-ontology/IAO/v2026-03-30/iao.owl"] },
     { ns: "http://purl.obolibrary.org/obo/RO_", urls: ["https://raw.githubusercontent.com/oborel/obo-relations/master/ro.owl"] },
+    // FOAF: xmlns.com serves the spec WITHOUT CORS, so this only works via a
+    // server-side deref proxy — no reliable client-side CORS mirror exists
+    // (prefix.cc cert expired, DBpedia Archivo 500s, LOV paths are version-dated).
     { ns: "http://xmlns.com/foaf/0.1/", urls: ["https://xmlns.com/foaf/spec/index.rdf"] },
     { ns: "http://www.w3.org/2004/02/skos/core#", urls: ["https://www.w3.org/2009/08/skos-reference/skos.rdf"] },
     { ns: "https://schema.org/", urls: ["https://schema.org/version/latest/schemaorg-current-https.jsonld"] },
@@ -631,7 +639,22 @@ var ontoink = (function () {
     if (_ontologyCache[nsBase]) return Promise.resolve(_ontologyCache[nsBase]);
     if (_ontologyFetchPromises[nsBase]) return _ontologyFetchPromises[nsBase];
 
-    // Step 1: Check known URL registry (bypasses CORS-broken redirects)
+    // Step 0: Server-side deref proxy (generic — no registry, no version pins).
+    // Used only when a same-origin ontoink server (api/all mode) answers /health.
+    // On serverless GitHub Pages this rejects fast and we fall back to the registry.
+    function tryProxy() {
+      return probeServerReasoner().then(function(serverOk) {
+        if (!serverOk) return Promise.reject("no server");
+        return fetch("/deref?iri=" + encodeURIComponent(nsBase), { headers: { "Accept": "application/json" } })
+          .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function(j) {
+            if (!j || !j.body) throw new Error("empty deref response");
+            return { body: j.body, format: j.format };
+          });
+      });
+    }
+
+    // Step 1: Known URL registry (CORS-safe mirrors; fallback when no server)
     var knownUrls = resolveOntologyUrl(nsBase);
 
     function tryKnownUrls() {
@@ -653,7 +676,8 @@ var ontoink = (function () {
       return tryAccept(0);
     }
 
-    _ontologyFetchPromises[nsBase] = tryKnownUrls()
+    _ontologyFetchPromises[nsBase] = tryProxy()
+      .catch(function() { return tryKnownUrls(); })
       .catch(function() { return tryContentNeg(); })
       .then(function(result) {
         var parsed = parseRdfResponse(result);
@@ -1032,6 +1056,38 @@ var ontoink = (function () {
     }
   }
 
+  // SVG snippet for an edge arrowhead preview. The connecting line ends near
+  // x=22 and the arrow tip sits at x=32 (vertical centre y=6). Mirrors
+  // cytoscape's target-arrow-shape so Edit-Layout pointer changes show up in
+  // the legend; `filled` controls hollow-vs-solid for closed heads.
+  function arrowIconSvg(shape, color, filled) {
+    var f = filled ? color : "none";
+    switch (shape) {
+      case "none":
+        return "";
+      case "tee":
+        return '<line x1="22" y1="6" x2="30" y2="6" stroke="' + color + '" stroke-width="1.5"/>'
+             + '<line x1="30.5" y1="1" x2="30.5" y2="11" stroke="' + color + '" stroke-width="2.2"/>';
+      case "vee":
+      case "chevron":
+        return '<polyline points="22,2 32,6 22,10" fill="none" stroke="' + color + '" stroke-width="1.6"/>';
+      case "circle":
+        return '<circle cx="27" cy="6" r="4" fill="' + f + '" stroke="' + color + '" stroke-width="1"/>';
+      case "diamond":
+        return '<polygon points="22,6 27,1.5 32,6 27,10.5" fill="' + f + '" stroke="' + color + '" stroke-width="1"/>';
+      case "triangle-tee":
+        return '<polygon points="23,2 31,6 23,10" fill="' + color + '" stroke="' + color + '"/>'
+             + '<line x1="21.5" y1="1.5" x2="21.5" y2="10.5" stroke="' + color + '" stroke-width="1.8"/>';
+      case "circle-triangle":
+        return '<polygon points="24,2 32,6 24,10" fill="' + color + '" stroke="' + color + '"/>'
+             + '<circle cx="22" cy="6" r="2.8" fill="' + f + '" stroke="' + color + '" stroke-width="0.9"/>';
+      case "triangle-backcurve":
+      case "triangle":
+      default:
+        return '<polygon points="22,2 32,6 22,10" fill="' + f + '" stroke="' + color + '" stroke-width="0.8"/>';
+    }
+  }
+
   // Default style table for edge types (used when cytoscape isn't available)
   var EDGE_LEGEND_DEFAULTS = {
     "object-property": { l:"Object Property", c:"#2563eb", lineStyle:"solid",  filled:true,  bold:false },
@@ -1088,11 +1144,14 @@ var ontoink = (function () {
       var def = EDGE_LEGEND_DEFAULTS[t] || { l:t, c:"#999", lineStyle:"solid", filled:true, bold:false };
       var color = (live && live.edgeColors[t]) || def.c;
       var ls = (live && live.edgeLineStyles[t]) || def.lineStyle;
-      var arrow = (live && live.edgeArrows[t]) || (def.filled ? "triangle" : "triangle");
+      var arrow = (live && live.edgeArrows[t]) || "triangle";
       var dash = ls === "dashed" ? "4,2" : ls === "dotted" ? "1,2" : "";
       var da = dash ? ' stroke-dasharray="'+dash+'"' : '';
-      var fillArrow = def.filled ? color : "none";
-      html += '<div class="ov-oentry"><svg width="34" height="12"><line x1="0" y1="6" x2="22" y2="6" stroke="'+color+'" stroke-width="'+(def.bold?2.5:1.5)+'"'+da+'/><polygon points="22,2 32,6 22,10" fill="'+fillArrow+'" stroke="'+color+'" stroke-width="0.8"/></svg><span>'+esc(def.l)+'</span></div>';
+      // Render the live arrow shape (tee/vee/diamond/…) rather than a fixed
+      // triangle, so Edit-Layout pointer changes are reflected. The connecting
+      // line runs full-width when the edge has no arrowhead.
+      var lineEnd = (arrow === "none") ? 32 : 22;
+      html += '<div class="ov-oentry"><svg width="34" height="12"><line x1="0" y1="6" x2="'+lineEnd+'" y2="6" stroke="'+color+'" stroke-width="'+(def.bold?2.5:1.5)+'"'+da+'/>'+arrowIconSvg(arrow, color, def.filled)+'</svg><span>'+esc(def.l)+'</span></div>';
     });
     html += '</div></div></div>';
     el.innerHTML = html;
@@ -1323,20 +1382,74 @@ var ontoink = (function () {
     return out;
   }
 
+  // ── SHACL validation ──────────────────────────────────────────────────
+  //
+  // Full SHACL (Core + SPARQL) runs in the browser via the vendored
+  // rdf-validate-shacl bundle (demo/docs/assets/shacl/shacl.mjs), loaded
+  // same-origin. If that bundle can't be loaded (e.g. an old deploy that
+  // predates it), validate() falls back to validateMinimal() — the
+  // cardinality-only checker that needs no bundle.
+  var _shaclValidatorPromise = null;
+  function loadShaclValidator() {
+    if (_shaclValidatorPromise) return _shaclValidatorPromise;
+    var base = (typeof window !== "undefined" && window.ONTOINK_ASSET_BASE) || "/assets/";
+    _shaclValidatorPromise = import(base + "shacl/shacl.mjs").catch(function(e) {
+      _shaclValidatorPromise = null;   // clear memo so a later attempt can retry
+      throw e;
+    });
+    return _shaclValidatorPromise;
+  }
+
+  // Run the full engine and map its report onto the existing renderValidation
+  // shape. Shapes are searched in BOTH the shapes pane and the data graph
+  // (a diagram may define shapes inline in either), matching the old combined
+  // behaviour; the data graph for target selection is dataTtl alone.
+  function runShaclValidation(outEl, dataTtl, shapesTtl, withReasoning) {
+    return loadShaclValidator().then(function(mod) {
+      var shapesGraph = (shapesTtl || "") + "\n" + (dataTtl || "");
+      var r = mod.validate(dataTtl || "", shapesGraph);
+      var violations = (r.results || []).map(function(x) {
+        return { focusNode: x.focusNode, path: x.path, severity: x.severity,
+                 message: x.message || (x.component ? x.component.split(/[#/]/).pop() : "Constraint violated") };
+      });
+      var suffix = withReasoning ? " (with inferences)." : ".";
+      var report = r.conforms
+        ? "All constraints satisfied" + suffix
+        : violations.length + " violation(s) found" + suffix;
+      renderValidation(outEl, { conforms: r.conforms, violations: violations, report: report });
+    });
+  }
+
   function validate(id) {
-    var inst=instances[id]; if(!inst)return;
-    var outEl=document.getElementById(id).querySelector(".ov-validation-output"); if(!outEl)return;
-    var ttl = getEditorValue(id);
-    var shapes = getShapesValue(id);
-    // Combined parse: data triples come from the source pane, shape
-    // triples from the shapes pane. We pass both to parseTtlMinimal as
-    // one document so prefix declarations from either side apply.
+    var inst = instances[id]; if (!inst) return;
+    var outEl = document.getElementById(id).querySelector(".ov-validation-output"); if (!outEl) return;
+    var ttl = getEditorValue(id), shapes = getShapesValue(id);
+    if (!(shapes && shapes.trim()) && !(inst.data.shacl || []).length) {
+      renderValidation(outEl, { conforms: null, violations: [],
+        report: "No SHACL shapes defined. Add a sh:NodeShape with sh:targetClass + sh:property on the right." });
+      return;
+    }
+    renderValidation(outEl, { conforms: null, violations: [], report: "Validating…" });
+    runShaclValidation(outEl, ttl, shapes, false).catch(function(err) {
+      if (window.console) console.warn("ontoink: full SHACL bundle unavailable, using minimal checker —", (err && err.message) || err);
+      validateMinimal(id, false);
+    });
+  }
+
+  // Cardinality-only fallback (sh:targetClass + sh:min/maxCount, named-shape
+  // pattern only). Used when the full SHACL bundle fails to load.
+  function validateMinimal(id, withReasoning) {
+    var inst = instances[id]; if (!inst) return;
+    var outEl = document.getElementById(id).querySelector(".ov-validation-output"); if (!outEl) return;
+    var ttl = getEditorValue(id), shapes = getShapesValue(id);
     var combinedTtl = (ttl || "") + "\n" + (shapes || "");
+    if (withReasoning) {
+      (inst.data.inferred || []).forEach(function(t) {
+        combinedTtl += "\n" + (t.isLiteral ? ("<" + t.s + "> <" + t.p + "> " + JSON.stringify(t.o) + " .")
+                                            : ("<" + t.s + "> <" + t.p + "> <" + t.o + "> ."));
+      });
+    }
     var parsed = parseTtlMinimal(combinedTtl), triples = parsed.triples;
-    // Try to re-extract constraints from the edited shapes; fall back
-    // to the build-time array if extraction yields nothing (e.g. when
-    // shapes use inline blank-node property syntax the minimal parser
-    // can't read).
     var sc = extractShaclFromTriples(triples);
     if (!sc.length) sc = inst.data.shacl || [];
     if (!sc.length) {
@@ -1355,9 +1468,10 @@ var ontoink = (function () {
         if(c.maxCount!=null&&cnt>c.maxCount)violations.push({focusNode:focus,path:c.path,message:c.message||("Expected max "+c.maxCount+" for "+(c.pathLabel||c.path)+", found "+cnt)});
       });
     });
+    var suffix = withReasoning ? " (with inferences)." : ".";
     var summary = violations.length
-      ? violations.length + " violation(s) found across " + sc.length + " constraint(s)."
-      : "All " + sc.length + " constraint(s) satisfied.";
+      ? violations.length + " violation(s) found across " + sc.length + " constraint(s)" + suffix
+      : "All " + sc.length + " constraint(s) satisfied" + suffix;
     renderValidation(outEl, { conforms: !violations.length, violations: violations, report: summary });
   }
   function renderValidation(el,r){
@@ -1989,37 +2103,21 @@ var ontoink = (function () {
     var c = document.getElementById(id);
     var outEl = c.querySelector(".ov-validation-output");
     if (!outEl) return;
-    // Get current TTL and append inferred triples as additional TTL statements
-    var ttl = getEditorValue(id);
     var inferred = inst.data.inferred || [];
     if (!inferred.length) { validate(id); return; }
-    // Build extra triples in Turtle syntax
+    var ttl = getEditorValue(id), shapes = getShapesValue(id);
+    // Append inferred triples to the data graph as extra Turtle statements.
     var extra = "\n# ── Inferred triples (OWL-RL) ──\n";
     inferred.forEach(function(t) {
-      if (t.isLiteral) {
-        extra += "<" + t.s + "> <" + t.p + "> " + JSON.stringify(t.o) + " .\n";
-      } else {
-        extra += "<" + t.s + "> <" + t.p + "> <" + t.o + "> .\n";
-      }
+      extra += t.isLiteral ? ("<" + t.s + "> <" + t.p + "> " + JSON.stringify(t.o) + " .\n")
+                           : ("<" + t.s + "> <" + t.p + "> <" + t.o + "> .\n");
     });
-    var combined = ttl + extra;
-    var sc = inst.data.shacl || [];
-    if (!sc.length) { renderValidation(outEl, { conforms: null, violations: [], report: "No SHACL shapes defined." }); return; }
-    var parsed = parseTtlMinimal(combined), triples = parsed.triples, violations = [];
-    sc.forEach(function(cn) {
-      if (!cn.targetClass || !cn.path) return;
-      var ti = [];
-      triples.forEach(function(t) { if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" && t.o === cn.targetClass) ti.push(t.s); });
-      if (!ti.length) triples.forEach(function(t) { if (t.p === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") triples.forEach(function(t2) { if (t2.s === t.o && t2.p === "http://www.w3.org/2000/01/rdf-schema#subClassOf" && t2.o === cn.targetClass) ti.push(t.s); }); });
-      ti.forEach(function(inst2) { var cnt = 0; triples.forEach(function(t) { if (t.s === inst2 && t.p === cn.path) cnt++; });
-        if (cn.minCount != null && cnt < cn.minCount) violations.push({ focusNode: inst2, path: cn.path, message: cn.message || ("Expected min " + cn.minCount + " for " + (cn.pathLabel || cn.path) + ", found " + cnt) });
-        if (cn.maxCount != null && cnt > cn.maxCount) violations.push({ focusNode: inst2, path: cn.path, message: cn.message || ("Expected max " + cn.maxCount + " for " + (cn.pathLabel || cn.path) + ", found " + cnt) });
-      });
-    });
-    renderValidation(outEl, { conforms: !violations.length, violations: violations, report: violations.length ? violations.length + " violation(s) found (with inferences)." : "All constraints satisfied (with inferences)." });
-    // Make editor panel visible so user sees result
+    var combinedData = (ttl || "") + extra;
+    // Reveal the editor panel so the result is visible.
     var edPanel = c.querySelector(".ov-editor-panel");
     if (edPanel && edPanel.style.display === "none") edPanel.style.display = "block";
+    renderValidation(outEl, { conforms: null, violations: [], report: "Validating…" });
+    runShaclValidation(outEl, combinedData, shapes, true).catch(function() { validateMinimal(id, true); });
   }
 
   // ── Playground: build graph from raw TTL in the browser ─────────────

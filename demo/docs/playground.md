@@ -96,13 +96,17 @@ ex:acme a ex:Organization ;
     <div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" onclick="this.closest('.ov-editor-panel').style.display='none'">&times;</button></div>
     <div class="ov-editor-split">
       <div class="ov-editor-left">
-        <div class="ov-editor-header">TTL Editor</div>
+        <div class="ov-editor-header">Source (data TTL)</div>
         <textarea class="ov-editor-textarea"></textarea>
       </div>
       <div class="ov-editor-right">
-        <div class="ov-editor-header">Validation Results</div>
-        <div class="ov-validation-output"></div>
+        <div class="ov-editor-header">SHACL Shapes</div>
+        <textarea class="ov-editor-shapes-textarea"></textarea>
       </div>
+    </div>
+    <div class="ov-editor-report">
+      <div class="ov-editor-header">Validation Report</div>
+      <div class="ov-validation-output"></div>
     </div>
     <div class="ov-editor-actions">
       <button class="ov-btn ov-btn-primary" onclick="ontoink.validate('pg-container')">Validate</button>
@@ -217,5 +221,5 @@ https://ise-fizkarlsruhe.github.io/ontoink/playground/?data=https://raw.githubus
 
 !!! info "Limitations"
     - **No OWL reasoning** — reasoning requires Python (HermiT via owlready2), which is only available when using the MkDocs plugin
-    - **Simplified SHACL** — basic `sh:minCount`/`sh:maxCount` constraints are supported; advanced SHACL features require the full plugin
+    - **Full SHACL Core** validation runs in the browser (`rdf-validate-shacl`) — `sh:datatype`, `sh:class`, `sh:pattern`, value ranges, `sh:in`, logical/shape-based constraints, property paths, etc. SHACL-SPARQL constraints (`sh:sparql`) and SHACL-AF rules (`sh:rule`) require the server/build-time pyshacl
     - For production use with reasoning and full SHACL, [install ontoink](getting-started.md) as a MkDocs plugin

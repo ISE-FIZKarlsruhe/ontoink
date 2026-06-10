@@ -8,6 +8,24 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.3] — 2026-06-10
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.3/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.3)
+
+### Added
+
+- **Full in-browser SHACL validation** — interactive **Validate** now runs a standards-compliant SHACL **Core** engine (`rdf-validate-shacl`) entirely in the browser, replacing the old cardinality-only checker. It catches `sh:datatype`, `sh:class`, `sh:nodeKind`, `sh:pattern`, value ranges, `sh:in`/`sh:hasValue`/`closed`, logical/shape-based constraints, property paths and inline blank-node shapes — verified against pyshacl. Ships as a committed same-origin bundle (`assets/shacl/shacl.mjs`), so it works on the static demo with no server. (SHACL-SPARQL constraints and SHACL-AF `sh:rule` still need the server/build-time pyshacl.)
+- **Server-side ontology dereference proxy (`/deref`)** — a generic, CORS-free, SSRF-guarded alternative to the hard-coded mirror registry; the "More…" dereference prefers it when a server is reachable and works for any ontology (including FOAF)
+
+### Fixed
+
+- **Dead ontology-mirror URLs** — the BFO and IAO entries in the known-ontology registry returned 404 (files moved); nfdicore is now version-less. Browser dereferencing of those namespaces works again
+- **Legend edge arrowheads** — the legend ignored the pointer shape chosen in *Edit Layout* and always drew a triangle; it now renders tee / vee / diamond / circle to match the graph
+- **Playground "Edit & Validate" now has a SHACL Shapes pane** — the playground's editor was missing the shapes editor, so an uploaded or `?shape=`-linked SHACL file was never shown and validation ran against empty shapes. The panel now matches the fence-rendered editor (Source | SHACL Shapes + Validation Report)
+
+---
+
 ## [0.6.2] — 2026-06-08
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.2/)
