@@ -116,6 +116,9 @@ Build SHACL shapes visually — no Turtle knowledge needed. Load an existing sha
         <button class="ov-btn" onclick="ontoink.toggleStats('se-preview-container')">Stats</button>
         <button class="ov-btn" onclick="ontoink.togglePathFinder('se-preview-container')">Paths</button>
       </div>
+      <div class="ov-toolbar-group">
+        <button class="ov-btn ov-btn-accent" onclick="ontoink.toggleEditor('se-preview-container')" title="Edit sample data &amp; validate it against your shape">Edit &amp; Validate</button>
+      </div>
     </div>
     <div class="ov-canvas-wrap" style="position:relative;width:100%;height:450px;">
       <div class="ov-canvas" style="width:100%;height:100%;"></div>
@@ -125,6 +128,26 @@ Build SHACL shapes visually — no Turtle knowledge needed. Load an existing sha
     </div>
     <div class="ov-stats-panel" style="display:none;"></div>
     <div class="ov-pathfinder-panel" style="display:none;"></div>
+    <div class="ov-editor-panel" style="display:none;">
+      <div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" onclick="this.closest('.ov-editor-panel').style.display='none'">&times;</button></div>
+      <div class="ov-editor-split">
+        <div class="ov-editor-left">
+          <div class="ov-editor-header">Sample data (edit me)</div>
+          <textarea class="ov-editor-textarea"></textarea>
+        </div>
+        <div class="ov-editor-right">
+          <div class="ov-editor-header">SHACL Shapes</div>
+          <textarea class="ov-editor-shapes-textarea"></textarea>
+        </div>
+      </div>
+      <div class="ov-editor-report">
+        <div class="ov-editor-header">Validation Report</div>
+        <div class="ov-validation-output"></div>
+      </div>
+      <div class="ov-editor-actions">
+        <button class="ov-btn ov-btn-primary" onclick="ontoink.validate('se-preview-container')">Validate</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -335,26 +358,56 @@ function seClear() {
   document.getElementById("se-preview-container").style.display = "none";
 }
 function seVisualize() {
-  var shapeTtl = document.getElementById("se-ttl-output").value;
+  var shapeTtl = document.getElementById("se-ttl-output").value;   // inline form the user copies
   if (!shapeTtl.trim()) { alert("Add at least one shape first."); return; }
   var pf = seState.prefixes;
-  var dataTtl = "";
-  Object.keys(pf).sort().forEach(function(p) { dataTtl += "@prefix " + p + ": <" + pf[p] + "> .\n"; });
-  dataTtl += "\n";
+  function ref(x) { return x.indexOf("://") >= 0 ? "<" + x + ">" : x; }
+  var prefixDecls = "";
+  Object.keys(pf).sort().forEach(function(p) { prefixDecls += "@prefix " + p + ": <" + pf[p] + "> .\n"; });
+
+  // The in-browser parser can't read inline `sh:property [ … ]` blocks, so to
+  // draw the SHAPE STRUCTURE (targetClass → each property → datatype/class with
+  // min..max) we emit an equivalent NAMED-property-shape graph here. This is
+  // diagram-only — se-ttl-output keeps the idiomatic inline form the user copies.
+  // We also build sample instance data to seed the Edit & Validate "Source" pane.
+  var vizShape = prefixDecls + "\n";
+  var sampleData = prefixDecls + "\n";
   seState.shapes.forEach(function(s, si) {
-    var tc = s.targetClass;
-    dataTtl += "ex:sample_" + si + " a " + tc + " ;\n";
-    dataTtl += '    rdfs:label "Sample ' + tc.split(":").pop() + '" ;\n';
+    var tc = ref(s.targetClass);
+    var psRefs = [], propBlocks = "";
+    s.properties.forEach(function(p, pi) {
+      if (!p.path) return;
+      var ps = "ex:_ps_" + si + "_" + pi;
+      psRefs.push(ps);
+      propBlocks += ps + " sh:path " + ref(p.path);
+      if (p.minCount != null && p.minCount !== "") propBlocks += " ; sh:minCount " + p.minCount;
+      if (p.maxCount != null && p.maxCount !== "") propBlocks += " ; sh:maxCount " + p.maxCount;
+      if (p.datatype) propBlocks += " ; sh:datatype " + p.datatype;
+      if (p.nodeKind) propBlocks += " ; sh:nodeKind " + p.nodeKind;
+      if (p.message) propBlocks += ' ; sh:message "' + String(p.message).replace(/"/g, '\\"') + '"';
+      propBlocks += " .\n";
+    });
+    vizShape += ref(s.shapeIri) + " a sh:NodeShape ;\n    sh:targetClass " + tc;
+    psRefs.forEach(function(r) { vizShape += " ;\n    sh:property " + r; });
+    vizShape += " .\n" + propBlocks + "\n";
+
+    sampleData += "ex:sample_" + si + " a " + tc + " ;\n    rdfs:label \"Sample " + s.targetClass.split(/[:#/]/).pop() + "\"";
     s.properties.forEach(function(p) {
       if (!p.path) return;
-      if (p.datatype || p.nodeKind === "sh:Literal") dataTtl += "    " + p.path + ' "example" ;\n';
-      else dataTtl += "    " + p.path + " ex:target_" + si + " ;\n";
+      if (p.datatype || p.nodeKind === "sh:Literal") sampleData += " ;\n    " + ref(p.path) + ' "example"';
+      else sampleData += " ;\n    " + ref(p.path) + " ex:target_" + si;
     });
-    dataTtl = dataTtl.replace(/;\s*$/, ".\n\n");
+    sampleData += " .\n\n";
   });
+
   var c = document.getElementById("se-preview-container");
   c.style.display = "";
-  setTimeout(function() { ontoink.playground("se-preview-container", dataTtl, shapeTtl); }, 50);
+  setTimeout(function() {
+    ontoink.playground("se-preview-container", prefixDecls, vizShape);   // draw the shape STRUCTURE
+    // Seed Edit & Validate: Source = sample data, Shapes = the inline shape the user built.
+    var ta = c.querySelector(".ov-editor-textarea"); if (ta) ta.value = sampleData;
+    var sta = c.querySelector(".ov-editor-shapes-textarea"); if (sta) sta.value = shapeTtl;
+  }, 50);
 }
 
 var SE_TEMPLATES = {
