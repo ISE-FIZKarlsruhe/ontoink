@@ -100,10 +100,12 @@ try {
     target: 'es2020',
     platform: 'browser',
     minify: true,
-    // Some rdfjs deps reference the bare `window` global at load. The playground
-    // runs in the main thread (window exists); this makes the bundle portable to
-    // Node/Web-Workers too (no-op in a normal browser).
-    banner: { js: 'globalThis.window=globalThis.window||globalThis;' },
+    // Some rdfjs deps reference the bare `window` global at load. In the browser
+    // `window` already exists, so we must NOT assign to it — `window` is a
+    // getter-only property on the global and assigning throws ("Cannot set
+    // property window ... which has only a getter"), killing the module. Only
+    // define it when genuinely absent (Node / Web-Workers).
+    banner: { js: "typeof window==='undefined'&&(globalThis.window=globalThis);" },
     outfile: OUT_FILE,
   });
 
