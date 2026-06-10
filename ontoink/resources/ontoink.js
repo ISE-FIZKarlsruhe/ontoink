@@ -1332,6 +1332,17 @@ var ontoink = (function () {
   }
   function getEditorValue(id) { var i=instances[id]; if(!i)return""; if(i.editor)return i.editor.getValue(); var t=document.getElementById(id).querySelector(".ov-editor-textarea"); return t?t.value:""; }
   function getShapesValue(id) { var i=instances[id]; if(!i)return""; if(i.shapeEditor)return i.shapeEditor.getValue(); var t=document.getElementById(id).querySelector(".ov-editor-shapes-textarea"); return t?t.value:""; }
+  // Shapes to validate against: the shapes editor pane if it has content,
+  // otherwise the originally-loaded shapes (inst.data.shapeTtl). Makes validation
+  // work even when the editor pane wasn't opened/seeded — e.g. the playground
+  // loads shapes via ?shape= and the user clicks Validate before (or without)
+  // the pane being populated by the CodeMirror editor.
+  function validationShapes(id) {
+    var s = getShapesValue(id);
+    if (s && s.trim()) return s;
+    var i = instances[id];
+    return (i && i.data && i.data.shapeTtl) || "";
+  }
 
   // ── Validation ──────────────────────────────────────────────────────────
 
@@ -1423,7 +1434,7 @@ var ontoink = (function () {
   function validate(id) {
     var inst = instances[id]; if (!inst) return;
     var outEl = document.getElementById(id).querySelector(".ov-validation-output"); if (!outEl) return;
-    var ttl = getEditorValue(id), shapes = getShapesValue(id);
+    var ttl = getEditorValue(id), shapes = validationShapes(id);
     if (!(shapes && shapes.trim()) && !(inst.data.shacl || []).length) {
       renderValidation(outEl, { conforms: null, violations: [],
         report: "No SHACL shapes defined. Add a sh:NodeShape with sh:targetClass + sh:property on the right." });
@@ -1441,7 +1452,7 @@ var ontoink = (function () {
   function validateMinimal(id, withReasoning) {
     var inst = instances[id]; if (!inst) return;
     var outEl = document.getElementById(id).querySelector(".ov-validation-output"); if (!outEl) return;
-    var ttl = getEditorValue(id), shapes = getShapesValue(id);
+    var ttl = getEditorValue(id), shapes = validationShapes(id);
     var combinedTtl = (ttl || "") + "\n" + (shapes || "");
     if (withReasoning) {
       (inst.data.inferred || []).forEach(function(t) {
@@ -2105,7 +2116,7 @@ var ontoink = (function () {
     if (!outEl) return;
     var inferred = inst.data.inferred || [];
     if (!inferred.length) { validate(id); return; }
-    var ttl = getEditorValue(id), shapes = getShapesValue(id);
+    var ttl = getEditorValue(id), shapes = validationShapes(id);
     // Append inferred triples to the data graph as extra Turtle statements.
     var extra = "\n# ── Inferred triples (OWL-RL) ──\n";
     inferred.forEach(function(t) {

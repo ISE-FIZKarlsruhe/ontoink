@@ -22,7 +22,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 - **Dead ontology-mirror URLs** — the BFO and IAO entries in the known-ontology registry returned 404 (files moved); nfdicore is now version-less. Browser dereferencing of those namespaces works again
 - **Legend edge arrowheads** — the legend ignored the pointer shape chosen in *Edit Layout* and always drew a triangle; it now renders tee / vee / diamond / circle to match the graph
-- **Playground "Edit & Validate" now has a SHACL Shapes pane** — the playground's editor was missing the shapes editor, so an uploaded or `?shape=`-linked SHACL file was never shown and validation ran against empty shapes. The panel now matches the fence-rendered editor (Source | SHACL Shapes + Validation Report)
+- **Playground "Edit & Validate" now has a SHACL Shapes pane** — the playground's editor was missing the shapes editor, so an uploaded or `?shape=`-linked SHACL file was never shown and validation ran against empty shapes. The panel now matches the fence-rendered editor (Source | SHACL Shapes + Validation Report), and validation falls back to the loaded shapes so `?data=…&shape=…` links validate even before the editor is opened
 
 ---
 

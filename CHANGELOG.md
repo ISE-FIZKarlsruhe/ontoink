@@ -71,7 +71,10 @@
   now mirrors the fence-rendered editor (Source | SHACL Shapes + a Validation
   Report row); the existing editor logic already seeds the pane from
   `data.shapeTtl`. The page's "Simplified SHACL" note was updated to reflect the
-  full SHACL Core engine.
+  full SHACL Core engine. Validation also now falls back to the originally
+  loaded shapes (`inst.data.shapeTtl`) when the editor pane isn't seeded, so a
+  `?data=…&shape=…` link validates even if the user clicks Validate before the
+  shapes editor has populated.
 
 ## [0.6.2] - 2026-06-08
 
