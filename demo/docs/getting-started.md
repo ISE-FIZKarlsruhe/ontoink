@@ -78,6 +78,92 @@ mkdocs build       # production build
 
 ---
 
+## Deploy to GitHub Pages
+
+Publish your site automatically on every push with a GitHub Actions workflow — the same way this documentation is built.
+
+[:material-download: Download the workflow](assets/deploy-mkdocs-pages.yml){ download="deploy.yml" .md-button .md-button--primary }
+
+### 1. Add the workflow
+
+Save the downloaded file (or the YAML below) as **`.github/workflows/deploy.yml`** in your repository:
+
+```yaml
+name: Deploy site
+
+on:
+  push:
+    branches: [main]        # change to your default branch if different
+  workflow_dispatch:        # also allow manual runs from the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install MkDocs + ontoink
+        run: pip install mkdocs-material ontoink
+      - name: Build the site
+        run: mkdocs build   # outputs to ./site
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+### 2. Enable GitHub Pages
+
+In your repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
+
+### 3. Set `site_url`
+
+GitHub Pages serves project sites from a sub-path (`/<repo>/`). Set `site_url` in `mkdocs.yml` so internal links and ontoink's assets resolve correctly:
+
+```yaml
+site_url: https://<your-username>.github.io/<your-repo>/
+```
+
+### 4. Push
+
+```bash
+git add .github/workflows/deploy.yml mkdocs.yml
+git commit -m "Deploy MkDocs + ontoink to GitHub Pages"
+git push
+```
+
+The **Deploy site** workflow runs under the repository's **Actions** tab. When it finishes, your site is live at the URL shown in the workflow summary.
+
+!!! note "OWL reasoning in CI"
+    The workflow above covers visualization, SHACL validation, and OWL-RL inference (all pure Python). To run the full **HermiT** reasoner at build time, the runner also needs Java — add an [`actions/setup-java`](https://github.com/actions/setup-java) step and install `ontoink[reasoning]` instead of `ontoink`.
+
+!!! tip "Self-hosting instead"
+    The same `mkdocs build` output in `site/` is a plain static site you can serve from any host (Nginx, S3, Netlify, …). ontoink loads its browser libraries from CDN, so no extra build tooling is required.
+
+---
+
 ## Configuration Options
 
 Each `ontoink` code block accepts these YAML options:
