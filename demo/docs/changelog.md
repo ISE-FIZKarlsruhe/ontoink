@@ -8,6 +8,43 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.1] — 2026-07-10
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.1/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.1)
+
+### Fixed — Live-editor DSL parser
+
+- **`@prefix ee: <http://ex#>` no longer reports "unterminated <IRI>"** — the line-comment stripper treated any `#` as a comment start, so `@prefix` lines whose namespace ended in `#` (the canonical form for RDFS / OWL) were silently truncated and the closing `>` disappeared. Fixed by tracking `<IRI>` context in the stripper. User-declared prefixes now surface correctly in the Prefixes overlay and the generated Turtle.
+- **Empty-prefix CURIE `:Person` is accepted** — the parser used to silently drop any triple that started with a `:` (Turtle default namespace); `:Local` is now a first-class CURIE.
+- **Typo detector for arrow shortcuts** — `-is->`, `-A->`, `-chian->`, and any bare-identifier arrow within Levenshtein distance ≤ 2 of a known shortcut now emits an error suggesting the correct one (`did you mean -isa-> ?`) plus the shortcut vocabulary.
+- **Every parser error now carries a plain-English hint** — a second line under the error explains what an IRI, a CURIE, or a predicate arrow is, so non-experts learn how to fix it, not just where it broke.
+
+### Fixed — Type inference
+
+- **Rank-tiered strength**: an explicit `rdf:type` (or a vocabulary-position class) beats an inferred kind from a predicate signature; no more `owl:ObjectProperty` demoted to `DatatypeProperty` because someone hangs `rdfs:label` off it.
+- **All conflict pairs reported**, not just the first-seen one.
+- **Well-known annotation properties** (`rdfs:label`, `rdfs:comment`, `skos:definition`, `dc:title`, `dcterms:description`) are typed as `owl:AnnotationProperty` when they take a literal.
+- **SHACL predicates feed the inference table**: `sh:path`, `sh:targetClass`, `sh:datatype`, `sh:class`, `sh:target[Objects|Subjects]Of`, `sh:node`, `sh:property`.
+- **Datatype ⊑ Class subsumption** accepted in `_kindsCompatible`, so `xsd:integer` on a range doesn't fire a spurious conflict.
+- **`undefined:undefined` gone from evidence labels** — full-IRI subjects now get a short label from the trailing path segment.
+- **`xsd:*` on `rdfs:domain`** types the subject as `owl:DatatypeProperty`, not `owl:ObjectProperty`.
+
+### Fixed — Rendering
+
+- **Property chains and boolean class expressions collapse `rdf:List` scaffolding.** `owl:propertyChainAxiom`, `owl:intersectionOf`, and `owl:unionOf` no longer leak `_:list0` / `_:list1` / `rdf:first` / `rdf:rest` / `rdf:nil` bubbles into the diagram. Chain axioms render as `chain 1..N`, intersections as `and 1..N`, unions as `or 1..N`.
+
+### Changed — Live editor UX
+
+- **Line-number gutter** next to the DSL editor — errors that reference "line 12, column 5" are now visually locatable, and clicking an error row jumps the caret to that position.
+- **Warnings are amber, not red** — the diagnostic strip distinguishes hard parse errors from type-inference warnings with a coloured kind pill and a hint line under the message.
+- **Playground-parity super-node + hull expand/collapse taps** — clustered views behave the same everywhere.
+- **Prefixes overlay filters to referenced prefixes only.**
+- **Widened live-editor layout** — the mkdocs content column is widened via a `:has(#live-editor-app)` guard (leaves other docs pages untouched), the right-hand TOC is hidden on this page, and pane heights use `clamp()` so tall monitors give the graph more room without breaking mobile stacking.
+- **Node / Edge popups + Legend + Prefixes overlays wired into the live editor** — the same panels the fence graphs use.
+
+---
+
 ## [0.7.0] — 2026-07-09
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.0/)

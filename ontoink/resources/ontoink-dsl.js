@@ -319,7 +319,7 @@
       // Full IRI: <http://…>
       r.pos++;
       var end = r.text.indexOf(">", r.pos);
-      if (end < 0) { r.err("unterminated <IRI>"); return null; }
+      if (end < 0) { r.err("unterminated <IRI> — expected a closing '>' before end of line"); return null; }
       var iri = r.text.substring(r.pos, end);
       r.pos = end + 1;
       return { kind: "iri", value: iri };
@@ -328,8 +328,20 @@
       // Blank node: _:b1
       r.pos += 2;
       var bn = readName(r);
-      if (!bn) { r.err("blank-node label expected after '_:'"); return null; }
+      if (!bn) { r.err("blank-node label expected after '_:' (e.g. _:b1)"); return null; }
       return { kind: "blank", value: bn };
+    }
+    // v0.7.1 — Empty-prefix CURIE `:local` (Turtle default namespace).
+    // Users writing `:Person` expect the empty prefix (`@prefix : <…>`)
+    // rather than a silent parse-drop; if the empty prefix wasn't
+    // declared, `resolvePredicate` / _iriOf still fall back to the
+    // literal `":Person"` and the DSL type inference does the right
+    // thing, but at least the triple exists.
+    if (r.peek() === ":") {
+      r.pos++;
+      var localEmpty = readName(r) || "";
+      if (!localEmpty) { r.err("expected a local name after ':' (e.g. :Person)"); return null; }
+      return { kind: "curie", prefix: "", local: localEmpty };
     }
     var first = readName(r);
     if (first === null) return null;
@@ -550,7 +562,7 @@
   // Parse the predicate portion between "-" and "->": returns a term.
   function parsePredicateArrow(r) {
     r.skipWs();
-    if (!r.match("-")) { r.err("expected '-' before predicate"); return null; }
+    if (!r.match("-")) { r.err("expected '-' to start a predicate arrow (syntax: SUBJECT -PREDICATE-> OBJECT)"); return null; }
     r.skipWs();
     // Read up to "->" — most predicates are single tokens but shortcuts
     // like `a` are alphabetic, and CURIEs like `rdf:type` include a colon.
@@ -560,10 +572,40 @@
       if (r.peek() === "-" && r.peek(1) === ">") break;
       r.pos++;
     }
-    if (!(r.peek() === "-" && r.peek(1) === ">")) { r.err("expected '->' to close predicate"); return null; }
+    if (!(r.peek() === "-" && r.peek(1) === ">")) { r.err("missing '->' to close the predicate arrow (syntax: SUBJECT -PREDICATE-> OBJECT)"); return null; }
     var raw = r.text.substring(start, r.pos).trim();
     r.pos += 2;
     return raw;
+  }
+
+  // v0.7.1 — Shortcut typo detector. If the raw arrow content is a
+  // bare unprefixed identifier that looks close to a known shortcut
+  // (`-is-> ` for `-isa-> `, `-chian-> ` for `-chain-> `, `-A-> ` for
+  // `-a-> `), emit an explanatory warning so users don't wonder why
+  // their arrow was silently reinterpreted as `ex:<typo>`. Also emit a
+  // warning when the arrow looks like it *tried* to be a shortcut
+  // (short, unprefixed) but doesn't match anything.
+  function _levenshtein(a, b) {
+    if (a === b) return 0;
+    var la = a.length, lb = b.length;
+    if (!la) return lb; if (!lb) return la;
+    var prev = new Array(lb + 1), cur = new Array(lb + 1);
+    for (var j = 0; j <= lb; j++) prev[j] = j;
+    for (var i = 1; i <= la; i++) {
+      cur[0] = i;
+      for (var jj = 1; jj <= lb; jj++) {
+        var cost = a.charAt(i-1) === b.charAt(jj-1) ? 0 : 1;
+        cur[jj] = Math.min(cur[jj-1] + 1, prev[jj] + 1, prev[jj-1] + cost);
+      }
+      var tmp = prev; prev = cur; cur = tmp;
+    }
+    return prev[lb];
+  }
+  var _SHORTCUT_KEYS = null;
+  function _shortcutKeys() {
+    if (_SHORTCUT_KEYS) return _SHORTCUT_KEYS;
+    _SHORTCUT_KEYS = Object.keys(SHORTCUT_PREDICATES);
+    return _SHORTCUT_KEYS;
   }
 
   function resolvePredicate(raw, prefixes, r) {
@@ -571,10 +613,30 @@
       var s = SHORTCUT_PREDICATES[raw];
       return { kind: "curie", prefix: s.prefix, local: s.local };
     }
+    // Typo probe: bare unprefixed identifier, no colon, short?
+    if (raw && raw.length > 0 && raw.length <= 8 && raw.indexOf(":") < 0 && /^[A-Za-z][A-Za-z0-9_-]*$/.test(raw)) {
+      var keys = _shortcutKeys();
+      var rlow = raw.toLowerCase();
+      // Case-only typo: -A-> vs -a->
+      if (SHORTCUT_PREDICATES[rlow]) {
+        r.err("shortcut '-" + raw + "->' is case-sensitive — did you mean '-" + rlow + "->'?");
+      } else {
+        // Distance 1 always; distance 2 for length ≥ 4 (catches
+        // transpositions like `chian` → `chain`).
+        var maxDist = raw.length >= 4 ? 2 : 1;
+        for (var i = 0; i < keys.length; i++) {
+          if (_levenshtein(rlow, keys[i]) <= maxDist) {
+            r.err("'-" + raw + "->' isn't a known shortcut — did you mean '-" + keys[i] + "->'? " +
+                  "(known shortcuts: -a-> for rdf:type, -isa-> for rdfs:subClassOf, -chain-> for owl:propertyChainAxiom)");
+            break;
+          }
+        }
+      }
+    }
     // Parse `raw` back through a tiny sub-reader
     var sub = new Reader(raw, r.line);
     var t = readCurieOrIri(sub);
-    if (!t) r.err("predicate '" + raw + "' is not a valid CURIE / IRI / shortcut");
+    if (!t) r.err("predicate '" + raw + "' isn't a valid CURIE (e.g. ex:knows), full IRI (<http://…>), or shortcut (-a->, -isa->, -chain->)");
     return t;
   }
 
@@ -725,16 +787,24 @@
     };
   }
 
-  // Find the index of a '#' that isn't inside a "..." string. Returns -1 if none.
+  // Find the index of a '#' that isn't inside a "..." string OR a <IRI>.
+  // v0.7.1 — Track angle-bracket depth so `<http://ex#>` isn't chopped at
+  // the '#'. Previously, any `#` inside a full-IRI truncated the line and
+  // the closing `>` disappeared into the comment — every `@prefix` line
+  // with a hash-terminated namespace ("…/rdf-schema#>", "…#>") wrongly
+  // reported "unterminated <IRI>".
   function _unquotedHash(text) {
-    var inStr = false;
+    var inStr = false, inIri = false;
     for (var i = 0; i < text.length; i++) {
       var c = text.charAt(i);
       if (inStr) {
         if (c === "\\" && i + 1 < text.length) { i++; continue; }
         if (c === '"') inStr = false;
+      } else if (inIri) {
+        if (c === ">") inIri = false;
       } else {
         if (c === '"') inStr = true;
+        else if (c === "<") inIri = true;
         else if (c === "#") return i;
       }
     }
@@ -983,34 +1053,480 @@
   // Nodes deduplicated by their canonical IRI; edge types inferred from the
   // predicate (rdf:type → 'rdf-type', rdfs:subClassOf → 'subclass', literal
   // object → 'data-property', otherwise 'object-property').
+  // v0.7.7 — Vocabulary-driven type inference. Given the parsed triples,
+  // apply well-known RDF/RDFS/OWL predicate semantics to conclude that
+  // certain IRIs are Classes, ObjectProperties, DataProperties, or
+  // NamedIndividuals, WITHOUT the user having to type them explicitly.
+  //
+  //   S rdfs:subClassOf O       ⇒ S,O : Class
+  //   S rdfs:subPropertyOf O    ⇒ S,O : Property (kind unifies)
+  //   S rdfs:domain / range O   ⇒ S : Property, O : Class (or Datatype)
+  //   S rdf:type O              ⇒ S : Individual, O : Class
+  //                              (unless O ∈ {owl:Class, owl:ObjectProperty,
+  //                               owl:DatatypeProperty, owl:AnnotationProperty,
+  //                               owl:NamedIndividual, owl:Restriction,
+  //                               owl:Thing, rdfs:Class, rdfs:Datatype})
+  //   S owl:equivalentClass O   ⇒ S,O : Class
+  //   S owl:disjointWith O      ⇒ S,O : Class
+  //   S owl:equivalentProperty O⇒ S,O : Property
+  //   S owl:inverseOf O         ⇒ S,O : ObjectProperty
+  //   S owl:sameAs O            ⇒ S,O : Individual
+  //   S owl:differentFrom O     ⇒ S,O : Individual
+  //   S owl:propertyChainAxiom L⇒ S : ObjectProperty
+  //   S owl:onProperty O        ⇒ O : Property
+  //   S owl:someValuesFrom / allValuesFrom / hasValue O ⇒ S : Restriction
+  //   S owl:onClass O           ⇒ O : Class
+  //
+  // Returns { types: Map<iri, {kind, sources: [{line, why}]}>, warnings }
+  // where warnings enumerate conflicting-type findings (e.g. same IRI
+  // typed as both Class and Individual by different triples).
+
+  function _iri(term, prefixes) { return _iriOf(term, prefixes); }
+
+  // Per-source *strength* tiers. A conflict-warning aggregator picks the
+  // primary kind by max(strength) first, then by evidence count as
+  // tiebreaker — so 10 fallback guesses can never overrule one explicit
+  // vocabulary-position assertion.
+  //   5 — vocabulary POSITION requires it (owl:onProperty target,
+  //       owl:inverseOf, rdfs:domain/range, someValuesFrom target, etc.)
+  //   4 — explicit `rdf:type X` where X is a known metaclass
+  //   3 — list-walker post-pass (property-chain member → ObjectProperty,
+  //       intersection/union member → Class)
+  //   2 — `rdf:type X` where X is unknown → Individual/Class fallback
+  //   1 — unknown-predicate fallback (predicate → ObjectProperty; literal
+  //       object → DataProperty)
+  //
+  // Keeping this on the SOURCE record (not the kind) lets the same kind
+  // arrive via multiple strengths without losing information: e.g.
+  // rdfs:label "..." records `p=rdfs:label` as an AnnotationProperty at
+  // strength 5 (from the well-known lookup), while a user-typed
+  // `ex:custom -a-> owl:DatatypeProperty` records it at strength 4.
+  var STRENGTH_POSITION = 5;
+  var STRENGTH_TYPE_KNOWN = 4;
+  var STRENGTH_LIST_WALKER = 3;
+  var STRENGTH_TYPE_FALLBACK = 2;
+  var STRENGTH_PRED_FALLBACK = 1;
+
+  // Well-known annotation-property IRIs, built once from WELL_KNOWN_TERMS
+  // so `rdfs:label`, `rdfs:comment`, `skos:definition`, `dc:title`, etc.
+  // don't get misclassified as DataProperty when they take a literal.
+  var _ANNOTATION_PROPERTY_IRIS = null;
+  function _annotationPropertyIris() {
+    if (_ANNOTATION_PROPERTY_IRIS) return _ANNOTATION_PROPERTY_IRIS;
+    var set = {};
+    for (var i = 0; i < WELL_KNOWN_TERMS.length; i++) {
+      var t = WELL_KNOWN_TERMS[i];
+      if (t.kind === "annotationProperty" && t.iri) set[t.iri] = true;
+    }
+    _ANNOTATION_PROPERTY_IRIS = set;
+    return set;
+  }
+
+  // Kind hierarchy for conflict detection: two kinds are compatible if
+  // one refines the other. Everything below "Property" refines it.
+  function _kindsCompatible(a, b) {
+    if (a === b) return true;
+    if (a === "Property" && (b === "ObjectProperty" || b === "DataProperty" || b === "AnnotationProperty")) return true;
+    if (b === "Property" && (a === "ObjectProperty" || a === "DataProperty" || a === "AnnotationProperty")) return true;
+    if (a === "Restriction" && b === "Class") return true;  // owl:Restriction ⊑ owl:Class
+    if (b === "Restriction" && a === "Class") return true;
+    // rdfs:Datatype ⊑ rdfs:Class — a user-declared xsd datatype used
+    // as a range target shouldn't fire a Class↔Datatype conflict.
+    if (a === "Datatype" && b === "Class") return true;
+    if (b === "Datatype" && a === "Class") return true;
+    // Restrictions and class expressions carry data-property values
+    // (owl:cardinality, owl:hasValue) — the "Individual" inference
+    // from a literal object is a false positive here.
+    if (a === "Restriction" && b === "Individual") return true;
+    if (b === "Restriction" && a === "Individual") return true;
+    return false;
+  }
+
+  // Render a display label for a triple term, whether it was written as
+  // a CURIE (ex:Foo) or a full IRI (<http://…>). Used in why()
+  // evidence messages so full IRIs don't come out "undefined:undefined".
+  function _termDisplay(term, prefixes) {
+    if (!term) return "?";
+    if (term.kind === "curie") return term.prefix + ":" + term.local;
+    if (term.kind === "iri") {
+      var v = term.value || "";
+      // Prefer a CURIE if any known prefix expands to a prefix of `v`.
+      if (prefixes) {
+        for (var k in prefixes) {
+          var ns = prefixes[k];
+          if (ns && v.indexOf(ns) === 0) return k + ":" + v.substring(ns.length);
+        }
+      }
+      return "<" + v + ">";
+    }
+    if (term.kind === "blank") return "_:" + term.value;
+    if (term.kind === "literal") return JSON.stringify(term.value);
+    return "?";
+  }
+
+  function _inferTypesAndWarnings(triples, prefixes) {
+    var rdf  = prefixes.rdf  || BUILTIN_PREFIXES.rdf;
+    var rdfs = prefixes.rdfs || BUILTIN_PREFIXES.rdfs;
+    var owl  = prefixes.owl  || BUILTIN_PREFIXES.owl;
+    var sh   = prefixes.sh   || BUILTIN_PREFIXES.sh || "http://www.w3.org/ns/shacl#";
+    var annoIris = _annotationPropertyIris();
+
+    // iri -> { kinds: {kind: [sources]}, primary: chosen kind }
+    // Each source carries a `strength` (see STRENGTH_* tiers above) so
+    // conflict resolution picks by max strength first, then count.
+    var typeInfo = {};
+    var warnings = [];
+
+    function record(id, kind, source, strength) {
+      if (!id) return;
+      // v0.7.7 — Never record inferences for RDF vocabulary sentinels
+      // that show up as list terminators / metaclass markers. rdf:nil
+      // is a leaf of every rdf:List and would otherwise be typed as
+      // Individual, cluttering the graph.
+      if (id === rdf + "nil") return;
+      if (!typeInfo[id]) typeInfo[id] = { kinds: {}, evidence: [] };
+      if (!typeInfo[id].kinds[kind]) typeInfo[id].kinds[kind] = [];
+      var srec = { line: source.line, why: source.why, strength: strength || STRENGTH_PRED_FALLBACK };
+      typeInfo[id].kinds[kind].push(srec);
+      typeInfo[id].evidence.push({ kind: kind, source: srec });
+    }
+
+    triples.forEach(function(t) {
+      if (!t.s || !t.p || !t.o) return;
+      var s = _iri(t.s, prefixes);
+      var o = t.o.kind === "literal" ? null : _iri(t.o, prefixes);
+      var p = _iri(t.p, prefixes);
+      var line = t.line;
+      var why = function(msg) { return { line: line, why: msg }; };
+
+      if (t.o.kind === "literal") {
+        // Any predicate to a literal ⇒ DataProperty by default, unless
+        // the predicate is a well-known annotation property (rdfs:label,
+        // rdfs:comment, skos:definition, dc:title, …) — those are
+        // AnnotationProperty regardless of subject kind. Position-level
+        // strength; a user-typed `-a-> owl:DatatypeProperty` still wins
+        // when the same predicate is asserted at strength 4 elsewhere.
+        if (annoIris[p]) {
+          record(p, "AnnotationProperty", why("well-known annotation property"), STRENGTH_POSITION);
+        } else {
+          record(p, "DataProperty", why("range is a literal"), STRENGTH_POSITION);
+        }
+        return;
+      }
+
+      // rdf:type — vocabulary-aware handling
+      if (p === rdf + "type") {
+        var oIri = o;
+        var oLabel = _termDisplay(t.o, prefixes);
+        var special = {};
+        special[owl + "Class"] = "Class";
+        special[rdfs + "Class"] = "Class";
+        special[owl + "Thing"] = "Class";
+        special[owl + "Restriction"] = "Restriction";
+        special[owl + "ObjectProperty"] = "ObjectProperty";
+        special[owl + "DatatypeProperty"] = "DataProperty";
+        special[owl + "AnnotationProperty"] = "AnnotationProperty";
+        special[owl + "NamedIndividual"] = "Individual";
+        special[rdfs + "Datatype"] = "Datatype";
+        special[owl + "FunctionalProperty"] = "Property";
+        special[owl + "InverseFunctionalProperty"] = "ObjectProperty";
+        special[owl + "TransitiveProperty"] = "ObjectProperty";
+        special[owl + "SymmetricProperty"] = "ObjectProperty";
+        special[owl + "AsymmetricProperty"] = "ObjectProperty";
+        special[owl + "ReflexiveProperty"] = "ObjectProperty";
+        special[owl + "IrreflexiveProperty"] = "ObjectProperty";
+        // SHACL metaclasses
+        special[sh + "NodeShape"] = "Class";
+        special[sh + "PropertyShape"] = "Class";
+        if (special[oIri]) {
+          record(s, special[oIri], why("declared as " + oLabel), STRENGTH_TYPE_KNOWN);
+          record(o, "Class",       why("is a vocabulary metaclass"), STRENGTH_TYPE_KNOWN);
+        } else {
+          record(s, "Individual", why("is an instance"), STRENGTH_TYPE_FALLBACK);
+          record(o, "Class",      why("is used as an rdf:type value"), STRENGTH_TYPE_FALLBACK);
+        }
+        return;
+      }
+
+      // rdfs:subClassOf
+      if (p === rdfs + "subClassOf") {
+        record(s, "Class", why("subClassOf"), STRENGTH_POSITION);
+        record(o, "Class", why("superclass"), STRENGTH_POSITION);
+        return;
+      }
+      // rdfs:subPropertyOf
+      if (p === rdfs + "subPropertyOf") {
+        record(s, "Property", why("subPropertyOf"), STRENGTH_POSITION);
+        record(o, "Property", why("superproperty"), STRENGTH_POSITION);
+        return;
+      }
+      // rdfs:domain / range
+      if (p === rdfs + "domain") {
+        record(s, "Property", why("has rdfs:domain"), STRENGTH_POSITION);
+        var domIsDatatype = o && o.indexOf("http://www.w3.org/2001/XMLSchema#") === 0;
+        // Strictly rdfs:domain must be a Class, but a user pointing it
+        // at xsd:string is more likely mistaken → tag as Datatype so
+        // it doesn't fire a false Class↔Datatype conflict.
+        record(o, domIsDatatype ? "Datatype" : "Class", why("is a domain"), STRENGTH_POSITION);
+        return;
+      }
+      if (p === rdfs + "range") {
+        record(s, "Property", why("has rdfs:range"), STRENGTH_POSITION);
+        var rngIsDatatype = o && o.indexOf("http://www.w3.org/2001/XMLSchema#") === 0;
+        record(o, rngIsDatatype ? "Datatype" : "Class", why("is a range"), STRENGTH_POSITION);
+        return;
+      }
+
+      // owl:equivalentClass / disjointWith / complementOf
+      if (p === owl + "equivalentClass" || p === owl + "disjointWith" || p === owl + "complementOf") {
+        record(s, "Class", why(t.p.local || "class relation"), STRENGTH_POSITION);
+        record(o, "Class", why(t.p.local || "class relation"), STRENGTH_POSITION);
+        return;
+      }
+      if (p === owl + "equivalentProperty") {
+        record(s, "Property", why("equivalentProperty"), STRENGTH_POSITION);
+        record(o, "Property", why("equivalentProperty"), STRENGTH_POSITION);
+        return;
+      }
+      if (p === owl + "inverseOf") {
+        record(s, "ObjectProperty", why("inverseOf"), STRENGTH_POSITION);
+        record(o, "ObjectProperty", why("inverseOf"), STRENGTH_POSITION);
+        return;
+      }
+      if (p === owl + "sameAs" || p === owl + "differentFrom") {
+        record(s, "Individual", why(t.p.local || "identity relation"), STRENGTH_POSITION);
+        record(o, "Individual", why(t.p.local || "identity relation"), STRENGTH_POSITION);
+        return;
+      }
+      if (p === owl + "propertyChainAxiom") {
+        record(s, "ObjectProperty", why("propertyChainAxiom"), STRENGTH_POSITION);
+        return;
+      }
+      if (p === owl + "onProperty") {
+        record(s, "Restriction", why("carries owl:onProperty"), STRENGTH_POSITION);
+        record(o, "Property",    why("target of owl:onProperty"), STRENGTH_POSITION);
+        return;
+      }
+      if (p === owl + "someValuesFrom" || p === owl + "allValuesFrom" || p === owl + "hasValue") {
+        record(s, "Restriction", why(t.p.local || "restriction"), STRENGTH_POSITION);
+        if (p === owl + "hasValue") {
+          record(o, "Individual", why("hasValue target"), STRENGTH_POSITION);
+        } else {
+          record(o, "Class", why((t.p.local || "restriction") + " target"), STRENGTH_POSITION);
+        }
+        return;
+      }
+      if (p === owl + "onClass") {
+        record(s, "Restriction", why("onClass carrier"), STRENGTH_POSITION);
+        record(o, "Class",       why("qualifier class"), STRENGTH_POSITION);
+        return;
+      }
+
+      // SHACL predicates — surface shape structure without demoting
+      // targets to Individual. sh:path/sh:class/sh:datatype describe
+      // property-shape geometry; the object is a Property, Class or
+      // Datatype respectively.
+      if (p === sh + "path")               { record(s, "Class", why("sh:path carrier"), STRENGTH_POSITION);
+                                             record(o, "Property", why("sh:path target"), STRENGTH_POSITION); return; }
+      if (p === sh + "targetClass")        { record(s, "Class", why("SHACL shape"), STRENGTH_POSITION);
+                                             record(o, "Class", why("sh:targetClass"), STRENGTH_POSITION); return; }
+      if (p === sh + "targetObjectsOf" ||
+          p === sh + "targetSubjectsOf")   { record(o, "Property", why(t.p.local || "sh:target..."), STRENGTH_POSITION); return; }
+      if (p === sh + "class")              { record(o, "Class", why("sh:class"), STRENGTH_POSITION); return; }
+      if (p === sh + "datatype")           { record(o, "Datatype", why("sh:datatype"), STRENGTH_POSITION); return; }
+      if (p === sh + "node")               { record(o, "Class", why("sh:node"), STRENGTH_POSITION); return; }
+      if (p === sh + "property")           { record(s, "Class", why("carries sh:property"), STRENGTH_POSITION); return; }
+
+      // v0.7.7 — Skip STRUCTURAL RDF/OWL predicates that appear in
+      // list / set encodings (rdf:first, rdf:rest, owl:intersectionOf,
+      // owl:unionOf). These wire blank nodes together and shouldn't be
+      // treated as domain object-property assertions. The list-walker
+      // below rederives node kinds from the outer axiom's context.
+      var structural = {};
+      structural[rdf + "first"] = 1;
+      structural[rdf + "rest"] = 1;
+      structural[rdf + "nil"] = 1;
+      structural[owl + "intersectionOf"] = 1;
+      structural[owl + "unionOf"] = 1;
+      structural[owl + "members"] = 1;
+      structural[owl + "distinctMembers"] = 1;
+      if (structural[p]) return;
+
+      // Unknown predicate: treat the predicate itself as an
+      // ObjectProperty at fallback strength — either side might have
+      // been declared elsewhere as a Class / Property, so we don't
+      // record S or O. The ensureNode default at graph-emit time
+      // still assigns "Individual" to truly-untyped nodes.
+      record(p, "ObjectProperty", why("used as a predicate"), STRENGTH_PRED_FALLBACK);
+    });
+
+    // v0.7.7 — List-walker post-pass. Trace `owl:propertyChainAxiom`,
+    // `owl:intersectionOf`, `owl:unionOf`, `owl:members` targets down
+    // the rdf:List and type each first-position element in the
+    // context of the outer axiom (chain members = ObjectProperty,
+    // intersection/union members = Class).
+    var rdfNil = rdf + "nil";
+    // Build a fast (subject → {predicate → object}) index for the walker.
+    var byS = {};
+    triples.forEach(function(t) {
+      var sIri = t.s ? _iri(t.s, prefixes) : "";
+      if (!sIri) return;
+      if (!byS[sIri]) byS[sIri] = {};
+      var pIri = _iri(t.p, prefixes);
+      byS[sIri][pIri] = t.o;
+    });
+    function walkList(headId, applyKind, sourceLine) {
+      var current = headId;
+      var safety = 0;
+      while (current && current !== rdfNil && safety++ < 512) {
+        var entry = byS[current];
+        if (!entry) break;
+        var first = entry[rdf + "first"];
+        if (first) applyKind(_iri(first, prefixes), sourceLine);
+        var rest = entry[rdf + "rest"];
+        current = rest ? _iri(rest, prefixes) : null;
+      }
+    }
+    triples.forEach(function(t) {
+      var p = _iri(t.p, prefixes);
+      var listHead = t.o && t.o.kind !== "literal" ? _iri(t.o, prefixes) : "";
+      if (!listHead) return;
+      if (p === owl + "propertyChainAxiom") {
+        walkList(listHead, function(id, line) {
+          if (id) record(id, "ObjectProperty",
+                        { line: line, why: "member of a property chain" },
+                        STRENGTH_LIST_WALKER);
+        }, t.line);
+      }
+      if (p === owl + "intersectionOf" || p === owl + "unionOf") {
+        walkList(listHead, function(id, line) {
+          if (id) record(id, "Class",
+                        { line: line, why: "member of a class expression list" },
+                        STRENGTH_LIST_WALKER);
+        }, t.line);
+      }
+    });
+
+    // Second pass: choose primary + report all conflicts.
+    //
+    // Ranking rule: max(source.strength) STRICTLY dominates count.
+    // Two kinds tie on strength → higher count wins; still tied → lexical.
+    // This guarantees a single explicit `rdf:type` (strength 4) beats
+    // any number of unknown-predicate fallbacks (strength 1).
+    function _pickPrimary(kindsMap) {
+      var kinds = Object.keys(kindsMap);
+      var scored = kinds.map(function(k) {
+        var srcs = kindsMap[k];
+        var maxS = 0;
+        for (var i = 0; i < srcs.length; i++) if (srcs[i].strength > maxS) maxS = srcs[i].strength;
+        return { k: k, maxS: maxS, count: srcs.length };
+      });
+      scored.sort(function(a, b) {
+        if (b.maxS !== a.maxS) return b.maxS - a.maxS;
+        if (b.count !== a.count) return b.count - a.count;
+        return a.k < b.k ? -1 : 1;
+      });
+      return scored[0].k;
+    }
+    // Return the SINGLE strongest source across ALL evidences for a
+    // kind — used when composing conflict messages so the user sees
+    // the most-informative line (a vocabulary position beats a
+    // fallback guess).
+    function _bestSource(sources) {
+      var best = sources[0];
+      for (var i = 1; i < sources.length; i++) {
+        if (sources[i].strength > best.strength) best = sources[i];
+      }
+      return best;
+    }
+
+    var primaryOf = {};
+    Object.keys(typeInfo).forEach(function(id) {
+      var info = typeInfo[id];
+      var kinds = Object.keys(info.kinds);
+      primaryOf[id] = _pickPrimary(info.kinds);
+
+      // Skip conflict warnings for blank-node scaffolding — those are
+      // internal (restriction anchors, list nodes) and any conflict is
+      // an expansion artefact.
+      if (typeof id === "string" && id.indexOf("_:") === 0) return;
+
+      // Enumerate every incompatible kind pair; emit one warning per
+      // pair so the user sees ALL conflicts, not just the first-seen.
+      for (var i = 0; i < kinds.length; i++) {
+        for (var j = i + 1; j < kinds.length; j++) {
+          var a = kinds[i], b = kinds[j];
+          if (_kindsCompatible(a, b)) continue;
+          var srcA = _bestSource(info.kinds[a]);
+          var srcB = _bestSource(info.kinds[b]);
+          warnings.push({
+            line: srcA.line || srcB.line || 0,
+            col: 1,
+            severity: "warning",
+            message: "'" + id + "' is typed as both " + a +
+                     " (line " + (srcA.line || "?") + ": " + srcA.why + ") and " +
+                     b + " (line " + (srcB.line || "?") + ": " + srcB.why + ")"
+          });
+        }
+      }
+    });
+
+    return { primaryOf: primaryOf, evidence: typeInfo, warnings: warnings };
+  }
+
   function toGraphData(parsed) {
-    if (!parsed) return { nodes: [], edges: [] };
+    if (!parsed) return { nodes: [], edges: [], warnings: [] };
     // Expand expressions BEFORE materialising the graph so restrictions
     // and class expressions render as blank-node axiom stars (v0.7.5).
     var expanded = _expandExpressions(parsed.triples);
     parsed = { prefixes: parsed.prefixes, triples: expanded, errors: parsed.errors };
+
+    // v0.7.7 — Vocabulary-driven type inference pre-pass.
+    var inferred = _inferTypesAndWarnings(expanded, parsed.prefixes);
+
     var nodesById = {};
     var edges = [];
     var edgeIdCounter = 0;
+    var colorOf = {
+      Class:              "#dbeafe",
+      Individual:         "#f3f4f6",
+      ObjectProperty:     "#e0e7ff",
+      DataProperty:       "#dcfce7",
+      AnnotationProperty: "#f3e8ff",
+      Property:           "#e0e7ff",
+      Restriction:        "#fde68a",
+      Datatype:           "#fef3c7",
+      BlankNode:          "#f3f4f6",
+      Literal:            "#f0fdf4"
+    };
 
     function ensureNode(term, isLiteralObj) {
       var id = _iriOf(term, parsed.prefixes);
       if (!id) return null;
       if (nodesById[id]) return nodesById[id];
       var label = _shortLabel(term);
-      var type = "Individual";
-      if (isLiteralObj) type = "Literal";
-      else if (term.kind === "blank") type = "BlankNode";
+      // Type resolution priority: inferred > blank > literal > individual.
+      var type = inferred.primaryOf[id];
+      if (!type) {
+        if (isLiteralObj)                type = "Literal";
+        else if (term.kind === "blank")  type = "BlankNode";
+        else                             type = "Individual";
+      }
       var n = { data: {
         id: id,
         iri: id,
         label: label,
         type: type,
         namespace: (term.kind === "curie" ? parsed.prefixes[term.prefix] || "" : ""),
-        color: type === "Class" ? "#dbeafe" : (type === "Literal" ? "#f0fdf4" : "#f3f4f6")
+        color: colorOf[type] || "#f3f4f6"
       }};
       if (term.kind === "blank" || (typeof id === "string" && id.indexOf("_:") === 0)) {
         n.data.isBlankNode = true;
+      }
+      // Attach inference evidence for the popup — users click a node
+      // and see WHY it was typed the way it was.
+      if (inferred.evidence[id]) {
+        n.data.typeEvidence = inferred.evidence[id].evidence.slice(0, 6);
       }
       nodesById[id] = n;
       return n;
@@ -1019,25 +1535,14 @@
     parsed.triples.forEach(function(t) {
       var predIri = _iriOf(t.p, parsed.prefixes);
       var predShort = _shortLabel(t.p);
-      var isType = predIri === (parsed.prefixes.rdf || BUILTIN_PREFIXES.rdf) + "type";
-      var isSubClassOf = predIri === (parsed.prefixes.rdfs || BUILTIN_PREFIXES.rdfs) + "subClassOf";
-      var isSubPropOf = predIri === (parsed.prefixes.rdfs || BUILTIN_PREFIXES.rdfs) + "subPropertyOf";
+      var rdf  = parsed.prefixes.rdf  || BUILTIN_PREFIXES.rdf;
+      var rdfs = parsed.prefixes.rdfs || BUILTIN_PREFIXES.rdfs;
+      var owl  = parsed.prefixes.owl  || BUILTIN_PREFIXES.owl;
+      var isType = predIri === rdf + "type";
+      var isSubClassOf = predIri === rdfs + "subClassOf";
+      var isSubPropOf = predIri === rdfs + "subPropertyOf";
 
-      var sNode = ensureNode(t.s, false);
-      // If this triple types the subject as a Class, upgrade its type.
-      // Types recognised: owl:Class, rdfs:Class, owl:ObjectProperty, etc.
-      if (isType && t.o && t.o.kind === "curie") {
-        var objIri = _iriOf(t.o, parsed.prefixes);
-        var owl = parsed.prefixes.owl || BUILTIN_PREFIXES.owl;
-        if (sNode && (objIri === owl + "Class" || objIri === (parsed.prefixes.rdfs || BUILTIN_PREFIXES.rdfs) + "Class")) {
-          sNode.data.type = "Class"; sNode.data.color = "#dbeafe";
-        }
-      }
-      if (isSubClassOf) {
-        if (sNode) { sNode.data.type = "Class"; sNode.data.color = "#dbeafe"; }
-        var pNode = ensureNode(t.o, false);
-        if (pNode) { pNode.data.type = "Class"; pNode.data.color = "#dbeafe"; }
-      }
+      ensureNode(t.s, false);
 
       if (t.o.kind === "literal") {
         var litId = _iriOf(t.s, parsed.prefixes) + "#lit_" + (edgeIdCounter++);
@@ -1063,6 +1568,13 @@
         if (isType) edgeType = "rdf-type";
         else if (isSubClassOf) edgeType = "subclass";
         else if (isSubPropOf) edgeType = "subclass";
+        // v0.7.7 — If the predicate is inferred to be a DataProperty,
+        // upgrade the edgeType so the styling matches.
+        if (!isType && !isSubClassOf && !isSubPropOf) {
+          var predType = inferred.primaryOf[predIri];
+          if (predType === "DataProperty") edgeType = "data-property";
+          else if (predType === "AnnotationProperty") edgeType = "annotation-property";
+        }
         edges.push({ data: {
           id: "e" + (edgeIdCounter++),
           source: _iriOf(t.s, parsed.prefixes),
@@ -1075,7 +1587,122 @@
       }
     });
 
-    return { nodes: Object.keys(nodesById).map(function(k){return nodesById[k];}), edges: edges };
+    // v0.7.7 — Collapse rdf:List scaffolding so property chains,
+    // owl:intersectionOf, and owl:unionOf render as clean fan-outs
+    // instead of exposing rdf:first/rdf:rest cells:
+    //
+    //   ex:hasGrandparent -owl:propertyChainAxiom-> _:list0
+    //   _:list0 -rdf:first-> ex:hasParent
+    //   _:list0 -rdf:rest-> _:list1
+    //   _:list1 -rdf:first-> ex:hasParent
+    //   _:list1 -rdf:rest-> rdf:nil
+    //
+    // rewrites to:
+    //
+    //   ex:hasGrandparent --chain 1--> ex:hasParent
+    //   ex:hasGrandparent --chain 2--> ex:hasParent
+    //
+    // and the list-cell blank nodes disappear from the display.
+    var rdfPfx  = parsed.prefixes.rdf  || BUILTIN_PREFIXES.rdf;
+    var owlPfx  = parsed.prefixes.owl  || BUILTIN_PREFIXES.owl;
+    var rdfNilIri = rdfPfx + "nil";
+    var rdfFirst  = rdfPfx + "first";
+    var rdfRest   = rdfPfx + "rest";
+    var chainIri  = owlPfx + "propertyChainAxiom";
+    var interIri  = owlPfx + "intersectionOf";
+    var unionIri  = owlPfx + "unionOf";
+    var membersIri= owlPfx + "members";
+    var distMembers= owlPfx + "distinctMembers";
+
+    // Build subject → predicate map from the *expanded* triples so we
+    // can walk lists inside the emit pass.
+    var listBySubject = {};
+    parsed.triples.forEach(function(t) {
+      if (!t.s || !t.p || !t.o || t.o.kind === "literal") return;
+      var sIri = _iriOf(t.s, parsed.prefixes);
+      var pIri = _iriOf(t.p, parsed.prefixes);
+      var oIri = _iriOf(t.o, parsed.prefixes);
+      if (!listBySubject[sIri]) listBySubject[sIri] = {};
+      listBySubject[sIri][pIri] = oIri;
+    });
+    function _walkListIris(headId) {
+      var out = [], cur = headId, safety = 0;
+      while (cur && cur !== rdfNilIri && safety++ < 512) {
+        var entry = listBySubject[cur];
+        if (!entry) break;
+        if (entry[rdfFirst]) out.push(entry[rdfFirst]);
+        cur = entry[rdfRest] || null;
+      }
+      return out;
+    }
+
+    // Structural predicates to strip entirely. NB: intersectionOf and
+    // unionOf are NOT in this set — the rewrite branch below expands
+    // them into per-member "and"/"or" edges. If they were stripped
+    // here the class-expression contents would disappear.
+    var structuralPreds = {};
+    structuralPreds[rdfFirst] = 1;
+    structuralPreds[rdfRest]  = 1;
+    structuralPreds[membersIri] = 1;
+    structuralPreds[distMembers] = 1;
+
+    // Collect all blank-node IRIs that participate in list scaffolding
+    // (they are subjects of rdf:first/rdf:rest, or objects of the list
+    // predicates). We'll drop them from the node list unless something
+    // else in the graph refers to them (defensive).
+    var listCells = {};
+    parsed.triples.forEach(function(t) {
+      if (!t.s || !t.p || !t.o) return;
+      var pIri = _iriOf(t.p, parsed.prefixes);
+      var sIri = _iriOf(t.s, parsed.prefixes);
+      if (pIri === rdfFirst || pIri === rdfRest) {
+        if (sIri) listCells[sIri] = 1;
+      }
+    });
+
+    // Rewrite the outer axiom edges (propertyChainAxiom / intersectionOf
+    // / unionOf) into direct edges from the subject to each member.
+    var rewrittenEdges = [];
+    edges.forEach(function(e) {
+      var pIri = e.data.iri;
+      // 1. Structural predicate → drop entirely.
+      if (structuralPreds[pIri]) return;
+      // 2. propertyChainAxiom / intersectionOf / unionOf: expand FIRST
+      //    (before the list-cell drop below), because the axiom target
+      //    is itself a list cell — dropping it would erase the chain.
+      if (pIri === chainIri || pIri === interIri || pIri === unionIri) {
+        var members = _walkListIris(e.data.target);
+        if (!members.length) return;
+        var labelBase = pIri === chainIri ? "chain" : (pIri === interIri ? "and" : "or");
+        for (var m = 0; m < members.length; m++) {
+          if (!nodesById[members[m]]) continue;
+          rewrittenEdges.push({ data: {
+            id: "e_expand_" + (edgeIdCounter++),
+            source: e.data.source,
+            target: members[m],
+            label: labelBase + " " + (m + 1),
+            iri: pIri,
+            predicate: pIri,
+            edgeType: pIri === chainIri ? "property-chain" : "class-expression"
+          }});
+        }
+        return;
+      }
+      // 3. Endpoint is a list cell or rdf:nil → drop the leftover edge.
+      if (listCells[e.data.source] || listCells[e.data.target]) return;
+      if (e.data.source === rdfNilIri || e.data.target === rdfNilIri) return;
+      rewrittenEdges.push(e);
+    });
+
+    // Drop list-cell blank nodes + rdf:nil from the node set.
+    var nodesArr = Object.keys(nodesById)
+      .filter(function(k) { return k !== rdfNilIri && !listCells[k]; })
+      .map(function(k){ return nodesById[k]; });
+    return {
+      nodes: nodesArr,
+      edges: rewrittenEdges,
+      warnings: inferred.warnings
+    };
   }
 
   function _iriOf(term, prefixes) {

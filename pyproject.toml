@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ontoink"
-version = "0.7.0"
+version = "0.7.1"
 description = "Interactive ontology visualization, SHACL validation, and live TTL editing plugin for MkDocs"
 readme = "README.md"
 license = "MIT"

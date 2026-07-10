@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Live Editor
 
 Type ontology triples in a small text notation on the left, and see the
@@ -76,7 +81,7 @@ Pick one and its `@prefix` line is auto-inserted at the top.
             <button class="ov-btn" onclick="ontoink.exportSVG('le-graph')" title="Export SVG">SVG</button>
           </div>
         </div>
-        <div class="ov-canvas-wrap" style="position:relative;width:100%;height:520px;">
+        <div class="ov-canvas-wrap" style="position:relative;width:100%;">
           <div class="ov-canvas" style="width:100%;height:100%;"></div>
           <div class="ov-legend-overlay ov-draggable" style="bottom:12px;left:12px;"></div>
           <div class="ov-ns-overlay ov-draggable" style="bottom:12px;right:12px;"></div>
@@ -107,7 +112,20 @@ Pick one and its `@prefix` line is auto-inserted at the top.
 -->
 
 <style>
+/* v0.7.1 — Widen the MkDocs Material content column ONLY on this page.
+   The `:has()` guard matches nothing on pages without #live-editor-app,
+   so the override is self-scoping — no bleed into other docs pages. */
+.md-grid:has(#live-editor-app) {
+  max-width: min(96rem, calc(100% - 1.5rem));
+}
 #live-editor-app { display: block; }
+/* v0.7.1 — Give the graph pane slightly more room than the editor pane
+   on the widened layout, and use minmax(0,·) so long DSL lines can't
+   force the parent grid to overflow. */
+#live-editor-app .le-canvas { height: 100%; }
+#live-editor-app .ov-canvas-wrap {
+  height: clamp(520px, calc(100vh - 260px), 780px);
+}
 #live-editor-app .le-toolbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 8px 12px; background: #f9fafb;
@@ -123,13 +141,37 @@ Pick one and its `@prefix` line is auto-inserted at the top.
   border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; color: #0f172a; cursor: pointer;
   max-width: 240px;
 }
-#live-editor-app .le-split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+#live-editor-app .le-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 8px; margin: 8px 0; }
 #live-editor-app .le-pane  { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; background: #fff; }
 #live-editor-app .le-pane-head { padding: 6px 12px; background: #f3f4f6; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #6b7280; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; }
 #live-editor-app .le-pane-note { color: #9ca3af; font-weight: 500; letter-spacing: 0; text-transform: none; font-size: 11px; }
 #live-editor-app .le-graph-stats { font-weight: 500; letter-spacing: 0; color: #9ca3af; text-transform: none; font-size: 11px; }
+/* v0.7.1 — Line-number gutter (JS-inserted wrapper .le-editor-wrap). */
+#live-editor-app .le-editor-wrap {
+  display: flex;
+  height: clamp(480px, calc(100vh - 300px), 720px);
+  background: #fff;
+}
+#live-editor-app .le-line-numbers {
+  flex: 0 0 auto;
+  min-width: 40px;
+  padding: 12px 6px 12px 10px;
+  text-align: right;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-right: 1px solid #e5e7eb;
+  font-family: 'Consolas','Menlo','Courier New',monospace;
+  font-feature-settings: "liga" 0, "calt" 0;
+  font-variant-ligatures: none;
+  font-size: 13px; line-height: 1.55;
+  white-space: pre;
+  overflow: hidden;
+  user-select: none;
+  pointer-events: none;
+  tab-size: 2;
+}
 #live-editor-app .le-editor {
-  width: 100%; height: 480px; box-sizing: border-box;
+  width: 100%; height: 100%; box-sizing: border-box; flex: 1 1 auto;
   padding: 12px 14px; border: 0; outline: none; resize: vertical;
   font-family: 'Consolas','Menlo','Courier New',monospace;
   font-feature-settings: "liga" 0, "calt" 0;
@@ -143,8 +185,37 @@ Pick one and its `@prefix` line is auto-inserted at the top.
   padding: 8px 12px; font-family: 'Consolas','Menlo',monospace; font-size: 12px;
   max-height: 140px; overflow-y: auto;
 }
-#live-editor-app .le-errors .le-err-row { padding: 2px 0; }
-#live-editor-app .le-errors .le-err-loc { color: #dc2626; font-weight: 700; margin-right: 8px; }
+#live-editor-app .le-errors .le-err-row {
+  padding: 6px 8px; margin: 2px 0; border-radius: 4px;
+  cursor: pointer; transition: background 0.1s;
+}
+#live-editor-app .le-errors .le-err-row:hover { background: rgba(0,0,0,0.04); }
+#live-editor-app .le-errors .le-err-loc { color: #dc2626; font-weight: 700; margin-right: 8px; font-family: 'Consolas','Menlo',monospace; }
+#live-editor-app .le-errors .le-err-kind {
+  display: inline-block; min-width: 60px; margin-right: 8px;
+  padding: 1px 6px; border-radius: 3px;
+  background: #fee2e2; color: #991b1b;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; vertical-align: middle;
+}
+#live-editor-app .le-errors .le-warn-row .le-err-kind {
+  background: #fef3c7; color: #92400e;
+}
+#live-editor-app .le-errors .le-err-msg { }
+#live-editor-app .le-errors .le-err-hint {
+  margin-top: 3px; margin-left: 68px;
+  color: #4b5563; font-size: 11px; font-style: italic;
+  line-height: 1.5;
+}
+/* v0.7.7 — Warnings (from type inference) are amber; errors stay red.
+   The row itself must override the container's red text color so the
+   whole warning body reads as amber, not just the "warn N" prefix. */
+#live-editor-app .le-errors .le-err-red   { color: #dc2626; }
+#live-editor-app .le-errors .le-err-amber { color: #b45309; }
+#live-editor-app .le-errors .le-warn-row  { background: #fffbeb; color: #92400e; }
+#live-editor-app .le-errors .le-warn-row .le-err-hint { color: #78350f; }
+#live-editor-app .le-errors { background: #fef2f2; }
+#live-editor-app .le-errors .le-warn-row + .le-warn-row { border-top: 1px dashed #fde68a; }
 #live-editor-app .le-pane-ttl { border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; background: #fff; margin-top: 8px; }
 #live-editor-app .le-ttl {
   margin: 0; padding: 12px 14px;
@@ -152,10 +223,15 @@ Pick one and its `@prefix` line is auto-inserted at the top.
   font-feature-settings: "liga" 0, "calt" 0;
   background: #0f172a; color: #e2e8f0;
   white-space: pre-wrap; word-break: break-all;
-  min-height: 60px; max-height: 260px; overflow-y: auto;
+  min-height: 60px; max-height: 360px; overflow-y: auto;
 }
 @media (max-width: 900px) {
   #live-editor-app .le-split { grid-template-columns: 1fr; }
+  /* On stacked layout the clamp()-based heights would still be tall;
+     drop back to the pre-0.7.1 fixed values so the two panes stack
+     within one viewport without needing three scroll gestures. */
+  #live-editor-app .ov-canvas-wrap { height: 520px; }
+  #live-editor-app .le-editor { height: 480px; }
 }
 
 /* v0.7.5 — Ctrl+Space autocomplete popup */

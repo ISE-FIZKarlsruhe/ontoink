@@ -1,5 +1,103 @@
 # Changelog
 
+## [0.7.1] - 2026-07-10
+
+### Fixed — Live-editor DSL parser
+- **`@prefix ee: <http://ex#>` no longer reports "unterminated <IRI>"** —
+  the line-comment stripper (`_unquotedHash`) treated every `#` as the
+  start of a comment, so any `@prefix` whose namespace ended in `#` (the
+  canonical form for RDFS / OWL vocabularies) was silently truncated and
+  the closing `>` disappeared. The stripper now tracks whether it's
+  inside a `<IRI>` and skips `#` characters that occur there. As a
+  follow-on: user-declared prefixes now show up correctly in the
+  Prefixes overlay and in the generated Turtle preview.
+- **Empty-prefix CURIE `:Person` is accepted** — the parser refused to
+  read a term starting with `:` (the Turtle default-namespace form),
+  silently dropping the whole triple with no error. `:Local` is now a
+  first-class CURIE with the empty prefix, and undeclared empty
+  prefixes fall back to a literal `":Local"` token so the triple exists
+  in the graph.
+- **Typo detector for arrow shortcuts** — writing `-is-> `, `-A-> `,
+  `-chian-> `, or any other bare-identifier arrow within Levenshtein
+  distance ≤ 2 of a known shortcut now produces an error suggesting
+  the correct one (`did you mean -isa-> ?`) and lists the full shortcut
+  vocabulary (`-a-> rdf:type`, `-isa-> rdfs:subClassOf`,
+  `-chain-> owl:propertyChainAxiom`). Case-only typos
+  (`-A-> ` vs `-a-> `) are flagged separately.
+- **Every parser error now includes a plain-English hint** — the error
+  strip in the live editor no longer just says "unterminated <IRI> at
+  line 1, col 16" and stops; a second line explains what an IRI is
+  (angle brackets, closing `>` required) and what to check. Applies to
+  `@prefix` errors, arrow syntax, blank-node labels, empty-prefix
+  terms, subject blocks, and multi-subject lists.
+
+### Fixed — Type inference
+- **Rank-tiered strength**: an explicit `rdf:type` (or a class derived
+  from a vocabulary position — `owl:Class`, `owl:ObjectProperty`,
+  `sh:NodeShape` as an object of the type triple) now outranks a kind
+  inferred from a predicate signature. Terms declared
+  `owl:ObjectProperty` are no longer demoted to `DatatypeProperty` just
+  because someone hangs `rdfs:label` off them.
+- **All conflict pairs reported** — the inference pass previously
+  stopped emitting warnings after the first contradictory pair for a
+  term; every conflict now streams to the warning row so a single edit
+  pass can address them all.
+- **Well-known annotation properties recognised** — `rdfs:label`,
+  `rdfs:comment`, `skos:definition`, `dc:title`, `dcterms:description`
+  are recorded as `owl:AnnotationProperty` when they take a literal,
+  instead of being classified as `owl:DatatypeProperty` by the
+  literal-object fallback.
+- **SHACL predicates feed the inference table** — `sh:path`,
+  `sh:targetClass`, `sh:datatype`, `sh:class`, `sh:targetObjectsOf`,
+  `sh:targetSubjectsOf`, `sh:node`, and `sh:property` now type both
+  endpoints correctly.
+- **`_kindsCompatible` accepts Datatype ⊑ Class subsumption** — a term
+  typed `rdfs:Datatype` is compatible with `owl:Class` (as it is in OWL 2),
+  so `xsd:integer` on a range no longer fires a spurious
+  `Class ↔ Datatype` conflict.
+- **`undefined:undefined` gone from evidence labels** — the
+  vocabulary-position reason strings assumed every term was a CURIE;
+  full-IRI subjects now get a display label via the trailing path
+  segment.
+- **`xsd:*` datatype detection on `rdfs:domain`** — `rdfs:domain xsd:string`
+  types the subject as `owl:DatatypeProperty` rather than
+  `owl:ObjectProperty`.
+
+### Fixed — Rendering
+- **Property chains and boolean class expressions collapse `rdf:List`
+  scaffolding** — `owl:propertyChainAxiom`, `owl:intersectionOf`, and
+  `owl:unionOf` no longer leak `_:list0` / `_:list1` / `rdf:first` /
+  `rdf:rest` / `rdf:nil` bubbles into the diagram. A chain axiom
+  renders as `chain 1..N`, an intersection as `and 1..N`, a union as
+  `or 1..N`, matching the collapsed-blank-node style already used for
+  restriction edges.
+
+### Changed — Live editor UX
+- **Line-number gutter next to the DSL editor** — errors that say
+  "line 12, column 5" are now visually locatable, and clicking an
+  error row jumps the caret to that position.
+- **Warning rows are amber, not red** — the diagnostic strip now
+  distinguishes hard parse errors (red badge, `ERROR`) from
+  type-inference warnings (amber badge, `WARNING`) with a coloured
+  kind pill and a hint line under the message.
+- **Playground-parity super-node + hull expand/collapse taps** — taps
+  on `?isSuperNode` nodes and cluster hulls now route to
+  `expandSuperNode` / `collapseSuperNode` instead of firing the
+  ordinary node popup, so clustered views behave the same everywhere.
+- **Prefixes overlay filters to referenced prefixes only** — was
+  listing every declared `@prefix`, including boilerplate ones the DSL
+  had not yet used.
+- **Widened live-editor layout** — the DSL / graph / Turtle panes were
+  cramped on 1440-wide viewports; the page now widens the mkdocs
+  content column via a `:has(#live-editor-app)` guard that leaves other
+  docs pages untouched, hides the right-hand TOC on this page, and
+  clamps pane heights with `clamp(min, calc(100vh − …), max)` so tall
+  monitors give the graph more room without breaking mobile stacking.
+- **Node / Edge popups + Legend + Prefixes overlays wired into the
+  live editor** — the same node-click popup, edge-click popup, Legend
+  overlay, and Prefixes overlay the fence graphs use are now mounted
+  by the live editor.
+
 ## [0.7.0] - 2026-07-10
 
 ### Added — Live editor with a D2-inspired DSL

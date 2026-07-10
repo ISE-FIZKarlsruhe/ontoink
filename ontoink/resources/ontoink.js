@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.6.3 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.7.1 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -6349,6 +6349,60 @@ var ontoink = (function () {
       _populateExamplesDropdown();
       // v0.7.5 — install Ctrl+Space autocomplete on the editor textarea.
       _installAutocomplete(containerId, editor);
+      // v0.7.1 — install a line-number gutter so error messages that
+      // reference "line 12, column 5" are actually locatable.
+      _installLineNumbers(editor);
+      // v0.7.7 — Playground-parity supernode + hull expand/collapse
+      // taps. Same handlers as initGraph — without these, tapping a
+      // clustered namespace bubble in the live editor was a dead-end.
+      cy.on("tap", 'node[?isSuperNode]', function(evt) {
+        var n = evt.target;
+        var inst2 = instances["le-graph"];
+        if (!inst2) return;
+        if (inst2.expandedSuperNodes.has(n.id())) collapseSuperNode("le-graph", n.id());
+        else                                       expandSuperNode("le-graph", n.id());
+        try { removePopup(graphContainer); } catch (e) {}
+      });
+      cy.on("tap", 'node[?isClusterHull]', function(evt) {
+        var n = evt.target;
+        var cid = n.data("clusterId") || n.id();
+        if (cid) collapseSuperNode("le-graph", cid);
+        try { removePopup(graphContainer); } catch (e) {}
+      });
+
+      // v0.7.7 — Playground-parity node + edge tap popups. Reuses the
+      // main buildPopup / buildEdgePopup helpers so a live-editor node
+      // shows the same IRI / CURIE / type-evidence panel a fence graph
+      // does. Blank node (`_:` prefix) taps still show a popup — useful
+      // because our type inference explains WHY the blank node exists.
+      cy.on("tap", "node", function(evt) {
+        try { removePopup(graphContainer); } catch (e) {}
+        if (evt.target.data("isSuperNode") || evt.target.data("isClusterHull")) return;
+        var d = evt.target.data(), pos = evt.renderedPosition;
+        var popup = document.createElement("div");
+        popup.className = "ov-popup";
+        popup.innerHTML = buildPopup(d, cy);
+        var cR = canvas.getBoundingClientRect(), pR = graphContainer.getBoundingClientRect();
+        popup.style.left = (cR.left - pR.left + pos.x + 15) + "px";
+        popup.style.top  = (cR.top  - pR.top  + pos.y - 15) + "px";
+        graphContainer.appendChild(popup);
+        _wireLivePopup(popup, d);
+      });
+      cy.on("tap", "edge", function(evt) {
+        try { removePopup(graphContainer); } catch (e) {}
+        var d = evt.target.data(), midpoint = evt.target.midpoint();
+        var zoom = cy.zoom(), pan = cy.pan();
+        var rx = midpoint.x * zoom + pan.x, ry = midpoint.y * zoom + pan.y;
+        var popup = document.createElement("div");
+        popup.className = "ov-popup";
+        popup.innerHTML = buildEdgePopup(d, cy);
+        var cR = canvas.getBoundingClientRect(), pR = graphContainer.getBoundingClientRect();
+        popup.style.left = (cR.left - pR.left + rx + 15) + "px";
+        popup.style.top  = (cR.top  - pR.top  + ry - 15) + "px";
+        graphContainer.appendChild(popup);
+        _wireLivePopup(popup, d);
+      });
+      cy.on("tap", function(e) { if (e.target === cy) { try { removePopup(graphContainer); } catch (e2) {} } });
 
       function refresh() {
         try { _refresh(containerId); } catch (e) {
@@ -6362,6 +6416,110 @@ var ontoink = (function () {
       });
       // Initial render.
       refresh();
+    }
+
+    // v0.7.7 — Minimal popup wiring shared by node + edge popups.
+    // Handles close button and Copy Label / Copy IRI chips.
+    function _wireLivePopup(popup, d) {
+      var close = popup.querySelector(".ov-popup-close");
+      if (close) close.addEventListener("click", function() { popup.remove(); });
+      popup.querySelectorAll(".ov-chip").forEach(function(b) {
+        b.addEventListener("click", function() {
+          if (b.classList.contains("ov-deref-btn")) {
+            try { derefIri(b.dataset.iri, b); } catch (e) {}
+            return;
+          }
+          var text = b.dataset.action === "copy-iri" ? d.iri : d.label;
+          try {
+            copyText(text, b);
+          } catch (e) {
+            try { navigator.clipboard.writeText(String(text || "")); } catch (e2) {}
+          }
+        });
+      });
+      // Collapsible sections
+      popup.querySelectorAll(".ov-popup-toggle").forEach(function(tog) {
+        tog.addEventListener("click", function() {
+          var sec = tog.dataset.section;
+          var tgt = popup.querySelector('.ov-collapsible[data-section="' + sec + '"]');
+          if (!tgt) return;
+          var open = tgt.style.display !== "none";
+          tgt.style.display = open ? "none" : "block";
+          var arrow = tog.querySelector(".ov-toggle-arrow");
+          if (arrow) arrow.textContent = open ? "▶" : "▼";
+        });
+      });
+      try { makePopupDraggable(popup); } catch (e) {}
+    }
+
+    // v0.7.1 — Line-number gutter. Wraps the editor textarea in a flex
+    // container and prepends a right-aligned monospace column that
+    // renders "1\n2\n3…" up to the textarea's current line count. The
+    // gutter's scroll offset mirrors the textarea's so long files stay
+    // aligned. Font metrics are inherited from the textarea via
+    // computed style so the gutter's baselines line up on any theme.
+    function _installLineNumbers(editor) {
+      if (!editor || editor.parentNode.classList.contains("le-editor-wrap")) return;
+      var wrap = document.createElement("div");
+      wrap.className = "le-editor-wrap";
+      var gutter = document.createElement("div");
+      gutter.className = "le-line-numbers";
+      gutter.setAttribute("aria-hidden", "true");
+      editor.parentNode.insertBefore(wrap, editor);
+      wrap.appendChild(gutter);
+      wrap.appendChild(editor);
+
+      function render() {
+        var lines = editor.value.split("\n").length;
+        // Show at least 20 rows so an empty editor still has a gutter.
+        var minRows = 20;
+        if (lines < minRows) lines = minRows;
+        var html = "";
+        for (var i = 1; i <= lines; i++) html += i + "\n";
+        gutter.textContent = html;
+      }
+      function sync() {
+        gutter.scrollTop = editor.scrollTop;
+      }
+      editor.addEventListener("input", render);
+      editor.addEventListener("scroll", sync);
+      // Keep the gutter aligned when the textarea is resized (the CSS
+      // uses resize:vertical, so the user can drag).
+      new ResizeObserver(sync).observe(editor);
+      render();
+    }
+
+    // v0.7.1 — Given a parser-error message, propose a plain-English
+    // supplementary hint so non-experts learn what to fix. Returns "" if
+    // no hint applies. The core message already contains the fix in
+    // v0.7.1 (e.g. "unterminated <IRI> — expected a closing '>' before
+    // end of line"); this adds a broader teaching aid.
+    function _errorHint(msg) {
+      if (!msg) return "";
+      msg = String(msg);
+      if (/unterminated <IRI>/i.test(msg))
+        return "IRIs are wrapped in angle brackets, e.g. <http://example.org/Person>. A missing '>' truncates the URL; check whether a comment mark '#' inside the URL was mistaken for a comment (it shouldn't be — that's a bug, please report).";
+      if (/expected ':' after prefix name/i.test(msg))
+        return "@prefix declarations look like: @prefix ex: <http://example.org/> — a prefix name, a colon, then the full IRI in angle brackets.";
+      if (/isn't a known shortcut/i.test(msg))
+        return "The shorthand arrows are: -a-> (rdf:type), -isa-> (rdfs:subClassOf), -chain-> (owl:propertyChainAxiom). For anything else use a CURIE, e.g. -rdfs:label-> or -foaf:knows-> .";
+      if (/is case-sensitive/i.test(msg))
+        return "DSL shortcuts use lowercase: -a-> not -A-> . CURIEs like -RDFS:label-> also need the exact prefix casing from your @prefix declarations.";
+      if (/missing '->' to close/i.test(msg) || /expected '-' to start a predicate arrow/i.test(msg))
+        return "A triple in this DSL is written: SUBJECT -PREDICATE-> OBJECT. Both dashes and the angle bracket are required; without them the parser can't tell where the predicate ends.";
+      if (/expected an object/i.test(msg))
+        return "After the predicate arrow the parser needs an object: another term (ex:Bob), a literal (\"hello\" or 42), or a class expression like (ex:A and ex:B).";
+      if (/blank-node label expected after '_:'/i.test(msg))
+        return "Blank nodes are written _:name where name follows the CURIE local-part rules (letters, digits, hyphen).";
+      if (/expected a local name after ':'/i.test(msg))
+        return "The empty-prefix form :Name uses the empty prefix (declare it with @prefix : <http://…>).";
+      if (/predicate .* isn't a valid CURIE/i.test(msg))
+        return "Predicates must be one of: a known shortcut (-a->, -isa->, -chain->), a CURIE (prefix:local), or a full IRI (<http://…>).";
+      if (/subject block '\{' is not supported with multiple subjects/i.test(msg))
+        return "Subject blocks are one-subject shortcuts: ex:S { -p1-> o1; -p2-> o2 } — comma-separating subjects and opening a block would be ambiguous.";
+      if (/expected subject after ','/i.test(msg))
+        return "Multi-subject lines look like: ex:A, ex:B -isa-> ex:C — no trailing comma before the arrow.";
+      return "";
     }
 
     // v0.7.5 — Ctrl+Space autocomplete popup. Wraps the editor textarea:
@@ -6565,16 +6723,56 @@ var ontoink = (function () {
       var text = st.editor.value;
       var parsed = window.ontoinkDsl.parse(text);
 
-      // Error panel.
+      // Graph render (do this early so we can merge inference warnings).
+      var graph = window.ontoinkDsl.toGraphData(parsed);
+
+      // Error + warning panel. Errors are red, warnings are amber.
+      // v0.7.1 — Each row now clickable (jumps caret to the referenced
+      // line) and carries a plain-English hint under the message so
+      // non-experts learn what's wrong instead of just where.
       if (st.errBox) {
-        if (parsed.errors && parsed.errors.length) {
-          var html = "";
-          for (var i = 0; i < parsed.errors.length; i++) {
-            var e = parsed.errors[i];
-            html += '<div class="le-err-row"><span class="le-err-loc">' + e.line + ":" + e.col + '</span>' + _escHtml(e.message) + '</div>';
-          }
-          st.errBox.innerHTML = html;
+        var rows = "";
+        (parsed.errors || []).forEach(function(e) {
+          var hint = _errorHint(e.message);
+          rows += '<div class="le-err-row" data-jump-line="' + e.line + '" data-jump-col="' + e.col + '" title="Click to jump to line ' + e.line + '">' +
+                  '<span class="le-err-loc le-err-red">' + e.line + ":" + e.col + '</span>' +
+                  '<span class="le-err-kind">error</span>' +
+                  '<span class="le-err-msg">' + _escHtml(e.message) + '</span>' +
+                  (hint ? '<div class="le-err-hint">' + _escHtml(hint) + '</div>' : '') +
+                  '</div>';
+        });
+        (graph.warnings || []).forEach(function(w) {
+          var whint = _errorHint(w.message) || "Warnings don't stop the graph from rendering — they flag a pattern (like a term typed as both Class and Property) that usually indicates a mistake somewhere in the DSL.";
+          rows += '<div class="le-err-row le-warn-row" data-jump-line="' + (w.line || 1) + '" data-jump-col="1" title="Click to jump to line ' + (w.line || 1) + '">' +
+                  '<span class="le-err-loc le-err-amber">' + (w.line || "?") + '</span>' +
+                  '<span class="le-err-kind le-err-amber">warning</span>' +
+                  '<span class="le-err-msg">' + _escHtml(w.message) + '</span>' +
+                  '<div class="le-err-hint">' + _escHtml(whint) + '</div>' +
+                  '</div>';
+        });
+        if (rows) {
+          st.errBox.innerHTML = rows;
           st.errBox.style.display = "block";
+          // Wire the click-to-jump handler.
+          st.errBox.querySelectorAll(".le-err-row").forEach(function(row) {
+            row.addEventListener("click", function() {
+              var ln = parseInt(row.dataset.jumpLine, 10);
+              var co = parseInt(row.dataset.jumpCol, 10) || 1;
+              if (!isNaN(ln) && st.editor) {
+                var lines = st.editor.value.split("\n");
+                var offset = 0;
+                for (var i = 0; i < ln - 1 && i < lines.length; i++) offset += lines[i].length + 1;
+                offset += co - 1;
+                st.editor.focus();
+                st.editor.setSelectionRange(offset, offset);
+                // Scroll caret into view.
+                try {
+                  var lh = parseFloat(getComputedStyle(st.editor).lineHeight) || 20;
+                  st.editor.scrollTop = Math.max(0, (ln - 3) * lh);
+                } catch (_e) {}
+              }
+            });
+          });
         } else {
           st.errBox.innerHTML = "";
           st.errBox.style.display = "none";
@@ -6584,8 +6782,6 @@ var ontoink = (function () {
       // Turtle preview.
       if (st.ttlOut) st.ttlOut.textContent = window.ontoinkDsl.toTurtle(parsed);
 
-      // Graph render.
-      var graph = window.ontoinkDsl.toGraphData(parsed);
       var cy = st.cy;
       cy.elements().remove();
       if (graph.nodes.length) cy.add(graph.nodes);
@@ -6601,7 +6797,22 @@ var ontoink = (function () {
         inst.data.edges = graph.edges;
         inst.data.prefixes = parsed.prefixes;
         inst.data.namespaces = parsed.prefixes;
-        inst.data.activeNamespaces = parsed.prefixes;
+        // v0.7.7 — Filter activeNamespaces to only prefixes actually
+        // referenced by the current graph. Without this, the Prefixes
+        // overlay shows all 15 built-in prefixes even for a one-triple
+        // document. Iterate all node IRIs + edge predicate IRIs and
+        // record which registered prefixes they use.
+        var referenced = {};
+        function _bumpPrefix(iri) {
+          if (!iri) return;
+          for (var k in parsed.prefixes) {
+            var ns = parsed.prefixes[k];
+            if (ns && iri.indexOf(ns) === 0) { referenced[k] = ns; return; }
+          }
+        }
+        graph.nodes.forEach(function(n) { _bumpPrefix(n.data && n.data.iri); });
+        graph.edges.forEach(function(e) { _bumpPrefix(e.data && (e.data.iri || e.data.predicate)); });
+        inst.data.activeNamespaces = Object.keys(referenced).length ? referenced : parsed.prefixes;
         // Reset the ns-clusterer's idempotency guard so a fresh parse
         // re-clusters cleanly (the DSL editor changes ontology shape
         // between keystrokes; we can't cache).
@@ -6616,8 +6827,26 @@ var ontoink = (function () {
         try { setLodLevel("le-graph", inst.lodLevel); } catch (e5) {}
       }
 
-      if (st.stats) st.stats.textContent = graph.nodes.length + " nodes · " + graph.edges.length + " edges" +
-        (parsed.errors && parsed.errors.length ? (" · " + parsed.errors.length + " error" + (parsed.errors.length === 1 ? "" : "s")) : "");
+      // v0.7.7 — Playground-parity Legend + Prefixes overlays. The
+      // graph container has `.ov-legend-overlay` and `.ov-ns-overlay`
+      // divs; rebuild them from inst.data so their content stays in
+      // sync with the current parse.
+      try {
+        var graphContainer = document.getElementById("le-graph");
+        if (graphContainer && inst && inst.data) {
+          buildLegendOverlay(graphContainer, inst.data);
+          buildNsOverlay(graphContainer, inst.data);
+        }
+      } catch (e6) {}
+
+      if (st.stats) {
+        var errN = (parsed.errors && parsed.errors.length) || 0;
+        var warnN = (graph.warnings && graph.warnings.length) || 0;
+        var extras = "";
+        if (errN)  extras += " · " + errN + " error" + (errN === 1 ? "" : "s");
+        if (warnN) extras += " · " + warnN + " warning" + (warnN === 1 ? "" : "s");
+        st.stats.textContent = graph.nodes.length + " nodes · " + graph.edges.length + " edges" + extras;
+      }
     }
 
     function _escHtml(s) {
