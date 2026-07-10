@@ -64,6 +64,27 @@ ex:acme a ex:Organization ;
     <div class="ov-toolbar-group">
       <input class="ov-search-input" type="text" placeholder="Search..." oninput="ontoink.search('pg-container',this.value)">
     </div>
+    <div class="ov-toolbar-group" title="Big-ontology mode: LOD slider + Hidden panel + Group-by-namespace. Ontoink clusters your pasted TTL by namespace on load so you can see the shape before drilling in.">
+      <span class="ov-lod-label">LOD</span>
+      <select class="ov-lod-select" onchange="ontoink.setLodLevel('pg-container',this.value)" title="Pick a level of detail">
+        <option value="0">L0 · classes only</option>
+        <option value="1">L1 · + hierarchy</option>
+        <option value="2">L2 · + individuals & object props</option>
+        <option value="3">L3 · + OWL restrictions</option>
+        <option value="4">L4 · + data props & literals</option>
+        <option value="5">L5 · everything except inferred</option>
+        <option value="6" selected>L6 · everything</option>
+      </select>
+      <button class="ov-btn" onclick="ontoink.openAtticPanel('pg-container')" title="Open the Hidden panel — everything the current LOD level has removed, with a Pin button to re-add any of it">Hidden</button>
+      <label class="ov-super-toggle" title="Group by namespace — collapse each namespace into one hexagon super-node. Uncheck to flatten every group; click a hexagon to expand just that namespace."><input type="checkbox" checked onchange="ontoink.toggleSuperNodes('pg-container',this.checked)"> Group</label>
+      <button class="ov-btn" onclick="ontoink.openFacetsPanel('pg-container')" title="Facets — narrow the view to one or more namespaces, or to nodes with OWL restrictions / annotations">Facets</button>
+      <select class="ov-lod-select" onchange="ontoink.applyStylePreset('pg-container',this.value)" title="Ontology visualization style preset">
+        <option value="ontoink" selected>Style: Ontoink</option>
+        <option value="chowlk">Style: Chowlk</option>
+        <option value="graffoo">Style: Graffoo</option>
+        <option value="vowl">Style: VOWL</option>
+      </select>
+    </div>
     <div class="ov-toolbar-group">
       <button class="ov-btn" onclick="ontoink.exportPNG('pg-container')">PNG</button>
       <button class="ov-btn" onclick="ontoink.exportSVG('pg-container')">SVG</button>
@@ -92,6 +113,27 @@ ex:acme a ex:Organization ;
   <div class="ov-pathfinder-panel" style="display:none;"></div>
   <div class="ov-sparql-panel" style="display:none;"></div>
   <div class="ov-reasoning-panel" style="display:none;"></div>
+  <!-- v0.7.0 Big-ontology mode: Attic side panel for reversible progressive
+       disclosure. openAtticPanel() looks for '.ov-attic-panel' scoped to the
+       container id; the JS renders the virtualised list into
+       '.ov-attic-body' on open. -->
+  <div class="ov-attic-panel" id="pg-container-attic" style="display:none;">
+    <div class="ov-attic-head">
+      <span class="ov-attic-title">Hidden by LOD</span>
+      <span class="ov-attic-count"></span>
+      <button class="ov-btn-close" onclick="ontoink.closeAtticPanel('pg-container')">&times;</button>
+    </div>
+    <div class="ov-attic-body"></div>
+    <div class="ov-sparql-note" style="margin:8px;font-size:11px;">Namespaces with 4+ members are grouped into hexagon super-nodes on load. Uncheck <b>Group</b> to flatten everything, or click a hexagon to expand just that namespace.</div>
+  </div>
+  <!-- v0.7.3 Facets side panel (#33) — narrow the view by namespace or content. -->
+  <div class="ov-facets-panel ov-attic-panel" id="pg-container-facets" style="display:none;">
+    <div class="ov-attic-head">
+      <span class="ov-attic-title">Facets  ·  narrow the view</span>
+      <button class="ov-btn-close" onclick="ontoink.closeFacetsPanel('pg-container')">&times;</button>
+    </div>
+    <div class="ov-attic-body" id="pg-container-facets-body"></div>
+  </div>
   <div class="ov-editor-panel" style="display:none;">
     <div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" onclick="this.closest('.ov-editor-panel').style.display='none'">&times;</button></div>
     <div class="ov-editor-split">

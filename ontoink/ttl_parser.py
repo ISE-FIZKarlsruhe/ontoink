@@ -393,15 +393,284 @@ def _extract_boolean_class_members(g: Graph) -> Tuple[List[dict], Set[BNode]]:
 
 
 # ---------------------------------------------------------------------------
+# Predicate policy — v0.7.0 semantic-tile support
+# ---------------------------------------------------------------------------
+
+# Built-in CURIE map covering the common prefixes referenced by fence-level
+# predicate policies. Used when the source graph doesn't declare a matching
+# @prefix binding.
+_BUILTIN_CURIE_MAP: Dict[str, str] = {
+    "rdf":    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs":   "http://www.w3.org/2000/01/rdf-schema#",
+    "owl":    "http://www.w3.org/2002/07/owl#",
+    "xsd":    "http://www.w3.org/2001/XMLSchema#",
+    "sh":     "http://www.w3.org/ns/shacl#",
+    "skos":   "http://www.w3.org/2004/02/skos/core#",
+    "dct":    "http://purl.org/dc/terms/",
+    "dc":     "http://purl.org/dc/elements/1.1/",
+    "prov":   "http://www.w3.org/ns/prov#",
+    "schema": "http://schema.org/",
+}
+
+# Annotation-style predicates whose folded literal object goes into
+# ``node_badges[iri]['annotations']`` rather than ``data_properties``.
+_ANNOTATION_PREDS: Set[str] = {
+    "http://www.w3.org/2000/01/rdf-schema#label",
+    "http://www.w3.org/2000/01/rdf-schema#comment",
+    "http://www.w3.org/2004/02/skos/core#prefLabel",
+    "http://www.w3.org/2004/02/skos/core#altLabel",
+    "http://www.w3.org/2004/02/skos/core#definition",
+    "http://purl.org/dc/terms/title",
+    "http://purl.org/dc/terms/description",
+    "http://purl.org/dc/elements/1.1/title",
+    "http://purl.org/dc/elements/1.1/description",
+}
+
+
+def _resolve_curie(curie: str, graph_ns: Dict[str, str]) -> Optional[str]:
+    """Expand a CURIE like ``rdfs:label`` to a full IRI using the graph's
+    prefix map first, then the built-in fallback map. Returns ``None`` when
+    the prefix cannot be resolved. Bare IRIs (containing '://') pass through
+    unchanged.
+    """
+    if not curie or not isinstance(curie, str):
+        return None
+    if "://" in curie:
+        return curie
+    if ":" not in curie:
+        return None
+    prefix, _, local = curie.partition(":")
+    ns_uri = graph_ns.get(prefix) or _BUILTIN_CURIE_MAP.get(prefix)
+    if ns_uri is None:
+        return None
+    return ns_uri + local
+
+
+def _build_prefix_map(graph: Graph) -> Dict[str, str]:
+    """Return {prefix: namespace_uri} from graph.namespaces() as strings."""
+    out: Dict[str, str] = {}
+    try:
+        for prefix, uri in graph.namespaces():
+            if prefix:
+                out[str(prefix)] = str(uri)
+    except Exception:
+        pass
+    return out
+
+
+def apply_predicate_policy(graph: Graph, policy: Optional[dict]) -> dict:
+    """Compile a predicate policy into IRI-level lookup sets.
+
+    Parameters
+    ----------
+    graph : rdflib.Graph
+        Consulted for prefix bindings so CURIE resolution matches the source
+        document's own bindings first.
+    policy : dict | None
+        The (already-merged) YAML policy dict. When ``None`` or missing
+        ``predicates:``, the returned dict has empty sets — the caller's
+        walk becomes a no-op.
+
+    Returns
+    -------
+    dict
+        {
+          "hide":       set[str],       # predicate IRIs to drop wholesale
+          "fold":       set[str],       # predicate IRIs whose literal
+                                        # objects become node badges
+          "badge":      set[str],       # object-property predicates surfaced
+                                        # as node badges instead of edges
+          "hide_prefixes": list[str],   # namespace-URI prefixes matched by
+                                        # wildcard CURIEs (e.g. prov:*)
+          "fold_prefixes": list[str],
+          "badge_prefixes": list[str],
+        }
+
+    The function does NOT mutate ``graph``.
+    """
+    result = {
+        "hide": set(),
+        "fold": set(),
+        "badge": set(),
+        "hide_prefixes": [],
+        "fold_prefixes": [],
+        "badge_prefixes": [],
+    }
+    if not policy:
+        return result
+
+    preds = policy.get("predicates") if isinstance(policy, dict) else None
+    if not preds:
+        return result
+
+    ns_map = _build_prefix_map(graph)
+
+    def _classify(items, target_set_key: str, target_prefix_key: str):
+        if not items:
+            return
+        for item in items:
+            if not isinstance(item, str):
+                continue
+            item = item.strip()
+            if not item:
+                continue
+            # Wildcard form: "prov:*"
+            if item.endswith(":*"):
+                prefix = item[:-2]
+                ns_uri = ns_map.get(prefix) or _BUILTIN_CURIE_MAP.get(prefix)
+                if ns_uri:
+                    result[target_prefix_key].append(ns_uri)
+                continue
+            iri = _resolve_curie(item, ns_map)
+            if iri:
+                result[target_set_key].add(iri)
+
+    _classify(preds.get("hide_predicates"), "hide", "hide_prefixes")
+    _classify(preds.get("fold_into_badge"), "fold", "fold_prefixes")
+    _classify(preds.get("badge_predicates"), "badge", "badge_prefixes")
+
+    return result
+
+
+def _policy_matches(iri: str, exact: Set[str], prefixes: List[str]) -> bool:
+    """Return True if ``iri`` is in ``exact`` or begins with any of ``prefixes``."""
+    if iri in exact:
+        return True
+    for p in prefixes:
+        if iri.startswith(p):
+            return True
+    return False
+
+
+def _init_node_badges_entry(node_badges: dict, subj_iri: str) -> dict:
+    """Return (creating if needed) the badge accumulator for ``subj_iri``."""
+    entry = node_badges.get(subj_iri)
+    if entry is None:
+        entry = {
+            "annotations": [],
+            "data_properties": [],
+            "counts": {"annotations": 0, "data_properties": 0, "hidden_object": 0},
+        }
+        node_badges[subj_iri] = entry
+    return entry
+
+
+def fold_literals_into_badges(cytoscape_data: dict, pol: dict) -> dict:
+    """Post-process the ``nodes``/``edges`` payload to move folded literal
+    objects into ``node_badges`` and drop the now-redundant edges (and any
+    orphan literal nodes).
+
+    Parameters
+    ----------
+    cytoscape_data : dict
+        Must contain ``nodes`` (list of dicts wrapping ``data``) and
+        ``edges`` (list of dicts wrapping ``data``).
+    pol : dict
+        As returned by :func:`apply_predicate_policy`.
+
+    Returns
+    -------
+    dict
+        The same ``cytoscape_data`` with ``node_badges`` populated in-place.
+        Also removes matching edges and orphaned literal nodes.
+    """
+    nodes = cytoscape_data.get("nodes", [])
+    edges = cytoscape_data.get("edges", [])
+    node_badges = cytoscape_data.setdefault("node_badges", {})
+
+    fold_set = pol.get("fold", set())
+    fold_prefixes = pol.get("fold_prefixes", [])
+    if not fold_set and not fold_prefixes:
+        return cytoscape_data
+
+    # Index nodes by id for quick lookup and later orphan pruning.
+    nodes_by_id: Dict[str, dict] = {}
+    for n in nodes:
+        nid = n.get("data", {}).get("id")
+        if nid is not None:
+            nodes_by_id[nid] = n
+
+    # Also index subject IRI for badge attribution.
+    def _subj_iri(source_id: str) -> Optional[str]:
+        n = nodes_by_id.get(source_id)
+        if not n:
+            return None
+        return n.get("data", {}).get("iri") or source_id
+
+    kept_edges: List[dict] = []
+    literal_touched: Set[str] = set()  # ids of literal nodes whose edges were folded
+
+    for e in edges:
+        d = e.get("data", {})
+        pred_iri = d.get("iri", "")
+        edge_type = d.get("edgeType", "")
+
+        if (edge_type == "data-property"
+                and pred_iri
+                and _policy_matches(pred_iri, fold_set, fold_prefixes)):
+            src_id = d.get("source")
+            tgt_id = d.get("target")
+            subj_iri = _subj_iri(src_id) or ""
+            tgt_node = nodes_by_id.get(tgt_id) if tgt_id else None
+            value = ""
+            if tgt_node:
+                value = tgt_node.get("data", {}).get("label", "")
+                literal_touched.add(tgt_id)
+            entry = _init_node_badges_entry(node_badges, subj_iri)
+            bucket = "annotations" if pred_iri in _ANNOTATION_PREDS else "data_properties"
+            entry[bucket].append({
+                "predicate": d.get("label") or pred_iri,
+                "predicate_iri": pred_iri,
+                "value": value,
+            })
+            entry["counts"][bucket] += 1
+            continue
+        kept_edges.append(e)
+
+    cytoscape_data["edges"] = kept_edges
+
+    # Remove literal nodes that are now orphaned.
+    if literal_touched:
+        # Recompute referenced ids from the surviving edges.
+        referenced: Set[str] = set()
+        for e in kept_edges:
+            d = e.get("data", {})
+            if d.get("source"):
+                referenced.add(d["source"])
+            if d.get("target"):
+                referenced.add(d["target"])
+        surviving: List[dict] = []
+        for n in nodes:
+            nid = n.get("data", {}).get("id")
+            if nid in literal_touched and nid not in referenced:
+                # Only prune Literal-typed nodes; never drop URI subjects.
+                if n.get("data", {}).get("type") == "Literal":
+                    continue
+            surviving.append(n)
+        cytoscape_data["nodes"] = surviving
+
+    return cytoscape_data
+
+
+# ---------------------------------------------------------------------------
 # Main parser
 # ---------------------------------------------------------------------------
 
-def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
+def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optional[dict] = None) -> dict:
     """
     Parse TTL files and return Cytoscape.js elements + metadata.
 
     Returns dict with keys: nodes, edges, shacl, namespaces, edgeStyles, nodeStyles,
     rawTtl (for editor), shapeTtl (for validation).
+
+    Parameters
+    ----------
+    policy : dict | None
+        Optional predicate/cluster/LOD policy (fence-level YAML). When given,
+        ``predicates.hide_predicates`` triples are skipped during the Step-2
+        walk and ``predicates.fold_into_badge`` triples are diverted to the
+        ``node_badges`` accumulator so their literal objects become node
+        badges instead of separate literal nodes + edges.
     """
     g = Graph()
     g.parse(data_path, format="turtle")
@@ -421,6 +690,9 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
     all_ttl = raw_ttl + "\n" + shape_ttl
     namespaces = _extract_namespaces(g, all_ttl)
     obj_props, data_props = _detect_property_types(g)
+
+    # Compile the predicate policy once (empty sets when no policy given).
+    pol = apply_predicate_policy(g, policy)
 
     # -----------------------------------------------------------------------
     # Step 1: Identify classes
@@ -463,6 +735,12 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
     nodes: Dict[str, dict] = {}
     edges: List[dict] = []
     seen_edges: set = set()
+    node_badges: Dict[str, dict] = {}
+
+    # For each subject seen with a folded predicate, we still need to make
+    # sure the subject node exists — since the badge (§node_badges) attaches
+    # to it. Collected here so we can re-emit isolated subjects in step 2b'.
+    fold_subjects: Set[str] = set()
 
     for s, p, o in g:
         if p in (RDF.first, RDF.rest):
@@ -476,6 +754,33 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
            (isinstance(o, BNode) and o in restriction_bnodes):
             continue
         if isinstance(s, BNode) or isinstance(o, BNode):
+            continue
+
+        p_iri = str(p)
+        # POLICY: hide_predicates — drop the triple entirely.
+        if _policy_matches(p_iri, pol["hide"], pol["hide_prefixes"]):
+            continue
+        # POLICY: fold literal objects into node badges. Recorded here for
+        # step 2 to skip the edge/literal emission; the fold pass below
+        # runs a defensive sweep for anything that leaked through.
+        if isinstance(o, Literal) and _policy_matches(
+                p_iri, pol["fold"], pol["fold_prefixes"]):
+            if isinstance(s, URIRef):
+                subj_iri = str(s)
+                fold_subjects.add(subj_iri)
+                # Emit the badge immediately.
+                entry = _init_node_badges_entry(node_badges, subj_iri)
+                bucket = "annotations" if p_iri in _ANNOTATION_PREDS else "data_properties"
+                lang = getattr(o, "language", None)
+                datatype = getattr(o, "datatype", None)
+                entry[bucket].append({
+                    "predicate": resolve_predicate_label(p, g),
+                    "predicate_iri": p_iri,
+                    "value": str(o),
+                    "lang": lang,
+                    "datatype": str(datatype) if datatype else None,
+                })
+                entry["counts"][bucket] += 1
             continue
 
         s_id = _node_id(s)
@@ -589,6 +894,33 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
                         "edgeWidth": style[3],
                     }
                 })
+
+    # -----------------------------------------------------------------------
+    # Step 2a': Materialise subject nodes for any subject that only shows
+    # up as the source of folded (badge-diverted) triples. Without this the
+    # badge would have no host node to attach to on the client.
+    for subj_iri in fold_subjects:
+        subj_node = URIRef(subj_iri)
+        subj_id = _node_id(subj_node)
+        if subj_id in nodes:
+            continue
+        source_name, color = detect_source(subj_iri)
+        node_type = "Class" if subj_iri in classes else "Individual"
+        shape = NODE_STYLES[node_type][0]
+        if node_type == "Individual":
+            color = NODE_STYLES["Individual"][1]
+        nodes[subj_id] = {
+            "data": {
+                "id": subj_id,
+                "label": resolve_label(subj_node, g),
+                "type": node_type,
+                "color": color,
+                "shape": shape,
+                "iri": subj_iri,
+                "source": source_name,
+                "namespace": _ns_for_uri(subj_iri, namespaces),
+            }
+        }
 
     # -----------------------------------------------------------------------
     # Step 2b: Materialise nodes for isolated classes.
@@ -842,7 +1174,7 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
     consistency = _check_consistency(g)
     smells = _detect_smells(g, nodes, edges, classes, shacl_data, namespaces, shape_graph)
 
-    return {
+    result = {
         "nodes": list(nodes.values()),
         "edges": edges,
         "shacl": shacl_data,
@@ -856,7 +1188,15 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None) -> dict:
         "metrics": metrics,
         "consistency": consistency,
         "smells": smells,
+        "node_badges": node_badges,
     }
+
+    # Defensive fold pass: any folded literal that slipped through
+    # (e.g. via the OWL-restriction filler literal branch) is uniformly
+    # moved into node_badges, matching edges dropped, orphan literals pruned.
+    fold_literals_into_badges(result, pol)
+
+    return result
 
 
 def _ns_for_uri(uri_str: str, namespaces: Dict[str, str]) -> str:

@@ -8,6 +8,34 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.0] — 2026-07-09
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.0/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.0)
+
+### Added
+
+- **Big-ontology mode — Semantic-Tile bundle** — a coordinated set of build-time + runtime knobs that lets one ontoink diagram scale from a tiny example to a 100 000-triple ontology without swamping the browser. Opt-in: a fence with no YAML config still renders exactly the same graph 0.6.1 rendered.
+    - **Build-time literal-fold + predicate-policy YAML config** — `predicates: { hide_predicates, fold_into_badge, badge_predicates }` (CURIEs resolve against the source graph's own prefixes; `prov:*` wildcards match by namespace URI). Folded literals migrate into `node_badges`; hidden predicates are dropped wholesale.
+    - **Leiden clustering with LLM-titled super-nodes and JSON side-store** — needs `ontoink[cluster]` (python-igraph + leidenalg). `ontoink[topic]` (anthropic + openai) additionally names each community; a missing library or missing API key falls back to a deterministic synthetic title.
+    - **Element-removing semantic zoom (L0..L6) slider** — new toolbar slider, default L2. L0 = super-nodes + top-K central classes only, L6 = everything (SHACL + inferred).
+    - **Attic side panel for reversible progressive disclosure** — every element hidden by the LOD slider is snapshotted into a per-diagram Attic; a pin button re-adds it to the canvas regardless of the slider.
+    - **SPARQL endpoint result graphs get the same LOD slider + Attic** — SELECT rows projecting `?s ?p ?o` now materialise into the live graph, are sanitised through the same `predicates:` policy, and settle into the Attic when hidden. Community detection stays build-time only.
+- **Optional dependency groups** — `[cluster]` (python-igraph + leidenalg) for community detection, `[topic]` (anthropic + openai) for super-node titling. Neither is required for the default rendering path.
+
+### Changed
+
+- **Fence toolbar** gains a new group between search and export: LOD slider + LOD value badge + **Attic** button + **Super** checkbox.
+- **Super-node styling** — hexagon with a double 3-px cyan border, chunkier font, and a `·N` member count in the label. Clicking a super-node expands / collapses its community; the ordinary node popup does not fire.
+- **CSS design tokens** — new `--ov-attic-*`, `--ov-super-*`, `--ov-badge-*`, `--ov-restriction-*` tokens make every new control themable via Edit Layout.
+
+### Fixed
+
+- **No-config regression** — the predicate policy compiles to empty sets when no policy is given, so `parse_ttl_to_cytoscape(path)` returns the exact triple-by-triple output shape 0.6.1 emitted. Verified by the existing test suite (83 passed, 4 skipped, no test changes).
+- **Attic z-index isolation** — the panel sits inside `.ontoink-container` (which is `isolation: isolate` since 0.6.1) so its `z-index: 400` cannot escape over the host site's sticky chrome.
+
+---
+
 ## [0.6.3] — 2026-06-10
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.3/)

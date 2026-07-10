@@ -47,6 +47,139 @@ After `mkdocs serve`, open <http://127.0.0.1:8000/playground/>:
 
 A working sample SHACL ontology pair is in [`demo/docs/examples/`](demo/docs/examples/).
 
+## 4a. Big-ontology mode (v0.7.0)
+
+The v0.7.0 Semantic-Tile bundle is opt-in — a fence with no YAML config
+still renders the exact same graph 0.6.1 rendered — so first confirm the
+default path is untouched:
+
+```bash
+# Regression: no policy, no clustering, no LOD toolbar changes
+python -c "from ontoink.ttl_parser import parse_ttl_to_cytoscape; \
+    r = parse_ttl_to_cytoscape('tests/fixtures/sample-data.ttl'); \
+    print('nodes=', len(r['nodes']), 'edges=', len(r['edges']))"
+```
+
+The output must match the 0.6.1 snapshot. Then exercise the new
+layers.
+
+### Prerequisites
+
+```bash
+pip install -e ".[dev,cluster]"    # + [topic] if you want LLM-titled super-nodes
+# On Windows, python-igraph may need a build toolchain — see igraph docs.
+```
+
+### Build the sample ontologies through the pipeline
+
+Fetch a large public ontology (ChEBI or IAO) and run it through the
+parser to confirm the clustering + predicate-policy pipeline handles it.
+
+```bash
+# ChEBI — very large (~2 GB uncompressed). Skip if you're on a slow disk.
+mkdir -p /tmp/big-onto
+curl -L -o /tmp/big-onto/chebi.owl.gz \
+    "https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.owl.gz"
+gunzip /tmp/big-onto/chebi.owl.gz
+# rdflib can parse OWL/XML directly — but ChEBI is a lot; give it time.
+
+# IAO — smaller, still exercises the big-ontology paths.
+curl -L -o /tmp/big-onto/iao.owl \
+    "https://raw.githubusercontent.com/information-artifact-ontology/IAO/v2026-03-30/iao.owl"
+```
+
+Now run through the pipeline:
+
+```bash
+python - <<'PY'
+from ontoink.ttl_parser import parse_ttl_to_cytoscape
+from ontoink.cluster import detect_clusters
+from ontoink.cluster_titles import title_clusters
+
+policy = {
+    "predicates": {
+        "hide_predicates":  ["prov:*", "owl:versionInfo"],
+        "fold_into_badge":  ["rdfs:label", "rdfs:comment", "skos:definition"],
+        "badge_predicates": [],
+    }
+}
+
+# NOTE: parse_ttl_to_cytoscape expects turtle; convert first if you fetched OWL/XML:
+#     rapper -i rdfxml -o turtle /tmp/big-onto/iao.owl > /tmp/big-onto/iao.ttl
+data = parse_ttl_to_cytoscape("/tmp/big-onto/iao.ttl", policy=policy)
+print("Post-policy nodes:", len(data["nodes"]), "edges:", len(data["edges"]))
+print("Badged subjects  :", len(data.get("node_badges", {})))
+
+top_nodes, top_edges, clusters, side, cent = detect_clusters(
+    data, algorithm="leiden", min_size=8, max_supernodes=30
+)
+title_clusters(clusters, side, provider="anthropic")  # optional — omit for synthetic titles
+print("Super-nodes:", len(clusters), "avg size:",
+      round(sum(c['size'] for c in clusters) / max(len(clusters), 1), 1))
+print("Sample title:", clusters[0]["title"] if clusters else "(no communities)")
+PY
+```
+
+Expected output for IAO: dozens of super-nodes, each 8-40 members, with
+titles like *"Information Content Entities"* / *"Editor Notes and
+Provenance"* (LLM path) or *"MaterialInformationEntity and ContinuantFiat"*
+(synthetic path — deterministic fallback).
+
+### Manual UI checks (in the playground)
+
+After `mkdocs serve`, open a big diagram and step through:
+
+- **LOD slider (0..6)** — drag left-to-right. Each stop should reveal a
+  new layer:
+  - L0 = super-nodes + top-K central classes only
+  - L1 = adds every class
+  - L2 = adds object-property edges (default)
+  - L3 = adds OWL restriction pills (`∃/∀/=`)
+  - L4 = adds individuals
+  - L5 = adds data-property edges
+  - L6 = adds SHACL constraints + inferred triples
+  Verify: hiding a node also hides its incident edges (no dangling
+  arrows), and dragging **back** restores the exact same layout — the
+  Attic snapshot must be reversible.
+- **Attic drawer** — click **Attic** in the toolbar. The panel opens on
+  the right, virtualised by type. Pin a hidden node — it re-appears on
+  the canvas regardless of the current LOD level. Close the panel via
+  the × button.
+- **Super-node click** — a hexagon with a `·N` count. Clicking should
+  expand the community into its interior sub-graph (loaded from
+  `data-ontoink-side-store`); a second click re-collapses. Confirm the
+  ordinary node popup does **not** fire.
+- **Super checkbox** — un-tick to render every community's members
+  in-place (skipping the super-node collapse); re-tick to restore.
+- **SPARQL results respect the predicate policy** — open the SPARQL
+  panel, run `SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 100`. The result
+  rows should materialise into the live graph, folded through the same
+  `predicates:` policy the fence configured — hidden predicates stay
+  hidden, folded literals become node badges, not separate literal
+  nodes. A grey pill above the result table should read
+  *"SPARQL results — clustering unavailable for live queries"*.
+
+### Regression: fences with no YAML config
+
+Open an existing (pre-0.7.0) example page and re-verify:
+
+- The toolbar renders the LOD slider group but the default value (L2)
+  produces the same set of visible elements the page rendered in 0.6.1.
+- No super-nodes are present (clustering did not run).
+- The Attic is empty — everything is on the canvas — until the user
+  drags the slider left.
+
+If any of those regressions fire, the culprit is almost always a
+non-empty `pol` set leaking through when the config is absent. Reproduce
+with:
+
+```bash
+python -c "from ontoink.ttl_parser import apply_predicate_policy; \
+    from rdflib import Graph; \
+    print(apply_predicate_policy(Graph(), None))"
+# → {'hide': set(), 'fold': set(), 'badge': set(), ...}   ← must all be empty
+```
+
 ## 5. Docker image
 
 ### Prerequisites

@@ -279,7 +279,12 @@ var ontoink = (function () {
     if (d.message) html += '<div class="ov-popup-meta">Message: ' + esc(d.message) + '</div>';
     // OWL restriction details: surface the operator + predicate + filler so the
     // reader sees the Manchester-style rendering even after the bnode is hidden.
-    if (d.edgeType === "owl-restriction") {
+    // v0.7.3-fix (adversarial finding #10): skip this block for FANNED
+    // super-edges (clusterManaged + weight > 1) — the "Bundle: N relations"
+    // block below already summarises them, and the owlOp/owlOpSymbol
+    // fields are stale (they come from the first origEdge only, not the
+    // aggregate). Keep it for non-fanned owl-restriction edges.
+    if (d.edgeType === "owl-restriction" && !(d.clusterManaged && d.weight && d.weight > 1)) {
       var owlOp = d.owlOp || "";
       var owlSym = d.owlOpSymbol || "";
       var n = (d.owlCardinality != null) ? d.owlCardinality : "";
@@ -298,6 +303,25 @@ var ontoink = (function () {
       html += '<div class="ov-popup-meta">Operator: <code>owl:' + esc(owlOp) + '</code></div>';
       if (d.owlPredicate) html += '<div class="ov-popup-meta">On property: <a href="'+esc(d.owlPredicate)+'" target="_blank">'+esc(d.owlPredicate)+'</a></div>';
       if (d.owlFiller) html += '<div class="ov-popup-meta">Filler: <a href="'+esc(d.owlFiller)+'" target="_blank">'+esc(d.owlFiller)+'</a></div>';
+    }
+    // v0.7.3 \u2014 Edge fanning: cluster-managed edge with weight > 1
+    // aggregates N originals. Show the count + underlying predicate
+    // list so the user sees WHAT connects the two clusters.
+    if (d.clusterManaged && d.weight && d.weight > 1) {
+      var fanArr = (d.fan && d.fan.length) ? d.fan : [];
+      html += '<div class="ov-popup-section"><strong>Bundle:</strong> ' + esc(String(d.weight)) + ' relations</div>';
+      if (fanArr.length) {
+        var maxShow = 12;
+        var shown = fanArr.slice(0, maxShow);
+        html += '<div style="font-size:11px;color:#4b5563;margin:4px 0 0 8px;max-height:180px;overflow-y:auto;">';
+        for (var fi = 0; fi < shown.length; fi++) {
+          html += '<div style="margin:2px 0;font-family:monospace;">' + esc(shown[fi]) + '</div>';
+        }
+        if (fanArr.length > maxShow) {
+          html += '<div style="margin:2px 0;color:#9ca3af;">\u2026and ' + (fanArr.length - maxShow) + ' more</div>';
+        }
+        html += '</div>';
+      }
     }
     html += '<div class="ov-popup-actions"><button class="ov-chip" data-action="copy-label">Copy Label</button>';
     if (d.iri) html += '<button class="ov-chip" data-action="copy-iri">Copy IRI</button>';
@@ -1013,6 +1037,1766 @@ var ontoink = (function () {
     return info2;
   }
 
+  // ── Big-Ontology Mode (LOD / Attic / Super-nodes / Folded Badges) ───────
+  //
+  // A single-file front-end for the "Semantic-Tile" pipeline stages:
+  //
+  //   1. loadSideStore(id)               — read the base64 side-store payload
+  //   2. setLodLevel(id, level)          — reversibly show/hide elements
+  //                                        via cy.add/cy.remove (never CSS
+  //                                        display:none), snapshotting the
+  //                                        cyto JSON into inst.attic Map
+  //   3. expand/collapseSuperNode(...)   — swap a cluster placeholder for
+  //                                        its interior sub-graph
+  //   4. openAtticPanel / pinFromAttic   — surface hidden elements + let the
+  //                                        user pin any one back onto the
+  //                                        canvas
+  //   5. renderNodeBadges                — chip overlays for folded
+  //                                        annotations / data properties
+  //   6. applyPredicatePolicyToElements  — used by runSparql to fold /
+  //                                        drop predicates on freshly
+  //                                        materialised triples
+  //   7. triplesToElements               — helper for the SPARQL ?s ?p ?o
+  //                                        materialisation
+  //
+  // ES5-compatible: var, Map, Set, Object.assign (all present elsewhere in
+  // this file already).
+
+  // Built-in predicate → LOD floor. Elements whose edgeType matches surface
+  // only once the slider reaches this level.
+  var _LOD_EDGE_FLOOR = {
+    "subclass": 1,
+    "rdf-type": 1,
+    "object-property": 2,
+    "owl-restriction": 3,
+    "shacl-constraint": 3,
+    "data-property": 4,
+    "inferred": 6
+  };
+  // Built-in CURIE → prefix map for wildcard resolution when the graph
+  // doesn't bind the prefix itself. Mirrors the Python side.
+  var _BUILTIN_PREFIXES = {
+    "rdf":  "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "owl":  "http://www.w3.org/2002/07/owl#",
+    "xsd":  "http://www.w3.org/2001/XMLSchema#",
+    "sh":   "http://www.w3.org/ns/shacl#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "dct":  "http://purl.org/dc/terms/",
+    "dc":   "http://purl.org/dc/elements/1.1/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "schema": "http://schema.org/"
+  };
+
+  function _decodeUtf8Base64(b64) {
+    var binStr = atob(b64);
+    var bytes = new Uint8Array(binStr.length);
+    for (var i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  function loadSideStore(id) {
+    var inst = instances[id]; if (!inst) return;
+    var container = document.getElementById(id);
+    if (!container) return;
+    var b64 = container.getAttribute("data-ontoink-side-store");
+    if (!b64) { inst.sideStore = {}; return; }
+    try { inst.sideStore = JSON.parse(_decodeUtf8Base64(b64)); }
+    catch (e) { inst.sideStore = {}; }
+    // v0.7.3-fix (adversarial review finding #5): when build-time
+    // clustering (fence.py + cluster.py) shipped the side-store, we
+    // ALSO need to synthesize the two fields that only the browser-side
+    // `_autoClusterByNamespace` writes: `_memberToCid` (id → cluster id)
+    // for expandSuperNode / setLodLevel to identify cluster interior,
+    // and `_origEdges` (pristine edge snapshot) for `_rebuildClusterBoundary`
+    // to recompute cross-cluster edges on expand/collapse. Without this
+    // the pre-built cluster path is a black hole: clicking a super-node
+    // adds members but no boundary edges reconnect them to the rest of
+    // the graph.
+    _syncClusterMetaFromShipped(inst);
+  }
+
+  // Populate inst._memberToCid + inst._origEdges from inst.data.clusters
+  // and inst.data.edges when they weren't produced by the browser-side
+  // auto-clusterer. Safe to call multiple times — it's idempotent because
+  // it overwrites the entire fields based on inst.data.
+  function _syncClusterMetaFromShipped(inst) {
+    if (!inst || !inst.data) return;
+    var clusters = inst.data.clusters;
+    if (!clusters || !clusters.length) return;
+    var m = {};
+    for (var c = 0; c < clusters.length; c++) {
+      var cid = clusters[c].id;
+      var members = clusters[c].member_ids || [];
+      for (var mi = 0; mi < members.length; mi++) m[members[mi]] = cid;
+    }
+    inst._memberToCid = m;
+    // Recover the pristine edge list. Shipped `data.edges` is the
+    // top-level list AFTER clustering (contains super-edges); the
+    // original member↔member edges live inside sideStore[cid].edges.
+    // Fold both back into a single snapshot so _rebuildClusterBoundary
+    // has enough to work with.
+    var orig = [];
+    (inst.data.edges || []).forEach(function(e) {
+      // Skip synthetic super-edges when reconstructing origs — they
+      // wouldn't help the rebuild anyway (their endpoints are already
+      // super-nodes, not real members).
+      if (e && e.data && !e.data.isSuperEdge && !e.data.clusterManaged) {
+        orig.push({ group: "edges", data: e.data });
+      }
+    });
+    // Interior edges live in sideStore[cid].edges; pristine cross-cluster
+    // boundary edges (v0.7.3-fix round-3 finding #5) live in
+    // sideStore[cid].boundary_edges when cluster.py emitted them. Fold
+    // both back so _rebuildClusterBoundary has enough to recompute
+    // real member↔outer links. Cross-cluster boundary edges are
+    // stored on BOTH endpoints' sides — dedup by id so we don't
+    // add each one twice.
+    if (inst.sideStore) {
+      var seenEdgeIds = {};
+      Object.keys(inst.sideStore).forEach(function(cid) {
+        var side = inst.sideStore[cid];
+        if (!side) return;
+        (side.edges || []).forEach(function(e) {
+          var d = (e && e.data) || e;
+          var eid = d && d.id;
+          if (eid && seenEdgeIds[eid]) return;
+          if (eid) seenEdgeIds[eid] = true;
+          orig.push({ group: "edges", data: d });
+        });
+        (side.boundary_edges || []).forEach(function(e) {
+          var d = (e && e.data) || e;
+          var eid = d && d.id;
+          if (eid && seenEdgeIds[eid]) return;
+          if (eid) seenEdgeIds[eid] = true;
+          orig.push({ group: "edges", data: d });
+        });
+      });
+    }
+    inst._origEdges = orig;
+    // Mark clustered so browser-side _autoClusterByNamespace skips this
+    // instance (it already guards on sideStore keys but this is defense
+    // in depth).
+    inst._nsClustered = true;
+  }
+
+  // Resolve an IRI to its CURIE using the instance's namespaces + the
+  // built-in prefix table. Returns null if no known prefix matches.
+  function _iriToCurie(iri, inst) {
+    if (!iri) return null;
+    var pf = (inst && inst.data && inst.data.namespaces) || {};
+    var p;
+    for (p in pf) {
+      if (pf.hasOwnProperty(p) && iri.indexOf(pf[p]) === 0) return p + ":" + iri.substring(pf[p].length);
+    }
+    for (p in _BUILTIN_PREFIXES) {
+      if (_BUILTIN_PREFIXES.hasOwnProperty(p) && iri.indexOf(_BUILTIN_PREFIXES[p]) === 0) {
+        return p + ":" + iri.substring(_BUILTIN_PREFIXES[p].length);
+      }
+    }
+    return null;
+  }
+
+  // Compute the minimum LOD level at which an element becomes visible.
+  // Sources checked in order:
+  //   (i)   data.lod_visibility[iri] from build time
+  //   (ii)  policy.hide_at_level[curie]
+  //   (iii) built-in edge-type / node-type floor
+  function _lodFloorFor(el, inst) {
+    var d = el.data ? el.data() : el;
+    if (d && d.pinned) return 0;
+    var iri = d.iri || d.id;
+    var lodVis = (inst.data && inst.data.lod_visibility) || {};
+    if (iri && lodVis.hasOwnProperty(iri)) return lodVis[iri] | 0;
+
+    // Predicate-level overrides (policy.hide_at_level)
+    var hideAt = (inst.policy && inst.policy.hide_at_level) || {};
+    var curie = iri ? _iriToCurie(iri, inst) : null;
+    if (curie && hideAt.hasOwnProperty(curie)) return hideAt[curie] | 0;
+    // Wildcards ("prov:*")
+    for (var k in hideAt) {
+      if (!hideAt.hasOwnProperty(k)) continue;
+      if (k.charAt(k.length - 1) === "*") {
+        var stem = k.substring(0, k.length - 1);
+        if (curie && curie.indexOf(stem) === 0) return hideAt[k] | 0;
+      }
+    }
+
+    // Built-in floors
+    if (el.isEdge && el.isEdge()) {
+      // v0.7.4 — Cluster-managed super-edges always surface at L1+ so
+      // users see WHICH clusters connect to which even at "hierarchy"
+      // level. The underlying originals might be object-property
+      // (floor 2) or subclass (floor 1) — treating the aggregate as
+      // subclass-equivalent (floor 1) lets users navigate cluster
+      // topology from L1 upward. Otherwise on ontologies where
+      // cross-namespace subclass axioms are rare (e.g. mwo, where
+      // most subclass edges are intra-namespace and become interior),
+      // L1 shows only hexagons with zero visible connections and
+      // users conclude "L1 doesn't work".
+      if (d.clusterManaged) return 1;
+      var et = d.edgeType;
+      if (et && _LOD_EDGE_FLOOR.hasOwnProperty(et)) return _LOD_EDGE_FLOOR[et];
+      return 2;
+    }
+    // Node
+    // v0.7.3 — ClusterHull is a UI wrapper, not ontology content, but
+    // it must survive LOD culling whenever its children survive. Give
+    // it floor 0 (visible at every level) — the members inside decide
+    // via Fix #3 (setLodLevel skip for expanded-cluster interior).
+    if (d.isSuperNode || d.type === "SuperNode" || d.isClusterHull || d.type === "ClusterHull") return 0;
+    if (d.type === "Class") return 0;
+    if (d.inferred || d._inferred) return 6;
+    // Literals only make sense once their carrying data-property edge is
+    // visible (data-property floor = 4). Emitting them earlier produces
+    // orphan labels floating next to their subject — the "disconnected
+    // entities" bug reported on /examples/foaf-person/ pre-0.7.1.
+    if (d.type === "Literal") return _LOD_EDGE_FLOOR["data-property"] || 4;
+    return 2;
+  }
+
+  // For attic JSON (which isn't a live cy element), synthesize just enough
+  // shape to reuse _lodFloorFor without duplicating the branching logic.
+  function _lodFloorForJson(json, inst) {
+    var proxy = {
+      data: function() { return json.data || {}; },
+      isEdge: function() { return json.group === "edges" || !!(json.data && json.data.source); }
+    };
+    return _lodFloorFor(proxy, inst);
+  }
+
+  // ==========================================================================
+  // v0.7.3 — Layout position cache (#4 in docs/big-ontology-plan.md)
+  //
+  // Second open of the same ontology skips the dagre layout and reuses
+  // the positions the user last dragged things to. Keyed by djb2 hash
+  // of the source TTL (or the base64 fence blob when TTL text isn't
+  // available). Persisted in localStorage — 5 MB is enough for a 3 k
+  // node ontology (positions serialize to ~40 bytes each). Full-blown
+  // IndexedDB is a v1.0 upgrade path.
+  var _POS_CACHE_PREFIX = "ontoink.pos.";
+  var _POS_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+  function _ttlHash(str) {
+    // djb2 non-crypto hash; good enough to key cache entries and
+    // uniformly distributed for common ontology text.
+    if (!str) return "0";
+    var h = 5381 | 0;
+    for (var i = 0; i < str.length; i++) {
+      h = (((h << 5) + h) ^ str.charCodeAt(i)) | 0;
+    }
+    return (h >>> 0).toString(36);
+  }
+  function _posCacheKeyFor(sourceText) {
+    return _POS_CACHE_PREFIX + _ttlHash(sourceText || "");
+  }
+  function _positionsLoad(cacheKey) {
+    if (!cacheKey) return null;
+    try {
+      var raw = window.localStorage && window.localStorage.getItem(cacheKey);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.positions || !parsed.ts) return null;
+      if (Date.now() - parsed.ts > _POS_CACHE_MAX_AGE_MS) {
+        try { window.localStorage.removeItem(cacheKey); } catch (e) {}
+        return null;
+      }
+      return parsed.positions;
+    } catch (e) { return null; }
+  }
+  function _positionsSave(cacheKey, cy) {
+    if (!cacheKey || !cy) return;
+    try {
+      var positions = {};
+      cy.nodes().forEach(function(n) {
+        // Skip UI wrappers — the hull's position is derived from its
+        // children each render and would only pollute the cache.
+        var d = n.data();
+        if (d && (d.isClusterHull || d.type === "ClusterHull")) return;
+        var p = n.position();
+        positions[n.id()] = { x: Math.round(p.x), y: Math.round(p.y) };
+      });
+      window.localStorage.setItem(cacheKey, JSON.stringify({
+        ts: Date.now(),
+        positions: positions
+      }));
+    } catch (e) {
+      // QuotaExceededError, SecurityError (private-mode Safari), etc.
+      // Silently skip — the graph still works, just no cache speed-up.
+    }
+  }
+  // Apply cached positions to a live cy instance and fit. Returns true
+  // if any positions were restored (caller uses this to skip the dagre
+  // pass, though we currently run dagre first anyway for MVP simplicity).
+  function _applyCachedPositions(cy, cachedPos) {
+    if (!cy || !cachedPos) return false;
+    var restored = 0;
+    cy.nodes().forEach(function(n) {
+      var pos = cachedPos[n.id()];
+      if (pos) { try { n.position(pos); restored++; } catch (e) {} }
+    });
+    if (restored > 0) { try { cy.fit(cy.elements(), 30); } catch (e) {} }
+    return restored > 0;
+  }
+  // v0.7.3-fix (adversarial finding #7 / #11): position cache used to
+  // save exactly once (cy.one("layoutstop")); user drags after that
+  // never persisted. `_wirePositionCache` binds a persistent listener
+  // for both layout ends and user drag-drops, debounced to 500 ms so a
+  // burst of layout events (dagre + preset) coalesces into one write.
+  function _wirePositionCache(cy, cacheKeyGetter) {
+    var pending = null;
+    function schedule() {
+      if (pending) return;
+      pending = setTimeout(function() {
+        pending = null;
+        var key = cacheKeyGetter();
+        if (key) _positionsSave(key, cy);
+      }, 500);
+    }
+    cy.on("layoutstop", schedule);
+    cy.on("dragfree", "node", schedule);
+  }
+
+  // ==========================================================================
+  // v0.7.3 — Faceted browsing (#33 in docs/big-ontology-plan.md)
+  //
+  // Facets are a left-rail complement to the LOD slider: instead of "how
+  // much detail", they answer "which slice of the ontology". Every facet
+  // has a set of possible values (e.g. namespaces = {mwo, obo, nfdicore})
+  // and either a Set of currently-selected values (whitelist) or `null`
+  // (unfiltered — everything passes). Facet decisions plug into the same
+  // attic pipeline as LOD so hidden elements are reversibly recoverable
+  // when the user unchecks the facet.
+  //
+  // Facet values are computed once at load time from cy.nodes(); toggling
+  // a checkbox mutates `inst.facetSelections` and re-runs setLodLevel.
+  // Hulls and super-nodes always pass — they're UI wrappers, not data —
+  // but they DO get filtered when the user unchecks their namespace.
+
+  function _buildFacets(inst) {
+    if (!inst || !inst.cy) return;
+    var byNs = {};
+    var restrCount = 0;
+    var annCount = 0;
+    inst.cy.nodes().forEach(function(n) {
+      var d = n.data();
+      // Skip UI wrappers when counting so facet totals reflect real content
+      if (d.isClusterHull || d.type === "ClusterHull") return;
+      // Super-nodes represent a whole cluster — count their memberCount
+      var contribution = (d.isSuperNode && d.memberCount) ? d.memberCount : 1;
+      var ns = d.namespace || _nsFromNodeData(d);
+      if (ns) byNs[ns] = (byNs[ns] || 0) + contribution;
+      if (!d.isSuperNode) {
+        if (d.restrictions && d.restrictions.length) restrCount++;
+        if (d.annotations && d.annotations.length) annCount++;
+      }
+    });
+    inst.facets = {
+      namespaces: byNs,
+      hasRestrictions: restrCount,
+      hasAnnotations: annCount
+    };
+    if (!inst.facetSelections) {
+      inst.facetSelections = { namespaces: null, hasRestrictions: null, hasAnnotations: null };
+    }
+  }
+
+  // Given the current facet selection state, does this element pass?
+  // Returns true = keep visible, false = attic. Works on both live
+  // cy elements (isNode/isEdge methods) and attic JSON (via proxy).
+  function _passesFacets(inst, data, isEdge) {
+    if (!inst || !inst.facetSelections) return true;
+    var s = inst.facetSelections;
+    // Edges pass their endpoints' decisions transitively — if either
+    // endpoint is facet-hidden, its cascade in cy.remove will take the
+    // edge with it. We only test edge facet state for edges with an
+    // explicit `namespace` field (rare).
+    if (isEdge) return true;
+    // v0.7.3-fix (round-3 findings #1, #2): ClusterHull nodes previously
+    // blanket-passed here, which produced two visible bugs:
+    //   1. Uncheck an expanded cluster's namespace → interior members
+    //      atticized, hull stays as a "N members · click to collapse"
+    //      phantom with an empty interior.
+    //   2. Clear-all-namespaces (empty Set) → collapsed super-nodes
+    //      vanish (they carry data.namespace), but every expanded hull
+    //      persists as a phantom.
+    // Fix: hulls without a namespace still pass (rare), but hulls whose
+    // namespace fails the whitelist fail — and cascade-cull their
+    // children. Same rule as super-nodes (both carry data.namespace).
+    // The empty-Set case is also covered: has() returns false for every
+    // ns, so any hull with a namespace fails.
+    // Namespace whitelist
+    if (s.namespaces && s.namespaces.size !== undefined) {
+      var ns = data.namespace;
+      if (ns && !s.namespaces.has(ns)) return false;
+    }
+    // Non-namespace facets don't logically apply to structural wrappers.
+    // We still let hulls/super-nodes pass has-restriction / has-annotation
+    // since those are content-property filters that would just always
+    // fail on wrappers, creating another phantom-empty-hull class of bug.
+    if (data.isClusterHull || data.type === "ClusterHull") return true;
+    if (data.isSuperNode || data.type === "SuperNode") return true;
+    // has-restriction whitelist
+    if (s.hasRestrictions === true) {
+      var r = data.restrictions;
+      if (!(r && r.length)) return false;
+    }
+    // has-annotation whitelist
+    if (s.hasAnnotations === true) {
+      var a = data.annotations;
+      if (!(a && a.length)) return false;
+    }
+    return true;
+  }
+  function _passesFacetsJson(inst, json) {
+    var d = json.data || {};
+    var isEdge = (json.group === "edges") || !!(d.source && d.target);
+    return _passesFacets(inst, d, isEdge);
+  }
+
+  function setLodLevel(id, level) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy; if (!cy) return;
+    level = parseInt(level, 10); if (isNaN(level)) level = inst.lodLevel;
+    inst.lodLevel = level;
+
+    // Attic sweep: collect restore candidates. For nodes, facet + floor
+    // is enough. For edges we additionally need BOTH endpoints present
+    // (either already in cy or in nodeCandidates) — otherwise cy.add
+    // throws "nonexistent source/target" and the entry stays stranded
+    // in the attic on every subsequent setLodLevel call (adversarial
+    // finding #2).
+    var nodeCandidates = [];       // {key, json}
+    var edgeCandidates = [];       // {key, json}
+    inst.attic.forEach(function(json, key) {
+      var floor = _lodFloorForJson(json, inst);
+      if (floor > level) return;
+      if (!_passesFacetsJson(inst, json)) return;
+      var isEdge = (json.group === "edges") || !!(json.data && json.data.source && json.data.target);
+      if (isEdge) edgeCandidates.push({ key: key, json: json });
+      else        nodeCandidates.push({ key: key, json: json });
+    });
+    if (nodeCandidates.length) cy.add(nodeCandidates.map(function(c) { return c.json; }));
+    for (var kn = 0; kn < nodeCandidates.length; kn++) inst.attic.delete(nodeCandidates[kn].key);
+    // For each edge candidate, only restore if both endpoints exist in
+    // cy right now. Leave the rest in the attic — a later setLodLevel
+    // triggered by facet re-check / LOD change will retry.
+    for (var ke = 0; ke < edgeCandidates.length; ke++) {
+      var c = edgeCandidates[ke];
+      var d = c.json.data || {};
+      if (cy.getElementById(d.source).length === 0) continue;
+      if (cy.getElementById(d.target).length === 0) continue;
+      try { cy.add(c.json); inst.attic.delete(c.key); } catch (e) {}
+    }
+
+    // Now snapshot currently-visible elements whose floor exceeds level.
+    // Collect first, remove after — never mutate during iteration.
+    //
+    // v0.7.3-fix (adversarial review 2026-07-10 findings 1/3/4/7):
+    //   1. Facet check runs BEFORE the expanded-cluster shortcut so an
+    //      unchecked namespace also hides expanded cluster interior.
+    //   2. Edges are considered facet-failed when either endpoint is
+    //      facet-failed — otherwise cy.remove's cascade removes them
+    //      without the attic ever seeing them, and re-checking the
+    //      namespace can't recover.
+    //   3. We also pre-atticize the incident edges of every to-remove
+    //      node so cy.remove's cascade doesn't drop unwritten JSON.
+    //
+    // First pass: identify all nodes that fail facets so the edge test
+    // in the main pass can consult a Set instead of re-computing.
+    var facetFailNodeIds = new Set();
+    var hasFacetSelections = inst.facetSelections && (
+      inst.facetSelections.namespaces ||
+      inst.facetSelections.hasRestrictions === true ||
+      inst.facetSelections.hasAnnotations === true
+    );
+    if (hasFacetSelections) {
+      cy.nodes().forEach(function(n) {
+        var nd = n.data();
+        if (nd && nd.pinned) return;
+        if (!_passesFacets(inst, nd, false)) facetFailNodeIds.add(n.id());
+      });
+    }
+    var toRemove = [];
+    cy.elements().forEach(function(el) {
+      var d = el.data();
+      if (d && d.pinned) return;
+      // Super-node visibility toggle
+      if ((d.isSuperNode || d.type === "SuperNode") && inst.showSuperNodes === false) {
+        toRemove.push(el); return;
+      }
+      // v0.7.3-fix — Facet filter FIRST, before any early-return that
+      // could smuggle a facet-hidden element past the cull. For edges,
+      // "facet-hidden" means "either endpoint's namespace/annotation
+      // filter fails" — otherwise the edge would cascade-remove without
+      // being atticized (finding #1).
+      var isEdge = el.isEdge && el.isEdge();
+      if (hasFacetSelections) {
+        if (isEdge) {
+          if (facetFailNodeIds.has(d.source) || facetFailNodeIds.has(d.target)) {
+            toRemove.push(el); return;
+          }
+        } else if (facetFailNodeIds.has(el.id())) {
+          toRemove.push(el); return;
+        }
+      }
+      // v0.7.2 — cluster interior is managed by sideStore, NOT the LOD attic.
+      // Rule: an element whose owning cluster is currently EXPANDED stays
+      // visible regardless of LOD level (facet check above already
+      // handled facet exclusion).
+      if (inst._memberToCid) {
+        if (!isEdge) {
+          var ncid = inst._memberToCid[el.id()];
+          if (ncid && inst.expandedSuperNodes && inst.expandedSuperNodes.has(ncid)) return;
+        } else {
+          var e_s_cid = inst._memberToCid[d.source];
+          var e_t_cid = inst._memberToCid[d.target];
+          if (e_s_cid && e_s_cid === e_t_cid &&
+              inst.expandedSuperNodes && inst.expandedSuperNodes.has(e_s_cid)) return;
+        }
+      }
+      var floor = _lodFloorFor(el, inst);
+      if (floor > level) toRemove.push(el);
+    });
+    // v0.7.3-fix — Atticize cascade victims BEFORE cy.remove takes them.
+    // For every node in toRemove, snapshot its connected edges into the
+    // attic if not already there. This preserves the edge for restore
+    // when the user re-checks the facet / raises the LOD (findings 1/3).
+    var toRemoveSet = new Set();
+    for (var r0 = 0; r0 < toRemove.length; r0++) toRemoveSet.add(toRemove[r0].id());
+    for (var r1 = 0; r1 < toRemove.length; r1++) {
+      var el1 = toRemove[r1];
+      if (!(el1.isNode && el1.isNode())) continue;
+      var incident = el1.connectedEdges();
+      incident.forEach(function(e) {
+        var eid = e.id();
+        if (toRemoveSet.has(eid)) return;  // already scheduled
+        if (!inst.attic.has(eid)) inst.attic.set(eid, e.json());
+      });
+    }
+    for (var r = 0; r < toRemove.length; r++) {
+      var el2 = toRemove[r];
+      var key2 = el2.id();
+      // Do not double-attic
+      if (!inst.attic.has(key2)) inst.attic.set(key2, el2.json());
+      cy.remove(el2);
+    }
+
+    // Update slider value display — descriptive per-level label so
+    // users understand the discrete stops without hunting through the
+    // docs. Descriptions match the LOD spec: L0..L6.
+    var _LOD_DESCRIPTIONS = {
+      0: "L0 · classes only",
+      1: "L1 · + hierarchy",
+      2: "L2 · + individuals & object properties",
+      3: "L3 · + OWL restrictions",
+      4: "L4 · + data properties & literals",
+      5: "L5 · everything except inferred",
+      6: "L6 · everything"
+    };
+    var container = document.getElementById(id);
+    if (container) {
+      // v0.7.4 — LOD is now a dropdown (.ov-lod-select). The legacy
+      // slider (.ov-lod-slider) and the descriptor span (.ov-lod-value)
+      // may still be present in older fences — sync all three where
+      // they exist so nothing goes stale.
+      var span = container.querySelector(".ov-lod-value");
+      if (span) span.textContent = _LOD_DESCRIPTIONS[level] || ("L" + level);
+      var slider = container.querySelector(".ov-lod-slider");
+      if (slider && String(slider.value) !== String(level)) slider.value = level;
+      var select = container.querySelector(".ov-lod-select");
+      if (select && String(select.value) !== String(level)) select.value = level;
+    }
+
+    // Re-render node badges surfaced at L4+
+    if (level >= 4) renderNodeBadges(id);
+
+    // Best-effort layout refresh (preserve positions).
+    try { cy.layout({ name: "preset", animate: false, fit: false }).run(); } catch (e) {}
+  }
+
+  // Hull compound-parent id derived from a cluster id. Keeps the two
+  // namespaces separate so a stray real IRI can never collide.
+  function _hullIdFor(supernode_id) { return supernode_id + "__hull"; }
+
+  function expandSuperNode(id, supernode_id) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    if (!inst.expandedSuperNodes) inst.expandedSuperNodes = new Set();
+    if (inst.expandedSuperNodes.has(supernode_id)) return;
+    var side = inst.sideStore ? inst.sideStore[supernode_id] : null;
+    if (!side) return;
+    var cy = inst.cy;
+
+    // Snapshot the collapsed super-node's on-screen position so we can
+    // seed the freshly-added members around it — otherwise Cytoscape
+    // dumps them at (0,0) and the compound parent auto-sizes to a tiny
+    // square at origin.
+    var anchorPos = { x: 0, y: 0 };
+    var sn = cy.getElementById(supernode_id);
+    if (sn && sn.length) {
+      try { anchorPos = sn.position(); } catch (e) {}
+      cy.remove(sn);
+    }
+
+    // Build the "hull" — a compound-parent node that visually contains
+    // the cluster's members. When expanded, the cluster is a dashed
+    // rounded rectangle around its interior with a header label
+    // "<title> · N · click header to collapse". Dragging the hull moves
+    // every member with it (Cytoscape's built-in compound behavior).
+    // Tapping the hull border/header calls collapseSuperNode via the tap
+    // handler wired in fence + playground init.
+    var clusters = (inst.data && inst.data.clusters) || [];
+    var meta = null;
+    for (var c = 0; c < clusters.length; c++) { if (clusters[c].id === supernode_id) { meta = clusters[c]; break; } }
+    var memberCount = (meta && (meta.size || (meta.member_ids ? meta.member_ids.length : 0))) || (side.nodes ? side.nodes.length : 0);
+    var title = (meta && meta.title) || supernode_id;
+    var hullId = _hullIdFor(supernode_id);
+    var subtitle = (meta && meta.type_breakdown)
+      ? _clusterSubtitle(meta.type_breakdown, memberCount)
+      : "";
+    cy.add({ group: "nodes", data: {
+      id: hullId,
+      label: title + "  ·  " + memberCount +
+             (subtitle ? ("  (" + subtitle + ")") : "") +
+             "  ·  click header to collapse",
+      type: "ClusterHull",
+      isClusterHull: true,
+      clusterId: supernode_id,
+      memberCount: memberCount,
+      // Carry the cluster's namespace so facet filters (v0.7.3 #33) can
+      // treat the hull as belonging to the same namespace as its members.
+      namespace: (meta && meta.ns) || null
+    }});
+
+    // Position + reparent members. Grid layout centered on the anchor
+    // gives a predictable initial view for any cluster size. We CLONE
+    // the sideStore JSON before mutating (side.nodes is the pristine
+    // snapshot; mutating it in place would corrupt future expands).
+    var cols = Math.max(2, Math.ceil(Math.sqrt(memberCount)));
+    var cellW = 100, cellH = 70;
+    var origin = { x: anchorPos.x - (cols * cellW) / 2, y: anchorPos.y - (Math.ceil(memberCount / cols) * cellH) / 2 };
+    var nodesToAdd = (side.nodes || []).map(function(n, i) {
+      var d = {};
+      for (var k in n.data) if (Object.prototype.hasOwnProperty.call(n.data, k)) d[k] = n.data[k];
+      d.parent = hullId;
+      var row = Math.floor(i / cols), col = i % cols;
+      return {
+        group: "nodes",
+        data: d,
+        position: { x: origin.x + col * cellW, y: origin.y + row * cellH }
+      };
+    });
+    if (nodesToAdd.length) cy.add(nodesToAdd);
+    if (side.edges && side.edges.length) cy.add(side.edges);
+
+    // Merge side-store badges into instance policy so the badge renderer
+    // picks them up on the newly added nodes.
+    if (side.node_badges) {
+      if (!inst.policy.node_badges) inst.policy.node_badges = {};
+      Object.assign(inst.policy.node_badges, side.node_badges);
+    }
+
+    inst.expandedSuperNodes.add(supernode_id);
+    // Rebuild boundary edges: cy.remove(super) killed every edge that
+    // touched the super-node placeholder — those crossings need to
+    // re-emerge pointing at real members now, or at other supers where
+    // the far side is still collapsed. See _rebuildClusterBoundary.
+    _rebuildClusterBoundary(inst, supernode_id);
+    // Re-apply LOD so freshly added elements settle at the slider position.
+    // Suppressed when inside a batch expand/collapse (toggleSuperNodes) —
+    // running setLodLevel mid-loop would evict sibling super-nodes into
+    // the attic, corrupting the pre-collapse state for later iterations
+    // (adversarial review 2026-07-10).
+    if (!inst._batchOp) setLodLevel(id, inst.lodLevel);
+  }
+
+  function collapseSuperNode(id, supernode_id) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    if (!inst.expandedSuperNodes || !inst.expandedSuperNodes.has(supernode_id)) return;
+    var side = inst.sideStore ? inst.sideStore[supernode_id] : null;
+    if (!side) return;
+    var cy = inst.cy;
+
+    // Snapshot the hull's current position so the reconstituted
+    // hexagon lands roughly where the user last dragged the cluster
+    // — otherwise it jumps back to (0,0) and the reading flow breaks.
+    var hullAnchor = null;
+    var hullId = _hullIdFor(supernode_id);
+    var hullEl = cy.getElementById(hullId);
+    if (hullEl && hullEl.length) {
+      try { hullAnchor = hullEl.position(); } catch (e) {}
+    }
+
+    // Remove interior nodes (their edges follow automatically). We
+    // iterate side.nodes rather than descendants of the hull because
+    // a stray member with a stale parent field might have been dragged
+    // outside the hull — we still want to remove it.
+    var memberIds = (side.nodes || []).map(function(n) { return n.data && n.data.id; }).filter(Boolean);
+    var interiorEdgeIds = (side.edges || []).map(function(ee) { return ee.data && ee.data.id; }).filter(Boolean);
+    for (var i = 0; i < memberIds.length; i++) {
+      var e = cy.getElementById(memberIds[i]);
+      if (e && e.length) cy.remove(e);
+    }
+    // Now the hull is childless — remove it too. cy.remove on a parent
+    // whose children still exist orphans them (their `parent` field is
+    // unset). We removed the members above so this call is safe.
+    if (hullEl && hullEl.length) cy.remove(hullEl);
+
+    // Purge stale attic copies of these members/edges. Fix #3 keeps
+    // cluster interior OUT of the LOD attic when the cluster is
+    // expanded, but historical attic entries from an earlier session
+    // state could still be there — belt-and-braces guarantees a later
+    // re-expand won't collide with a stale `cy.add(side.nodes)` on the
+    // same ids (adversarial review 2026-07-10).
+    if (inst.attic && inst.attic.delete) {
+      for (var mi = 0; mi < memberIds.length; mi++) inst.attic.delete(memberIds[mi]);
+      for (var ei = 0; ei < interiorEdgeIds.length; ei++) inst.attic.delete(interiorEdgeIds[ei]);
+      inst.attic.delete(hullId);
+    }
+
+    // Reconstitute the super-node placeholder from data.clusters
+    var clusters = (inst.data && inst.data.clusters) || [];
+    var meta = null;
+    for (var c = 0; c < clusters.length; c++) { if (clusters[c].id === supernode_id) { meta = clusters[c]; break; } }
+    if (meta) {
+      var placeholder = {
+        group: "nodes",
+        data: {
+          id: supernode_id,
+          label: meta.title || supernode_id,
+          type: "SuperNode",
+          isSuperNode: true,
+          memberCount: meta.size || (meta.member_ids ? meta.member_ids.length : 0),
+          centrality: meta.centrality || 0,
+          namespace: meta.ns || null,
+          clusterId: supernode_id
+        }
+      };
+      if (hullAnchor) placeholder.position = { x: hullAnchor.x, y: hullAnchor.y };
+      cy.add(placeholder);
+    }
+    inst.expandedSuperNodes.delete(supernode_id);
+    // Rebuild boundary edges: cy.remove(members) cascaded through their
+    // outgoing edges; the freshly-added super-node has none. Recompute
+    // super-edges from the pristine _origEdges snapshot.
+    _rebuildClusterBoundary(inst, supernode_id);
+    // Suppress the tail LOD run inside a batch collapse — see the twin
+    // note in expandSuperNode above.
+    if (!inst._batchOp) setLodLevel(id, inst.lodLevel);
+  }
+
+  // Windowed Attic renderer. First 200 rows on open; scroll near the bottom
+  // appends the next 200 — keeps DOM cost bounded on very large graphs.
+  function _renderAtticList(id) {
+    var inst = instances[id]; if (!inst) return;
+    var body = document.getElementById(id + "-attic-body");
+    if (!body) return;
+    var items = [];
+    inst.attic.forEach(function(json, key) { items.push({ key: key, json: json }); });
+    // Sort: nodes before edges, then by label
+    items.sort(function(a, b) {
+      var an = !((a.json.group === "edges") || (a.json.data && a.json.data.source));
+      var bn = !((b.json.group === "edges") || (b.json.data && b.json.data.source));
+      if (an !== bn) return an ? -1 : 1;
+      var al = (a.json.data && (a.json.data.label || a.json.data.id)) || "";
+      var bl = (b.json.data && (b.json.data.label || b.json.data.id)) || "";
+      return al < bl ? -1 : al > bl ? 1 : 0;
+    });
+    inst._atticItems = items;
+    inst._atticRendered = 0;
+    body.innerHTML = "";
+    _appendAtticRows(id, 200);
+    // Wire lazy scroll
+    body.onscroll = function() {
+      if (body.scrollTop + body.clientHeight >= body.scrollHeight - 40) {
+        _appendAtticRows(id, 200);
+      }
+    };
+  }
+
+  function _appendAtticRows(id, count) {
+    var inst = instances[id]; if (!inst) return;
+    var body = document.getElementById(id + "-attic-body");
+    if (!body || !inst._atticItems) return;
+    var start = inst._atticRendered || 0;
+    var end = Math.min(start + count, inst._atticItems.length);
+    if (end <= start) return;
+    var html = "";
+    for (var i = start; i < end; i++) {
+      var it = inst._atticItems[i];
+      var d = it.json.data || {};
+      var isEdge = it.json.group === "edges" || !!(d.source && d.target);
+      var label = d.label || d.id || "";
+      var typeLabel = isEdge ? (d.edgeType || "edge") : (d.type || "node");
+      var safeKey = String(it.key).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      html += '<div class="ov-attic-row">' +
+              '<span class="ov-attic-row-label" title="' + esc(d.id || "") + '">' + esc(label) + '</span>' +
+              '<span class="ov-attic-row-type">' + esc(typeLabel) + '</span>' +
+              '<button class="ov-chip ov-attic-row-pin" onclick="ontoink.pinFromAttic(\'' + id + '\',\'' + safeKey + '\')">Pin</button>' +
+              '</div>';
+    }
+    body.insertAdjacentHTML("beforeend", html);
+    inst._atticRendered = end;
+  }
+
+  function openAtticPanel(id) {
+    var panel = document.getElementById(id + "-attic");
+    if (!panel) return;
+    panel.style.display = "block";
+    _renderAtticList(id);
+  }
+
+  function closeAtticPanel(id) {
+    var panel = document.getElementById(id + "-attic");
+    if (panel) panel.style.display = "none";
+  }
+
+  function pinFromAttic(id, node_iri) {
+    var inst = instances[id]; if (!inst) return;
+    var json = inst.attic.get(node_iri);
+    if (!json) return;
+    inst.attic.delete(node_iri);
+    if (!json.data) json.data = {};
+    json.data.pinned = true;
+    try { inst.cy.add(json); } catch (e) {}
+    _renderAtticList(id);
+  }
+
+  // ── Facets panel (v0.7.3 #33) ──────────────────────────────────────
+  // Windowed renderer for the facets panel; wired via the ``Facets``
+  // toolbar button. The panel offers three sections: namespaces (a
+  // scrollable list of prefixes with counts), has-restriction (single
+  // toggle), and has-annotation (single toggle). Selecting/deselecting
+  // any control writes to inst.facetSelections and re-runs setLodLevel
+  // so LOD + facets stay coherent.
+  function _renderFacetsList(id) {
+    var inst = instances[id]; if (!inst) return;
+    if (!inst.facets) _buildFacets(inst);
+    var body = document.getElementById(id + "-facets-body");
+    if (!body) return;
+    var prefixes = (inst.data && (inst.data.prefixes || inst.data.namespaces || inst.data.activeNamespaces)) || {};
+
+    // Namespace section — sort by count desc
+    var entries = [];
+    var byNs = (inst.facets && inst.facets.namespaces) || {};
+    Object.keys(byNs).forEach(function(ns) { entries.push({ ns: ns, n: byNs[ns] }); });
+    entries.sort(function(a, b) { return b.n - a.n; });
+    var selNs = inst.facetSelections && inst.facetSelections.namespaces;
+
+    var html = '<div class="ov-facet-section-head">Namespaces <span class="ov-facet-note">' + entries.length + '</span>';
+    html += ' <button class="ov-chip" onclick="ontoink.selectAllFacets(\'' + id + '\',\'namespaces\')">All</button>';
+    html += ' <button class="ov-chip" onclick="ontoink.clearFacet(\'' + id + '\',\'namespaces\')">Clear</button></div>';
+    html += '<div class="ov-facet-list">';
+    entries.forEach(function(e) {
+      var label = _shortNsLabel(e.ns, prefixes);
+      var checked = (!selNs || selNs.has(e.ns)) ? "checked" : "";
+      var safeNs = e.ns.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      html += '<label class="ov-facet-row" title="' + esc(e.ns) + '">' +
+              '<input type="checkbox" ' + checked + ' onchange="ontoink.toggleFacet(\'' + id + '\',\'namespaces\',\'' + safeNs + '\',this.checked)"> ' +
+              '<span class="ov-facet-label">' + esc(label) + '</span>' +
+              '<span class="ov-facet-count">' + e.n + '</span>' +
+              '</label>';
+    });
+    html += '</div>';
+
+    var restrOn = inst.facetSelections && inst.facetSelections.hasRestrictions === true;
+    var annOn = inst.facetSelections && inst.facetSelections.hasAnnotations === true;
+    html += '<div class="ov-facet-section-head">Only</div>';
+    html += '<div class="ov-facet-list">';
+    html += '<label class="ov-facet-row"><input type="checkbox" ' + (restrOn ? "checked" : "") +
+            ' onchange="ontoink.toggleFacet(\'' + id + '\',\'hasRestrictions\',null,this.checked)"> ' +
+            '<span class="ov-facet-label">Has OWL restriction</span>' +
+            '<span class="ov-facet-count">' + ((inst.facets && inst.facets.hasRestrictions) || 0) + '</span></label>';
+    html += '<label class="ov-facet-row"><input type="checkbox" ' + (annOn ? "checked" : "") +
+            ' onchange="ontoink.toggleFacet(\'' + id + '\',\'hasAnnotations\',null,this.checked)"> ' +
+            '<span class="ov-facet-label">Has annotation</span>' +
+            '<span class="ov-facet-count">' + ((inst.facets && inst.facets.hasAnnotations) || 0) + '</span></label>';
+    html += '</div>';
+
+    body.innerHTML = html;
+  }
+
+  function openFacetsPanel(id) {
+    var panel = document.getElementById(id + "-facets");
+    if (!panel) return;
+    panel.style.display = "block";
+    _renderFacetsList(id);
+  }
+  function closeFacetsPanel(id) {
+    var panel = document.getElementById(id + "-facets");
+    if (panel) panel.style.display = "none";
+  }
+
+  // Toggle a single facet value.
+  //  - `facet` = "namespaces" | "hasRestrictions" | "hasAnnotations"
+  //  - `value` = namespace string (for "namespaces") or null (for booleans)
+  //  - `checked` = the new checkbox state
+  function toggleFacet(id, facet, value, checked) {
+    var inst = instances[id]; if (!inst) return;
+    if (!inst.facets) _buildFacets(inst);
+    if (!inst.facetSelections) inst.facetSelections = { namespaces: null, hasRestrictions: null, hasAnnotations: null };
+    var sel = inst.facetSelections;
+    if (facet === "namespaces") {
+      // First interaction: promote null → "all currently in facets" so we
+      // have a set to remove from. Then flip the requested value.
+      if (!sel.namespaces) {
+        sel.namespaces = new Set(Object.keys(inst.facets.namespaces || {}));
+      }
+      if (checked) sel.namespaces.add(value);
+      else         sel.namespaces.delete(value);
+      // If the set now equals "everything", collapse back to null so we
+      // skip the filter loop on every element (perf on big graphs).
+      if (sel.namespaces.size === Object.keys(inst.facets.namespaces || {}).length) {
+        sel.namespaces = null;
+      }
+    } else if (facet === "hasRestrictions" || facet === "hasAnnotations") {
+      sel[facet] = checked ? true : null;
+    }
+    setLodLevel(id, inst.lodLevel);
+    _renderFacetsList(id);
+  }
+  function selectAllFacets(id, facet) {
+    var inst = instances[id]; if (!inst) return;
+    if (!inst.facetSelections) return;
+    if (facet === "namespaces") inst.facetSelections.namespaces = null;
+    setLodLevel(id, inst.lodLevel);
+    _renderFacetsList(id);
+  }
+  function clearFacet(id, facet) {
+    var inst = instances[id]; if (!inst) return;
+    if (!inst.facetSelections) return;
+    if (facet === "namespaces") inst.facetSelections.namespaces = new Set();
+    else inst.facetSelections[facet] = null;
+    setLodLevel(id, inst.lodLevel);
+    _renderFacetsList(id);
+  }
+
+  // ==========================================================================
+  // v0.7.3 — Metrics dashboard splash (#38 in docs/big-ontology-plan.md)
+  //
+  // For big ontologies (>= 500 subjects), the honest entry point is a
+  // dashboard, not a graph. The splash renders subject/edge counts,
+  // type distribution, namespace shape, orphan count, and SHACL/OWL
+  // constraint totals — with a LOD level picker so the user commits to
+  // a starting slice before the graph unfurls. Replaces the earlier
+  // `prompt()` UX (which was ugly and gave no context).
+
+  // Test whether a node id / IRI looks like a blank node. rdflib emits
+  // them as N-Triples-style "_:bN..." strings which flow through
+  // ttl_parser unchanged. Blank-node detection is used for typing
+  // (they aren't Individuals no matter what type field says) and for
+  // metric-splash reporting (they clutter the count).
+  function _isBlankNode(id) {
+    if (!id || typeof id !== "string") return false;
+    return id.indexOf("_:") === 0;
+  }
+  // Stamp isBlankNode=true on every cy node whose id starts with "_:".
+  // The v0.7.4 style block matches this flag to render blank nodes as
+  // dashed grey ghosts (round-diamond shape) so users see immediately
+  // that they're OWL/SHACL scaffolding, not domain entities.
+  function _flagBlankNodes(cy) {
+    if (!cy) return;
+    cy.nodes().forEach(function(n) {
+      if (_isBlankNode(n.id())) {
+        n.data("isBlankNode", true);
+      }
+    });
+  }
+
+  function _computeMetrics(inst) {
+    if (!inst || !inst.data) return null;
+    var nodes = inst.data.nodes || [];
+    var edges = inst.data.edges || [];
+    var byType = {}, byNs = {}, byEdgeType = {};
+    var restrNodeCount = 0, annNodeCount = 0;
+    var blankNodeCount = 0;
+    var degree = {};
+    var realNodeCount = 0;
+
+    var clusterById = {};
+    (inst.data.clusters || []).forEach(function(c) {
+      if (c && c.id) clusterById[c.id] = c;
+    });
+
+    // v0.7.4 — Scan sideStore members too. When the graph is clustered
+    // (browser or build-time), the vast majority of nodes with
+    // annotations / restrictions live INSIDE sideStore[cid].nodes,
+    // never in inst.data.nodes. Iterating only the top-level list was
+    // reporting "0 OWL restrictions / 0 Annotated" on mwo, while the
+    // Edge types bar reported 107 owl-restriction edges — same
+    // ontology, contradictory numbers.
+    function tally(d) {
+      if (!d) return;
+      if (d.isClusterHull || d.type === "ClusterHull") return;
+      if (d.isSuperNode || d.type === "SuperNode") return;
+      if (_isBlankNode(d.id)) blankNodeCount++;
+      if (d.restrictions && d.restrictions.length) restrNodeCount++;
+      if (d.annotations && d.annotations.length) annNodeCount++;
+    }
+    nodes.forEach(function(n) {
+      var d = (n && n.data) || n || {};
+      if (d.isClusterHull || d.type === "ClusterHull") return;
+      if (d.isSuperNode || d.type === "SuperNode") {
+        var meta = clusterById[d.id] || {};
+        var count = meta.size || d.memberCount || 1;
+        var ns = d.namespace || meta.ns || _nsFromNodeData(d);
+        if (ns) byNs[ns] = (byNs[ns] || 0) + count;
+        // Attribute cluster to Class bucket by default; enhanced when
+        // per-cluster type breakdown is available (see meta.type_breakdown).
+        var br = meta.type_breakdown;
+        if (br) {
+          Object.keys(br).forEach(function(t) { byType[t] = (byType[t] || 0) + br[t]; });
+        } else {
+          byType["Class"] = (byType["Class"] || 0) + count;
+        }
+        realNodeCount += count;
+        return;
+      }
+      var t = d.type;
+      // v0.7.4 — Blank nodes should not be typed as "Individual" (which
+      // is what the current parser labels them). Give them a bucket
+      // of their own in the metrics so users see how much of the
+      // ontology is anonymous.
+      if (_isBlankNode(d.id)) t = "BlankNode";
+      byType[t || "Unknown"] = (byType[t || "Unknown"] || 0) + 1;
+      realNodeCount++;
+      var ns2 = d.namespace || _nsFromNodeData(d);
+      if (ns2) byNs[ns2] = (byNs[ns2] || 0) + 1;
+      tally(d);
+    });
+    // Sweep sideStore for restrictions / annotations / blanks that
+    // live inside clusters. Uses inst.sideStore populated by either
+    // the browser-side auto-clusterer or build-time cluster.py.
+    if (inst.sideStore) {
+      Object.keys(inst.sideStore).forEach(function(cid) {
+        var side = inst.sideStore[cid];
+        if (!side || !side.nodes) return;
+        side.nodes.forEach(function(n) {
+          var d = (n && n.data) || n || {};
+          tally(d);
+        });
+      });
+    }
+
+    // Total edges = sum of weight (fanned super-edge counts as N).
+    var totalEdgeCount = 0;
+    // Distinct SUBJECTS restricted = unique source ids of owl-restriction
+    // edges (matches Protégé's "Restricted class" concept). Falls back
+    // to restrNodeCount when the parser emits inline `data.restrictions`
+    // arrays instead of edges.
+    var restrictedSubjects = {};
+    edges.forEach(function(e) {
+      var d = (e && e.data) || e || {};
+      var w = (d.weight && d.weight > 1) ? d.weight : 1;
+      totalEdgeCount += w;
+      var et = d.edgeType || "other";
+      byEdgeType[et] = (byEdgeType[et] || 0) + w;
+      if (d.source) degree[d.source] = (degree[d.source] || 0) + 1;
+      if (d.target) degree[d.target] = (degree[d.target] || 0) + 1;
+      if (et === "owl-restriction" && d.source) restrictedSubjects[d.source] = true;
+    });
+    // Merge edge-derived restricted-subject count with node-inline count —
+    // whichever the ontology's parse produced, we report the higher
+    // (more informative) figure.
+    var restrictionsMetric = Math.max(restrNodeCount, Object.keys(restrictedSubjects).length);
+
+    var orphans = 0;
+    nodes.forEach(function(n) {
+      var d = (n && n.data) || n || {};
+      if (!d.id) return;
+      if (d.isClusterHull || d.type === "ClusterHull") return;
+      if (d.isSuperNode || d.type === "SuperNode") return;
+      if (!degree[d.id]) orphans++;
+    });
+    var shaclCount = (inst.data.shacl && inst.data.shacl.length) || 0;
+    return {
+      nodeCount: realNodeCount,
+      edgeCount: totalEdgeCount,
+      byType: byType,
+      byNs: byNs,
+      byEdgeType: byEdgeType,
+      restrictionsCount: restrictionsMetric,
+      annotationsCount: annNodeCount,
+      blankNodeCount: blankNodeCount,
+      orphans: orphans,
+      shaclCount: shaclCount
+    };
+  }
+  function _metricCard(label, value) {
+    return '<div class="ov-metric-card"><div class="ov-metric-value">' + esc(String(value)) + '</div><div class="ov-metric-label">' + esc(label) + '</div></div>';
+  }
+  function _metricBars(entries, total, labelResolver) {
+    var html = '<div class="ov-metrics-bars">';
+    entries.forEach(function(e) {
+      var pct = total > 0 ? Math.max(1, Math.round(100 * e.n / total)) : 0;
+      var lab = labelResolver ? labelResolver(e) : e.k;
+      var tt = e.title || e.k || "";
+      html += '<div class="ov-metrics-bar-row">' +
+              '<span class="ov-metrics-bar-label" title="' + esc(tt) + '">' + esc(lab) + '</span>' +
+              '<span class="ov-metrics-bar"><span style="width:' + pct + '%"></span></span>' +
+              '<span class="ov-metrics-bar-count">' + e.n + '</span>' +
+              '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+  function openMetricsSplash(id) {
+    var inst = instances[id]; if (!inst) return;
+    var container = document.getElementById(id); if (!container) return;
+    var m = _computeMetrics(inst); if (!m) return;
+    var prefixes = (inst.data && (inst.data.prefixes || inst.data.namespaces || inst.data.activeNamespaces)) || {};
+
+    var overlay = container.querySelector(".ov-metrics-splash");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "ov-metrics-splash";
+      container.appendChild(overlay);
+    }
+
+    var typeEntries = Object.keys(m.byType).map(function(k) { return { k: k, n: m.byType[k] }; })
+                       .sort(function(a, b) { return b.n - a.n; });
+    var nsEntries = Object.keys(m.byNs).map(function(k) { return { k: k, n: m.byNs[k], title: k }; })
+                     .sort(function(a, b) { return b.n - a.n; })
+                     .slice(0, 8);
+    var edgeEntries = Object.keys(m.byEdgeType).map(function(k) { return { k: k, n: m.byEdgeType[k] }; })
+                       .sort(function(a, b) { return b.n - a.n; });
+
+    var currentLod = (inst.lodLevel != null) ? inst.lodLevel : 6;
+    var lodRadios = "";
+    var lodLabels = _LOD_DESCRIPTIONS_STATIC;
+    for (var lv = 0; lv <= 6; lv++) {
+      var checked = (lv === currentLod) ? "checked" : "";
+      lodRadios += '<label class="ov-metrics-lod-row"><input type="radio" name="' + id + '-lod-pick" value="' + lv + '" ' + checked + '> <span>' + esc(lodLabels[lv]) + '</span></label>';
+    }
+
+    var html = '<div class="ov-metrics-panel">' +
+      '<div class="ov-metrics-head">Ontology overview' +
+        '<button class="ov-btn-close" onclick="ontoink.closeMetricsSplash(\'' + id + '\')" title="Close">&times;</button>' +
+      '</div>' +
+      '<div class="ov-metrics-body">' +
+        '<div class="ov-metrics-grid">' +
+          _metricCard("Subjects", m.nodeCount) +
+          _metricCard("Relations", m.edgeCount) +
+          _metricCard("Orphans", m.orphans) +
+          _metricCard("Blank nodes", m.blankNodeCount || 0) +
+          _metricCard("Restricted classes", m.restrictionsCount) +
+          _metricCard("Annotated", m.annotationsCount) +
+          _metricCard("SHACL shapes", m.shaclCount) +
+        '</div>' +
+        '<div class="ov-metrics-section-head">By type</div>' +
+        _metricBars(typeEntries, m.nodeCount) +
+        '<div class="ov-metrics-section-head">Top namespaces</div>' +
+        _metricBars(nsEntries, m.nodeCount, function(e) { return _shortNsLabel(e.k, prefixes); }) +
+        '<div class="ov-metrics-section-head">Edge types</div>' +
+        _metricBars(edgeEntries, m.edgeCount) +
+        '<div class="ov-metrics-section-head">Start rendering at</div>' +
+        '<div class="ov-metrics-lod-list">' + lodRadios + '</div>' +
+        '<div class="ov-metrics-actions">' +
+          '<button class="ov-btn ov-btn-accent" onclick="ontoink._exploreFromSplash(\'' + id + '\')">Explore the graph</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    overlay.innerHTML = html;
+    overlay.style.display = "flex";
+  }
+  function _exploreFromSplash(id) {
+    var container = document.getElementById(id); if (!container) return;
+    var chosen = container.querySelector('input[name="' + id + '-lod-pick"]:checked');
+    if (chosen) setLodLevel(id, parseInt(chosen.value, 10));
+    closeMetricsSplash(id);
+  }
+  function closeMetricsSplash(id) {
+    var container = document.getElementById(id); if (!container) return;
+    var overlay = container.querySelector(".ov-metrics-splash");
+    if (overlay) overlay.style.display = "none";
+  }
+  // Static copy of _LOD_DESCRIPTIONS (which is defined inside setLodLevel's
+  // closure). Duplicated here to avoid a circular closure reference and to
+  // stay independent of setLodLevel's internal state.
+  var _LOD_DESCRIPTIONS_STATIC = {
+    0: "L0 · classes only",
+    1: "L1 · + hierarchy",
+    2: "L2 · + individuals & object properties",
+    3: "L3 · + OWL restrictions",
+    4: "L4 · + data properties & literals",
+    5: "L5 · everything except inferred",
+    6: "L6 · everything"
+  };
+
+  // ==========================================================================
+  // v0.7.2 — Client-side namespace clustering
+  //
+  // Problem the earlier build shipped with: `cluster.detect_clusters` (Python)
+  // was never wired into the fence or playground pipeline, so the browser-side
+  // `sideStore` was always `{}` and no node ever carried `isSuperNode=true`.
+  // The "Super" checkbox (and every super-node code path) was therefore inert
+  // for every real user — flip the box, nothing happens.
+  //
+  // v0.7.2 fixes that in the browser, without adding a Python dependency:
+  // every ontoink instance auto-clusters its nodes by namespace at init time
+  // if no build-time side-store was shipped. A namespace with `MIN_MEMBERS`
+  // or more members collapses into one hexagonal super-node whose interior is
+  // stashed in `sideStore[cid]` and re-emerges on click.
+  //
+  // Cross-cluster edges are rewritten to point at the containing super-nodes;
+  // interior edges (both endpoints in the same namespace) stay in the
+  // side-store and appear only when the cluster is expanded. Expand/collapse
+  // stay consistent thanks to `_rebuildClusterBoundary`, which recomputes the
+  // touched-cluster's boundary from an untouched `_origEdges` snapshot.
+  //
+  // The old "Super" checkbox is repurposed as **Group by namespace**:
+  //   - checked  = grouped view (super-nodes visible, members hidden)
+  //   - unchecked = flat view (every super-node expanded)
+  var _CLUSTER_MIN_MEMBERS = 4;   // namespaces smaller than this stay flat
+  var _CLUSTER_MIN_GRAPH   = 30;  // graphs smaller than this aren't clustered
+
+  function _shortNsLabel(ns, prefixes) {
+    // Prefer a declared prefix; fall back to the URL's last path segment.
+    if (prefixes) {
+      for (var p in prefixes) {
+        if (Object.prototype.hasOwnProperty.call(prefixes, p) && prefixes[p] === ns) {
+          return p || "(default)";
+        }
+      }
+    }
+    var tail = String(ns || "").replace(/[#/]$/, "");
+    var idx = Math.max(tail.lastIndexOf("/"), tail.lastIndexOf("#"));
+    var last = idx > 0 ? tail.substring(idx + 1) : tail;
+    return last || tail || String(ns);
+  }
+  function _cidForNs(ns) {
+    // Deterministic, DOM-safe, INJECTIVE id.
+    // The naive `replace(/[^a-zA-Z0-9]/g, "_")` aliased common ontology
+    // patterns: `http://ex.org/foo/` and `http://ex.org/foo#` both
+    // collapse to `_grp_http___ex_org_foo_`, silently merging two
+    // logically distinct namespace groups into one mislabeled super-node
+    // (adversarial review 2026-07-10). Hex-encoding preserves round-trip
+    // uniqueness while staying DOM-safe.
+    return "_grp_" + String(ns || "").replace(/[^a-zA-Z0-9]/g, function(c) {
+      return "_" + c.charCodeAt(0).toString(16) + "_";
+    });
+  }
+  function _nsFromNodeData(d) {
+    if (d.namespace) return d.namespace;
+    var iri = d.iri || d.id || "";
+    var idx = Math.max(iri.lastIndexOf("/"), iri.lastIndexOf("#"));
+    return idx > 0 ? iri.substring(0, idx + 1) : "";
+  }
+
+  // Recompute the boundary edges for one cluster from the pristine
+  // `_origEdges` snapshot. Used after every expand/collapse — cy.remove
+  // cascade-kills every edge whose endpoint disappears, so both directions
+  // need to re-emit their touching-cluster edges. The other side may be:
+  //   - unclustered → keep the real IRI
+  //   - in a currently-expanded cluster → keep the real IRI
+  //   - in a currently-collapsed cluster → point at that cluster's super id
+  // Dedup key is (visSrc, visTgt, edgeType); duplicates already in cy are
+  // skipped so repeated calls are idempotent.
+  function _rebuildClusterBoundary(inst, cid) {
+    var cy = inst.cy; if (!cy) return;
+    if (!inst._origEdges || !inst._memberToCid) return;
+    // Purge stale cluster-managed attic entries — every boundary edge is
+    // regenerable from _origEdges, so an attic copy that pre-dated the
+    // current topology is by definition wrong. Without this, the sequence
+    // expand-A → drop LOD below the object-property floor → collapse-A →
+    // raise LOD would restore a stale A_member→B edge whose source is no
+    // longer in cy, throwing "missing endpoint" (adversarial review 2026-07-10).
+    var m = inst._memberToCid || {};
+    var expanded = inst.expandedSuperNodes || new Set();
+    // v0.7.3-fix (round-3 findings #3, #4): the purge previously nuked
+    // EVERY clusterManaged attic entry — but this function only rebuilds
+    // ONE cluster's boundary, so entries belonging to OTHER clusters
+    // (e.g. a facet-hidden cluster B whose boundary edges are legitimately
+    // atticized) got destroyed as collateral. Scope the purge: only
+    // delete entries whose either endpoint touches `cid` (as member or
+    // as the super-id itself).
+    if (inst.attic && inst.attic.forEach) {
+      var stale = [];
+      inst.attic.forEach(function(json, key) {
+        if (!(json && json.data && json.data.clusterManaged === true)) return;
+        var d = json.data;
+        var s_cid_p = m[d.source] || d.source;
+        var t_cid_p = m[d.target] || d.target;
+        if (s_cid_p === cid || t_cid_p === cid) stale.push(key);
+      });
+      for (var s = 0; s < stale.length; s++) inst.attic.delete(stale[s]);
+    }
+    // Snapshot the current edge set so dedup against it is O(1)
+    var existing = {};
+    cy.edges().forEach(function(ee) {
+      var d = ee.data();
+      existing[d.source + " " + d.target + " " + (d.edgeType || "")] = true;
+    });
+    // Bucket by (visSrc, visTgt, edgeType) so duplicates FAN — collect
+    // weight + predicate list rather than skipping the extra edges
+    // (#20 edge fanning).
+    var bucket = {};
+    var toAdd = [];
+    for (var i = 0; i < inst._origEdges.length; i++) {
+      var e = inst._origEdges[i];
+      var s = e.data.source, t = e.data.target;
+      var s_cid = m[s], t_cid = m[t];
+      // Only rebuild edges TOUCHING this cluster
+      if (s_cid !== cid && t_cid !== cid) continue;
+      // Pure-interior edges live in sideStore[cid].edges — expand puts them
+      // back directly, no boundary work needed.
+      if (s_cid && s_cid === t_cid) continue;
+      var visS = s_cid ? (expanded.has(s_cid) ? s : s_cid) : s;
+      var visT = t_cid ? (expanded.has(t_cid) ? t : t_cid) : t;
+      if (visS === visT) continue;
+      // Skip if either endpoint isn't present in cy right now
+      if (cy.getElementById(visS).length === 0) continue;
+      if (cy.getElementById(visT).length === 0) continue;
+      var key = visS + " " + visT + " " + (e.data.edgeType || "");
+      if (existing[key]) continue;
+      var pred_r = e.data.iri || e.data.label || e.data.predicate || "";
+      if (bucket[key]) {
+        bucket[key].weight++;
+        if (pred_r && bucket[key].fan.indexOf(pred_r) < 0) bucket[key].fan.push(pred_r);
+        continue;
+      }
+      bucket[key] = {
+        firstIdx: i,
+        weight: 1,
+        fan: pred_r ? [pred_r] : [],
+        source: visS, target: visT,
+        edgeType: e.data.edgeType || "object-property",
+        origLabel: e.data.label || ""
+      };
+    }
+    Object.keys(bucket).forEach(function(k) {
+      var b = bucket[k];
+      toAdd.push({ group: "edges", data: {
+        id: "_grp_e_" + cid + "_" + b.firstIdx,
+        source: b.source,
+        target: b.target,
+        edgeType: b.edgeType,
+        label: b.weight > 1 ? String(b.weight) : b.origLabel,
+        weight: b.weight,
+        fan: b.fan,
+        clusterManaged: true
+      }});
+    });
+    if (toAdd.length) cy.add(toAdd);
+  }
+
+  // v0.7.4 — Compact subtitle for a cluster's hexagon / hull header.
+  // Examples: "52C · 8I · 5B" (Class / Individual / BlankNode counts),
+  // or "no members" if empty. Only shows type entries with count > 0.
+  // Edge-type entries (prefixed "e_") from the breakdown are ignored
+  // here — they'd bloat the label; the popup shows the full picture.
+  function _clusterSubtitle(br, size) {
+    if (!br) return String(size || 0) + " members";
+    var parts = [];
+    var typeAbbr = { Class: "C", Individual: "I", Literal: "L", BlankNode: "B", SuperNode: "" };
+    ["Class", "Individual", "Literal", "BlankNode"].forEach(function(t) {
+      if (br[t]) parts.push(br[t] + typeAbbr[t]);
+    });
+    Object.keys(br).forEach(function(k) {
+      if (k.indexOf("e_") === 0) return;
+      if (typeAbbr.hasOwnProperty(k)) return;
+      if (br[k]) parts.push(br[k] + " " + k.substring(0, 3));
+    });
+    return parts.length ? parts.join(" · ") : String(size || 0) + " members";
+  }
+
+  // Run the auto-clustering pass on `id`'s cy instance. Skips instances that
+  // already carry a shipped side-store or cluster metadata (build-time Leiden
+  // clustering takes precedence). Idempotent via `inst._nsClustered`.
+  function _autoClusterByNamespace(id) {
+    var inst = instances[id]; if (!inst || !inst.cy || !inst.data) return;
+    if (inst._nsClustered) return;
+    // Respect shipped side-store or cluster metadata — build-time Leiden wins.
+    if (inst.sideStore && Object.keys(inst.sideStore).length > 0) return;
+    if (inst.data.clusters && inst.data.clusters.length > 0) return;
+
+    var cy = inst.cy;
+    var nodes = cy.nodes().filter(function(n) {
+      var d = n.data();
+      return !d.isSuperNode && d.type !== "SuperNode" && d.type !== "Literal";
+    });
+    if (nodes.length < _CLUSTER_MIN_GRAPH) return;
+
+    // Group non-literal nodes by namespace
+    var byNs = {};
+    nodes.forEach(function(n) {
+      var ns = _nsFromNodeData(n.data());
+      if (!ns) return;
+      (byNs[ns] = byNs[ns] || []).push(n.id());
+    });
+
+    var prefixes = inst.data.prefixes || inst.data.namespaces || inst.data.activeNamespaces || {};
+    var clusters = {};
+    var memberToCid = {};
+    var cidCount = 0;
+    Object.keys(byNs).forEach(function(ns) {
+      var members = byNs[ns];
+      if (members.length < _CLUSTER_MIN_MEMBERS) return;
+      var cid = _cidForNs(ns);
+      var title = _shortNsLabel(ns, prefixes);
+      // v0.7.4 — Per-cluster type breakdown: how many Classes vs
+      // Individuals vs blank-nodes vs other. Used by the hexagon /
+      // hull label so users see cluster composition at a glance
+      // ("mwo · 65 · 52 classes · 8 individuals · 5 blanks").
+      clusters[cid] = {
+        id: cid, ns: ns, member_ids: members.slice(),
+        size: members.length, title: title, centrality: 0,
+        type_breakdown: {}
+      };
+      for (var i = 0; i < members.length; i++) memberToCid[members[i]] = cid;
+      cidCount++;
+    });
+    if (cidCount === 0) return;
+
+    // Pristine edge snapshot for boundary rebuilds
+    inst._origEdges = cy.edges().map(function(e) { return e.json(); });
+    inst._memberToCid = memberToCid;
+    inst._clusterMeta = clusters;
+
+    // Populate sideStore[cid] with interior nodes + interior edges only.
+    // Simultaneously tally the type_breakdown for the hexagon label.
+    if (!inst.sideStore) inst.sideStore = {};
+    Object.keys(clusters).forEach(function(cid) {
+      inst.sideStore[cid] = { nodes: [], edges: [], node_badges: {} };
+    });
+    nodes.forEach(function(n) {
+      var cid = memberToCid[n.id()];
+      if (!cid) return;
+      inst.sideStore[cid].nodes.push(n.json());
+      var nd = n.data();
+      var t = nd.type || "Unknown";
+      if (_isBlankNode(nd.id)) t = "BlankNode";
+      var br = clusters[cid].type_breakdown;
+      br[t] = (br[t] || 0) + 1;
+    });
+    // Interior edges + per-edgeType tally for label + boundary rebuild.
+    cy.edges().forEach(function(e) {
+      var d = e.data();
+      var s_cid = memberToCid[d.source];
+      var t_cid = memberToCid[d.target];
+      if (s_cid && s_cid === t_cid) {
+        inst.sideStore[s_cid].edges.push(e.json());
+        var br = clusters[s_cid].type_breakdown;
+        var et = "e_" + (d.edgeType || "other");
+        br[et] = (br[et] || 0) + 1;
+      }
+    });
+
+    // Publish clusters for collapseSuperNode (reads inst.data.clusters)
+    inst.data.clusters = Object.keys(clusters).map(function(cid) { return clusters[cid]; });
+
+    // Remove clustered nodes (cascade also removes their touching edges).
+    // Unclustered nodes + edges between unclustered nodes stay put.
+    var toRemove = nodes.filter(function(n) { return !!memberToCid[n.id()]; });
+    if (toRemove.length) cy.remove(toRemove);
+
+    // Add super-node placeholders. v0.7.4 — richer label built from the
+    // per-cluster type breakdown (see `_clusterSubtitle`) so users can
+    // read the composition without expanding: "mwo · 65 · 52C · 8I · 5B".
+    var superNodes = Object.keys(clusters).map(function(cid) {
+      var meta = clusters[cid];
+      return { group: "nodes", data: {
+        id: cid, label: meta.title, type: "SuperNode", isSuperNode: true,
+        memberCount: meta.size, clusterId: cid, namespace: meta.ns,
+        subtitle: _clusterSubtitle(meta.type_breakdown, meta.size),
+        typeBreakdown: meta.type_breakdown
+      }};
+    });
+    cy.add(superNodes);
+
+    // Add cross-cluster + half-clustered super-edges. Duplicates of
+    // (visS, visT, edgeType) FAN into one — we accumulate weight +
+    // predicate list so the collapsed graph reads a thick "45" instead
+    // of a single anonymous arrow (#20 edge fanning).
+    var superEdges = [];
+    var superEdgeMap = {};
+    for (var i = 0; i < inst._origEdges.length; i++) {
+      var oe = inst._origEdges[i];
+      var s = oe.data.source, t = oe.data.target;
+      var s_cid = memberToCid[s], t_cid = memberToCid[t];
+      if (s_cid && s_cid === t_cid) continue;   // interior → sideStore already
+      if (!s_cid && !t_cid) continue;            // both unclustered → still in cy
+      var visS = s_cid || s;
+      var visT = t_cid || t;
+      if (visS === visT) continue;
+      var key = visS + " " + visT + " " + (oe.data.edgeType || "");
+      var pred_i = oe.data.iri || oe.data.label || oe.data.predicate || "";
+      if (superEdgeMap[key]) {
+        superEdgeMap[key].weight++;
+        if (pred_i && superEdgeMap[key].fan.indexOf(pred_i) < 0) superEdgeMap[key].fan.push(pred_i);
+        continue;
+      }
+      superEdgeMap[key] = {
+        firstIdx: i,
+        weight: 1,
+        fan: pred_i ? [pred_i] : [],
+        source: visS, target: visT,
+        edgeType: oe.data.edgeType || "object-property",
+        origLabel: oe.data.label || ""
+      };
+    }
+    Object.keys(superEdgeMap).forEach(function(k) {
+      var m = superEdgeMap[k];
+      superEdges.push({ group: "edges", data: {
+        id: "_grp_e_init_" + m.firstIdx,
+        source: m.source, target: m.target,
+        edgeType: m.edgeType,
+        label: m.weight > 1 ? String(m.weight) : m.origLabel,
+        weight: m.weight,
+        fan: m.fan,
+        clusterManaged: true
+      }});
+    });
+    if (superEdges.length) cy.add(superEdges);
+
+    inst._nsClustered = true;
+    // Re-layout the grouped view — new node/edge set needs settlement
+    try { cy.layout({ name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 }).run(); } catch (e) {}
+  }
+
+  // "Group by namespace" toggle — the renamed v0.7.2 replacement for the
+  // inert "Super" checkbox.
+  //   checked  → grouped view: collapse every currently-expanded cluster
+  //   unchecked → flat view: expand every super-node still in cy
+  //
+  // Batched via inst._batchOp so expand/collapseSuperNode skip their tail
+  // setLodLevel — otherwise the mid-loop LOD sweep sees the new
+  // showSuperNodes state and evicts every still-collapsed sibling
+  // super-node into the attic before the loop reaches it (adversarial
+  // review 2026-07-10 finding #7). Similarly `showSuperNodes` is written
+  // AFTER the loop so the sweep during the tail setLodLevel sees the
+  // correct final state, not an intermediate one.
+  function toggleSuperNodes(id, checked) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    var cy = inst.cy;
+    inst._batchOp = true;
+    try {
+      if (!checked) {
+        var toExpand = [];
+        cy.nodes().forEach(function(n) {
+          if (n.data("isSuperNode")) toExpand.push(n.id());
+        });
+        for (var i = 0; i < toExpand.length; i++) expandSuperNode(id, toExpand[i]);
+      } else {
+        var toCollapse = [];
+        if (inst.expandedSuperNodes) {
+          inst.expandedSuperNodes.forEach(function(sid) { toCollapse.push(sid); });
+        }
+        for (var j = 0; j < toCollapse.length; j++) collapseSuperNode(id, toCollapse[j]);
+      }
+    } finally {
+      inst._batchOp = false;
+    }
+    inst.showSuperNodes = !!checked;
+    setLodLevel(id, inst.lodLevel);
+  }
+
+  // Render badge chips as a compact overlay next to each node using the
+  // popup mechanism. Stateless — safe to call repeatedly. Renders one
+  // .ov-node-badge-layer per container; contents are position-synced with
+  // cytoscape via a 'render' listener registered once per instance.
+  function renderNodeBadges(id, nodeIds) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    var container = document.getElementById(id); if (!container) return;
+    var badges = (inst.policy && inst.policy.node_badges) || {};
+    if (!badges || !Object.keys(badges).length) return;
+    var layer = container.querySelector(".ov-node-badge-layer");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = "ov-node-badge-layer";
+      layer.style.cssText = "position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:2;";
+      var canvas = container.querySelector(".ov-canvas");
+      if (canvas) canvas.appendChild(layer);
+      else container.appendChild(layer);
+    }
+    var cy = inst.cy;
+    var canvasRect = (container.querySelector(".ov-canvas") || container).getBoundingClientRect();
+
+    var targets = nodeIds && nodeIds.length ? nodeIds : Object.keys(badges);
+    // Rebuild the layer wholesale — the set of visible nodes changes
+    // constantly and virtual overlays are cheap.
+    layer.innerHTML = "";
+    for (var i = 0; i < targets.length; i++) {
+      var iri = targets[i];
+      var b = badges[iri]; if (!b) continue;
+      var n = cy.getElementById(iri);
+      if (!n || !n.length) continue;
+      var counts = b.counts || {};
+      var dp = (b.data_properties && b.data_properties.length) || 0;
+      var ann = (b.annotations && b.annotations.length) || 0;
+      if (!dp && !ann) continue;
+      var chip = document.createElement("div");
+      chip.className = "ov-node-badge";
+      chip.style.cssText = "position:absolute;";
+      var label = "";
+      if (dp)  label += '<span class="ov-node-badge" title="Data properties">' + dp + ' data</span>';
+      if (ann) label += '<span class="ov-node-badge" title="Annotations">[i] ' + ann + '</span>';
+      chip.innerHTML = label;
+      // Position: node.renderedPosition returns pixel coords inside the
+      // cytoscape canvas — piggyback on that.
+      var rp = n.renderedPosition();
+      chip.style.left = (rp.x + 12) + "px";
+      chip.style.top  = (rp.y - 20) + "px";
+      layer.appendChild(chip);
+    }
+  }
+
+  // Fold annotations / data-properties into node_badges and drop hidden
+  // predicates. Used by the SPARQL result path where triples never touch
+  // the Python side. Mutates its input and returns
+  //   { nodes, edges, node_badges }.
+  function applyPredicatePolicyToElements(cyElements, policy) {
+    var nodes = (cyElements && cyElements.nodes) || [];
+    var edges = (cyElements && cyElements.edges) || [];
+    var hide  = (policy && policy.hide)  || [];
+    var fold  = (policy && policy.fold)  || [];
+    var badgePreds = (policy && policy.badge) || [];
+    var node_badges = {};
+
+    function inList(iri, list) {
+      if (!iri || !list || !list.length) return false;
+      for (var i = 0; i < list.length; i++) {
+        var pat = list[i];
+        if (pat === iri) return true;
+        if (pat && pat.charAt(pat.length - 1) === "*") {
+          var stem = pat.substring(0, pat.length - 1);
+          if (iri.indexOf(stem) === 0) return true;
+        }
+      }
+      return false;
+    }
+
+    // Common annotation predicates → annotations bucket
+    var ANNOT = {
+      "http://www.w3.org/2000/01/rdf-schema#label": 1,
+      "http://www.w3.org/2000/01/rdf-schema#comment": 1,
+      "http://www.w3.org/2004/02/skos/core#prefLabel": 1,
+      "http://www.w3.org/2004/02/skos/core#altLabel": 1,
+      "http://purl.org/dc/terms/title": 1,
+      "http://purl.org/dc/terms/description": 1
+    };
+
+    var keptEdges = [];
+    var referenced = {};
+    for (var i = 0; i < edges.length; i++) {
+      var e = edges[i];
+      var d = e.data || {};
+      var pred = d.predicate || d.iri || "";
+      if (inList(pred, hide)) continue;
+      // Fold data-property literals into badges
+      if (d.edgeType === "data-property" && inList(pred, fold)) {
+        var src = d.source;
+        if (!node_badges[src]) node_badges[src] = { annotations: [], data_properties: [], counts: {} };
+        var entry = { predicate: pred, value: d.label || "", datatype: d.datatype || "" };
+        if (ANNOT[pred]) node_badges[src].annotations.push(entry);
+        else            node_badges[src].data_properties.push(entry);
+        continue; // drop the edge
+      }
+      // Badge object-properties: surface, don't drop
+      if (inList(pred, badgePreds)) {
+        var src2 = d.source;
+        if (!node_badges[src2]) node_badges[src2] = { annotations: [], data_properties: [], counts: {} };
+        node_badges[src2].data_properties.push({ predicate: pred, value: d.target || "", datatype: "" });
+        continue;
+      }
+      keptEdges.push(e);
+      if (d.source) referenced[d.source] = 1;
+      if (d.target) referenced[d.target] = 1;
+    }
+    // Drop literal nodes that lost all incident edges after folding.
+    var keptNodes = [];
+    for (var j = 0; j < nodes.length; j++) {
+      var n = nodes[j];
+      var nd = n.data || {};
+      if (nd.type === "Literal" && !referenced[nd.id]) continue;
+      keptNodes.push(n);
+    }
+    // Fill counts
+    for (var k in node_badges) {
+      if (!node_badges.hasOwnProperty(k)) continue;
+      node_badges[k].counts = {
+        annotations:     node_badges[k].annotations.length,
+        data_properties: node_badges[k].data_properties.length,
+        hidden_object:   0
+      };
+    }
+    return { nodes: keptNodes, edges: keptEdges, node_badges: node_badges };
+  }
+
+  // Convert SPARQL result rows (?s ?p ?o) into a Cytoscape elements payload.
+  // The edgeType heuristic mirrors the TTL parser's rule set: object
+  // literal → data-property; rdf:type → rdf-type; rdfs:subClassOf →
+  // subclass; else object-property.
+  function triplesToElements(rows) {
+    if (!rows || !rows.length) return { nodes: [], edges: [] };
+    var nodesById = {};
+    var edges = [];
+
+    function isLiteral(v) { return typeof v === "string" && v.length && v.charAt(0) === '"'; }
+    function localName(iri) {
+      if (!iri) return "";
+      var h = iri.lastIndexOf("#");
+      if (h >= 0) return iri.substring(h + 1);
+      var s = iri.lastIndexOf("/");
+      if (s >= 0) return iri.substring(s + 1);
+      return iri;
+    }
+    function ensureNode(iri, isLit) {
+      if (!iri || nodesById[iri]) return;
+      nodesById[iri] = {
+        group: "nodes",
+        data: {
+          id: iri,
+          iri: iri,
+          label: isLit ? iri.replace(/^"/, "").replace(/"[^"]*$/, "") : localName(iri),
+          type: isLit ? "Literal" : "Individual",
+          color: isLit ? "#dcfce7" : "#e0e7ff",
+          shape: isLit ? "ellipse" : "ellipse"
+        }
+      };
+    }
+
+    var TYPE_IRI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    var SUB_IRI  = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
+
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      // Find s/p/o regardless of the variable's exact name (?s, ?subject, …)
+      var keys = Object.keys(row);
+      var s = row["?s"] || row.s;
+      var p = row["?p"] || row.p;
+      var o = row["?o"] || row.o;
+      // Fallback: first three columns
+      if (s == null && keys.length > 0) s = row[keys[0]];
+      if (p == null && keys.length > 1) p = row[keys[1]];
+      if (o == null && keys.length > 2) o = row[keys[2]];
+      if (!s || !p || o == null) continue;
+
+      var oIsLit = isLiteral(o);
+      var edgeType = oIsLit ? "data-property"
+                    : (p === TYPE_IRI ? "rdf-type"
+                    : (p === SUB_IRI ? "subclass" : "object-property"));
+
+      ensureNode(s, false);
+      ensureNode(o, oIsLit);
+
+      edges.push({
+        group: "edges",
+        data: {
+          id: "sparql-" + i,
+          source: s,
+          target: o,
+          label: localName(p),
+          iri: p,
+          predicate: p,
+          edgeType: edgeType
+        }
+      });
+    }
+    var nodeList = [];
+    for (var k in nodesById) if (nodesById.hasOwnProperty(k)) nodeList.push(nodesById[k]);
+    return { nodes: nodeList, edges: edges };
+  }
+
   // ── Legend overlay (inside canvas) ──────────────────────────────────────
 
   // Read live styles from the cytoscape instance for the given container.
@@ -1219,6 +3003,67 @@ var ontoink = (function () {
         { selector: 'node[type="Literal"]', style: { "shape":"ellipse","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#6a9" }},
         { selector: 'node[type="Datatype"]', style: { "shape":"diamond" }},
         { selector: 'node[type="SHACL Shape"]', style: { "shape":"round-rectangle","border-color":"#0891b2" }},
+        // v0.7.0 — SuperNode gets a chunkier hexagon + double border so
+        // it reads as a "container" node. Label mapper appends the member
+        // count (e.g. "People and Addresses  ·  42") so the cluster size
+        // is legible without a hover.
+        { selector: 'node[?isSuperNode]', style: {
+            "label": function(ele) {
+              var n = ele.data("memberCount");
+              var lab = ele.data("label") || "";
+              return n ? (lab + "  ·  " + n) : lab;
+            },
+            "shape":"hexagon",
+            "background-color":"#e0f2fe",
+            "border-width":3,
+            "border-color":"#0891b2",
+            "border-style":"double",
+            "font-weight":"700",
+            "font-size":"13px",
+            "text-outline-width":2,
+            "text-outline-color":"#fff",
+            "padding":"18px",
+            "text-max-width":"200px"
+        }},
+        { selector: 'node[?isSuperNode]:selected', style: { "border-color":"#0e7490","border-width":4 }},
+        // v0.7.3 — ClusterHull compound parent for expanded clusters.
+        // Dashed rounded rectangle that visually contains its members;
+        // header label at top says "<title> · N · click header to
+        // collapse". Draggable as a whole (Cytoscape's built-in
+        // compound behavior), and tappable on border/header to trigger
+        // collapse (see the tap wiring at ~line 2260).
+        { selector: 'node[?isClusterHull]', style: {
+          "shape":"round-rectangle","background-color":"#f0f9ff","background-opacity":0.35,
+          "border-width":2,"border-style":"dashed","border-color":"#0891b2",
+          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-6,
+          "font-weight":"700","font-size":"12px","color":"#0e7490",
+          "text-background-color":"#e0f2fe","text-background-opacity":0.95,"text-background-padding":"4px",
+          "text-background-shape":"round-rectangle","padding":"22px",
+          "compound-sizing-wrt-labels":"include"
+        }},
+        { selector: 'node[?isClusterHull]:selected', style: { "border-color":"#0e7490","border-width":3,"background-color":"#dbeafe" }},
+        // v0.7.4 — Blank-node styling. rdflib emits blank subjects as
+        // "_:bN..." — they aren't real Individuals no matter what
+        // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
+        // on init; the style below matches that flag reliably (avoiding
+        // the escape-sensitive `[id ^= "_:"]` attribute-prefix selector).
+        { selector: 'node[?isBlankNode]', style: {
+          "background-color":"#f3f4f6","border-style":"dashed","border-color":"#9ca3af",
+          "color":"#6b7280","font-style":"italic","opacity":0.7,
+          "shape":"round-diamond","width":24,"height":24
+        }},
+        // v0.7.3 — Fanned super-edges: when multiple originals collapse
+        // into one boundary edge, `data.weight > 1`. Widen the line
+        // proportionally (mapData → 3..12 px) and paint it a distinct
+        // "bundle" purple so users can tell "45 relations" apart from
+        // a single relation. The `data.fan` array powers the hover
+        // popup at buildEdgePopup.
+        { selector: 'edge[?clusterManaged][weight > 1]', style: {
+          "width": "mapData(weight, 1, 40, 3, 12)",
+          "line-color":"#7c3aed","target-arrow-color":"#7c3aed","source-arrow-color":"#7c3aed",
+          "color":"#5b21b6","font-weight":"700","font-size":"12px",
+          "text-background-color":"#ede9fe","text-background-opacity":0.95,"text-background-padding":"3px"
+        }},
         { selector: "node:selected", style: { "border-width":3,"border-color":"#0891b2" }},
         { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","source-arrow-shape":"circle","source-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","source-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
@@ -1232,10 +3077,67 @@ var ontoink = (function () {
         { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
       ],
       layout: { name:"dagre", rankDir:"BT", nodeSep:60, rankSep:80, edgeSep:20, animate:false, fit:true, padding:30 },
-      wheelSensitivity: 0.3, minZoom: 0.15, maxZoom: 5,
+      // v0.7.4 — Viewport optimizations for large ontologies. On pan/zoom
+      // over hundreds of edges Cytoscape's canvas renderer thrashes; these
+      // flags trade visual detail for interactivity: edges + labels hide
+      // during motion, and the whole scene is bitmap-cached to a texture.
+      // wheelSensitivity 0.15 gives finer-grained zoom control — the old
+      // 0.3 skipped past the sweet spot on trackpads.
+      wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
+      hideEdgesOnViewport: true,
+      hideLabelsOnViewport: true,
+      textureOnViewport: true,
+      pixelRatio: 1,
     });
 
-    instances[containerId] = { cy:cy, data:data, editor:null, originalTtl:data.rawTtl||"" };
+    instances[containerId] = {
+      cy: cy, data: data, editor: null, originalTtl: data.rawTtl || "",
+      sideStore: null,
+      attic: new Map(),
+      // Default: show EVERYTHING (L6) on small graphs — small examples
+      // like /examples/foaf-person/ must render identically to pre-0.7.0.
+      // Only "big" graphs (≥ 500 nodes) auto-collapse to L0 so the first
+      // paint doesn't overwhelm; users can still drag right for more.
+      // Authors can override with a fence YAML `lod: N`.
+      lodLevel: (data.lod_default != null) ? data.lod_default
+                : ((data.nodes && data.nodes.length >= 500) ? 0 : 6),
+      policy: {
+        hide_at_level: data.lod_hide_at_level || {},
+        node_badges: data.node_badges || {},
+        // hide/fold/badge lists only populated when SPARQL wants to re-fold
+        hide: [], fold: [], badge: []
+      },
+      expandedSuperNodes: new Set(),
+      showSuperNodes: true,
+      _nodeBadgesRendered: new Set()
+    };
+    // Big-ontology bootstrap: side-store + auto-cluster + facets + LOD settlement.
+    // loadSideStore first — it only fills sideStore if a build-time Leiden
+    // blob was shipped (v0.7.3 wires cluster.py at build time when the
+    // ontoink[cluster] extras are installed). If it comes back empty, the
+    // browser-side namespace clusterer takes over so "Group" is meaningful.
+    loadSideStore(containerId);
+    _flagBlankNodes(cy);
+    _autoClusterByNamespace(containerId);
+    _buildFacets(instances[containerId]);
+    // v0.7.3 — Position cache (#4). Reuse positions from a previous
+    // open so second visits skip the dagre stall. Key = djb2 hash of
+    // the base64 graph blob (stable per TTL). If nothing cached, we
+    // persist positions on layoutstop below.
+    try {
+      var _cacheSrc = container.getAttribute("data-ontoink-graph") || "";
+      instances[containerId]._posCacheKey = _posCacheKeyFor(_cacheSrc);
+      var _cached = _positionsLoad(instances[containerId]._posCacheKey);
+      if (_cached) _applyCachedPositions(cy, _cached);
+      _wirePositionCache(cy, function() { return instances[containerId] && instances[containerId]._posCacheKey; });
+    } catch (e) {}
+    setLodLevel(containerId, instances[containerId].lodLevel);
+    // v0.7.3 — open the metrics splash for big fence-side ontologies too
+    // (#38). Author can suppress via ``metrics_splash: false`` in fence
+    // YAML if they've placed the fence in a static docs page context.
+    if (data.nodes && data.nodes.length >= 500 && data.metrics_splash !== false) {
+      try { openMetricsSplash(containerId); } catch (e) {}
+    }
 
     function wirePopup(popup, d) {
       popup.querySelector(".ov-popup-close").addEventListener("click",function(){popup.remove();});
@@ -1259,7 +3161,38 @@ var ontoink = (function () {
       });
       makePopupDraggable(popup);
     }
+    // v0.7.0 — super-node tap: expand/collapse instead of showing the
+    // generic popup. Bound BEFORE the generic 'node' handler so Cytoscape
+    // fires the more-specific selector first; we stopPropagation() to
+    // keep the generic handler off.
+    cy.on("tap", 'node[?isSuperNode]', function(evt) {
+      removePopup(container);
+      var n = evt.target;
+      var inst2 = instances[containerId];
+      if (!inst2) return;
+      if (!inst2.expandedSuperNodes) inst2.expandedSuperNodes = new Set();
+      if (inst2.expandedSuperNodes.has(n.id())) collapseSuperNode(containerId, n.id());
+      else                                       expandSuperNode(containerId, n.id());
+      evt.stopPropagation();
+    });
+    // v0.7.3 — ClusterHull tap: collapse the cluster it wraps. The header
+    // label already reads "click header to collapse" so this is the
+    // discoverable affordance we promised. `evt.target` is the parent
+    // only when the user hit the border/header/padding — clicks on child
+    // members fire on the child (member data.parent === hullId doesn't
+    // interfere). Cytoscape's compound-node hit-testing gives us this
+    // out of the box.
+    cy.on("tap", 'node[?isClusterHull]', function(evt) {
+      removePopup(container);
+      var cid = evt.target.data("clusterId");
+      if (cid) collapseSuperNode(containerId, cid);
+      evt.stopPropagation();
+    });
     cy.on("tap", "node", function(evt) {
+      // Don't double-fire for super-nodes or hulls (the selectors above
+      // already handled them).
+      if (evt.target.data("isSuperNode")) return;
+      if (evt.target.data("isClusterHull")) return;
       removePopup(container);
       var d=evt.target.data(), pos=evt.renderedPosition;
       var popup=document.createElement("div"); popup.className="ov-popup"; popup.innerHTML=buildPopup(d,cy);
@@ -2301,12 +4234,123 @@ var ontoink = (function () {
         { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
         { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
+        // v0.7.2 — namespace-cluster super-nodes. Same visual language as
+        // the fence-side style block (~line 1788): chunky hexagon, double
+        // cyan border, member-count suffix. Ensures the playground and
+        // fence renders read as one product.
+        { selector: 'node[?isSuperNode]', style: {
+          "label": function(ele) {
+            // v0.7.4 — Multi-line label. Line 1: prefix + total count.
+            // Line 2: type breakdown ("52C · 8I · 5B"). Uses \n which
+            // Cytoscape renders when text-wrap='wrap' is applied.
+            var n = ele.data("memberCount");
+            var lab = ele.data("label") || "";
+            var st  = ele.data("subtitle") || "";
+            var line1 = n ? (lab + "  ·  " + n) : lab;
+            return st ? (line1 + "\n" + st) : line1;
+          },
+          "text-wrap": "wrap",
+          "line-height": 1.25,
+          "shape":"hexagon","background-color":"#e0f2fe","border-width":3,"border-color":"#0891b2","border-style":"double",
+          "font-weight":"700","font-size":"13px","text-outline-width":2,"text-outline-color":"#fff",
+          "padding":"18px","text-max-width":"200px"
+        }},
+        { selector: 'node[?isSuperNode]:selected', style: { "border-color":"#0e7490","border-width":4 }},
+        // v0.7.3 — ClusterHull compound parent for expanded clusters.
+        // Same visual language as the fence-side hull (~line 2192).
+        { selector: 'node[?isClusterHull]', style: {
+          "shape":"round-rectangle","background-color":"#f0f9ff","background-opacity":0.35,
+          "border-width":2,"border-style":"dashed","border-color":"#0891b2",
+          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-6,
+          "font-weight":"700","font-size":"12px","color":"#0e7490",
+          "text-background-color":"#e0f2fe","text-background-opacity":0.95,"text-background-padding":"4px",
+          "text-background-shape":"round-rectangle","padding":"22px",
+          "compound-sizing-wrt-labels":"include"
+        }},
+        { selector: 'node[?isClusterHull]:selected', style: { "border-color":"#0e7490","border-width":3,"background-color":"#dbeafe" }},
+        // v0.7.4 — Blank-node styling. rdflib emits blank subjects as
+        // "_:bN..." — they aren't real Individuals no matter what
+        // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
+        // on init; the style below matches that flag reliably (avoiding
+        // the escape-sensitive `[id ^= "_:"]` attribute-prefix selector).
+        { selector: 'node[?isBlankNode]', style: {
+          "background-color":"#f3f4f6","border-style":"dashed","border-color":"#9ca3af",
+          "color":"#6b7280","font-style":"italic","opacity":0.7,
+          "shape":"round-diamond","width":24,"height":24
+        }},
+        // v0.7.3 — Fanned super-edges: when multiple originals collapse
+        // into one boundary edge, `data.weight > 1`. Widen the line
+        // proportionally (mapData → 3..12 px) and paint it a distinct
+        // "bundle" purple so users can tell "45 relations" apart from
+        // a single relation. The `data.fan` array powers the hover
+        // popup at buildEdgePopup.
+        { selector: 'edge[?clusterManaged][weight > 1]', style: {
+          "width": "mapData(weight, 1, 40, 3, 12)",
+          "line-color":"#7c3aed","target-arrow-color":"#7c3aed","source-arrow-color":"#7c3aed",
+          "color":"#5b21b6","font-weight":"700","font-size":"12px",
+          "text-background-color":"#ede9fe","text-background-opacity":0.95,"text-background-padding":"3px"
+        }},
       ],
       layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, edgeSep: 20, animate: false, fit: true, padding: 30 },
-      wheelSensitivity: 0.3, minZoom: 0.15, maxZoom: 5,
+      // v0.7.4 — Viewport optimizations for large ontologies. On pan/zoom
+      // over hundreds of edges Cytoscape's canvas renderer thrashes; these
+      // flags trade visual detail for interactivity: edges + labels hide
+      // during motion, and the whole scene is bitmap-cached to a texture.
+      // wheelSensitivity 0.15 gives finer-grained zoom control — the old
+      // 0.3 skipped past the sweet spot on trackpads.
+      wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
+      hideEdgesOnViewport: true,
+      hideLabelsOnViewport: true,
+      textureOnViewport: true,
+      pixelRatio: 1,
     });
 
-    instances[containerId] = { cy: cy, data: data, editor: null, originalTtl: ttl };
+    // Playground init — mirror the fence-side v0.7.0 semantic-tile fields
+    // so LOD slider + Attic + Super toggle + node badges all work here.
+    // The playground has no build-time side-store (no Leiden clustering
+    // runs on the user's live TTL), so ``sideStore`` starts empty and
+    // ``expandedSuperNodes`` stays untouched.
+    //
+    // Default LOD: small graphs land on L6 (show everything, pre-0.7.0
+    // parity — the toolbar is the OPT-IN for hiding). Big graphs (≥ 500
+    // nodes) get the metrics splash after render (see _openSplashIfBig
+    // below), which shows the overview + a LOD picker the user commits
+    // to before the graph unfurls. Until they pick, we start at L0 so
+    // the initial paint is cheap.
+    var _isBigGraph = (data.nodes && data.nodes.length >= 500);
+    instances[containerId] = {
+      cy: cy, data: data, editor: null, originalTtl: ttl,
+      sideStore: {},
+      attic: new Map(),
+      lodLevel: _isBigGraph ? 0 : 6,
+      policy: { hide_at_level: {}, node_badges: {}, hide: [], fold: [], badge: [] },
+      expandedSuperNodes: new Set(),
+      showSuperNodes: true,
+      _nodeBadgesRendered: new Set(),
+      _isPlayground: true
+    };
+    // v0.7.2 — run browser-side namespace clustering on the pasted TTL so
+    // the "Group by namespace" checkbox is meaningful in the playground.
+    // The fence path has an equivalent bootstrap at line ~1848; keeping
+    // the two in sync is deliberate.
+    _flagBlankNodes(cy);
+    _autoClusterByNamespace(containerId);
+    _buildFacets(instances[containerId]);
+    // v0.7.3 — Position cache (#4). Keyed off the pasted TTL so the
+    // same paste on a later session recovers its layout.
+    try {
+      instances[containerId]._posCacheKey = _posCacheKeyFor(ttl || "");
+      var _cachedPos = _positionsLoad(instances[containerId]._posCacheKey);
+      if (_cachedPos) _applyCachedPositions(cy, _cachedPos);
+      _wirePositionCache(cy, function() { return instances[containerId] && instances[containerId]._posCacheKey; });
+    } catch (e) {}
+    // Bootstrap the LOD pipeline so the toolbar controls in
+    // demo/docs/playground.md take effect the moment the graph appears.
+    setLodLevel(containerId, instances[containerId].lodLevel);
+    // v0.7.3 — on big graphs, open the metrics dashboard splash so the
+    // user sees the shape of what they pasted (with a LOD picker) before
+    // committing to a first render (#38 in docs/big-ontology-plan.md).
+    if (_isBigGraph) { try { openMetricsSplash(containerId); } catch (e) {} }
 
     // Wire tap events
     function wirePlaygroundPopup(popup, d) {
@@ -2330,7 +4374,33 @@ var ontoink = (function () {
       });
       makePopupDraggable(popup);
     }
+    // v0.7.2 — super-node tap: expand/collapse the cluster instead of showing
+    // the ordinary popup. Bound BEFORE the generic 'node' handler so
+    // Cytoscape fires the more-specific selector first; stopPropagation()
+    // then keeps the generic handler off. Mirrors the fence-side wiring
+    // (~line 1874) so the playground and fence tap semantics match.
+    cy.on("tap", 'node[?isSuperNode]', function(evt) {
+      removePopup(container);
+      var n = evt.target;
+      var inst2 = instances[containerId];
+      if (!inst2) return;
+      if (!inst2.expandedSuperNodes) inst2.expandedSuperNodes = new Set();
+      if (inst2.expandedSuperNodes.has(n.id())) collapseSuperNode(containerId, n.id());
+      else                                       expandSuperNode(containerId, n.id());
+      evt.stopPropagation();
+    });
+    // v0.7.3 — ClusterHull tap: collapse. Matches the fence wiring
+    // (~line 2290). The header label reads "click header to collapse".
+    cy.on("tap", 'node[?isClusterHull]', function(evt) {
+      removePopup(container);
+      var cid = evt.target.data("clusterId");
+      if (cid) collapseSuperNode(containerId, cid);
+      evt.stopPropagation();
+    });
     cy.on("tap", "node", function(evt) {
+      // Don't double-fire for super-nodes or hulls.
+      if (evt.target.data("isSuperNode")) return;
+      if (evt.target.data("isClusterHull")) return;
       removePopup(container);
       var d = evt.target.data(), pos = evt.renderedPosition;
       var popup = document.createElement("div"); popup.className = "ov-popup"; popup.innerHTML = buildPopup(d, cy);
@@ -3142,8 +5212,79 @@ var ontoink = (function () {
 
     if (!results.length) { resultEl.innerHTML = '<span style="color:#9ca3af;">No results.</span>'; return; }
 
+    // v0.7.0 — SPARQL → LOD/Attic integration.
+    // If the SELECT projected ?s ?p ?o (the canonical triple pattern),
+    // materialise the rows into cytoscape elements so they participate in
+    // the SAME LOD slider + Attic UX as fence-loaded graphs. We do NOT
+    // client-side cluster — Leiden runs at build time only. Surface the
+    // trade-off as a small info pill above the results table.
+    var svars = selMatch[1].toLowerCase();
+    var hasSPO = /\?s\b/.test(svars) && /\?p\b/.test(svars) && /\?o\b/.test(svars);
+    var sparqlNoteHtml = "";
+    if (hasSPO) {
+      try {
+        var raw = triplesToElements(results);
+        // Filter out nodes/edges that already exist in cy (avoid duplicates
+        // when the fence graph and the SPARQL selection overlap).
+        var cy = inst.cy;
+        var newNodes = [], newEdges = [];
+        for (var ni = 0; ni < raw.nodes.length; ni++) {
+          var nEl = raw.nodes[ni];
+          if (nEl && nEl.data && !cy.getElementById(nEl.data.id).length) newNodes.push(nEl);
+        }
+        var edgeSeen = {};
+        for (var ei = 0; ei < raw.edges.length; ei++) {
+          var eEl = raw.edges[ei];
+          if (!eEl || !eEl.data) continue;
+          var key = eEl.data.source + "|" + eEl.data.predicate + "|" + eEl.data.target;
+          if (edgeSeen[key]) continue;
+          edgeSeen[key] = 1;
+          // Only add if source & target exist (either in cy already or in new nodes)
+          newEdges.push(eEl);
+        }
+        var filtered = { nodes: newNodes, edges: newEdges };
+
+        // Fold / hide / badge predicates BEFORE they hit cytoscape.
+        // inst.policy.{hide,fold,badge} may be empty — the helper is a
+        // no-op in that case.
+        var sanitised = applyPredicatePolicyToElements(filtered, inst.policy || {});
+
+        if (sanitised.nodes.length || sanitised.edges.length) {
+          if (sanitised.nodes.length) cy.add(sanitised.nodes);
+          if (sanitised.edges.length) cy.add(sanitised.edges);
+          // Merge folded badges so renderNodeBadges() picks them up.
+          if (sanitised.node_badges) {
+            if (!inst.policy) inst.policy = { hide_at_level: {}, node_badges: {} };
+            if (!inst.policy.node_badges) inst.policy.node_badges = {};
+            Object.assign(inst.policy.node_badges, sanitised.node_badges);
+          }
+          // Mark the newly-added elements so the Attic list can show
+          // "from SPARQL" chips downstream, and so a page reload knows
+          // to re-run the query to restore them.
+          inst._sparqlSourced = true;
+          for (var mi = 0; mi < sanitised.nodes.length; mi++) {
+            var mn = sanitised.nodes[mi];
+            if (mn && mn.data) mn.data.fromSparql = true;
+          }
+          // Settle at the current LOD slider position — SPARQL elements
+          // whose floor exceeds the level land in the Attic identically
+          // to fence-loaded ones.
+          setLodLevel(id, inst.lodLevel);
+        }
+        sparqlNoteHtml = '<div class="ov-sparql-note" title="Community detection runs at build time only. LOD slider and Attic still work for live results.">'
+                      + 'SPARQL results — clustering unavailable for live queries'
+                      + '</div>';
+      } catch (mErr) {
+        // Materialisation must never break the table render.
+        sparqlNoteHtml = '<div class="ov-sparql-note" style="background:#fef2f2;color:#991b1b;border-color:#fecaca;">'
+                      + 'Could not materialise results into the graph: ' + esc(String(mErr && mErr.message || mErr))
+                      + '</div>';
+      }
+    }
+
     // Render table with labels
-    var h = '<div style="font-size:12px;color:#374151;margin-bottom:6px;"><strong>' + results.length + '</strong> result(s)</div>';
+    var h = sparqlNoteHtml
+          + '<div style="font-size:12px;color:#374151;margin-bottom:6px;"><strong>' + results.length + '</strong> result(s)</div>';
     h += '<table class="ov-inferred-table"><thead><tr>';
     vars.forEach(function(v) { h += '<th>' + esc(v) + '</th>'; });
     h += '</tr></thead><tbody>';
@@ -3709,5 +5850,931 @@ var ontoink = (function () {
 
   document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll(".ontoink-container").forEach(function(el){initGraph(el.id);});});
 
-  return { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC, derefIriRemote:derefIriRemote, togglePlaygroundReasoning:togglePlaygroundReasoning, downloadInferences:downloadInferences, copyInferences:copyInferences, diagnoseReasoner:diagnoseReasoner, setInferredOverlay:setInferredOverlay };
+  // v0.7.4-fix — This was `return { ... };` but the giant IIFE had a
+  // LOT of code below this point (style presets, live-editor module,
+  // auto-mount hook) that would have been dead — `return` exits early
+  // and never lets those statements execute. Users reported that
+  // "Style dropdown does nothing" and "Live editor renders nothing";
+  // both are consequences of the same dead-code trap. Switch to a
+  // `var api = {...}` pattern and add `return api;` at the very end
+  // of the IIFE so every subsequent statement runs.
+  var api = { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC, derefIriRemote:derefIriRemote, togglePlaygroundReasoning:togglePlaygroundReasoning, downloadInferences:downloadInferences, copyInferences:copyInferences, diagnoseReasoner:diagnoseReasoner, setInferredOverlay:setInferredOverlay,
+    // v0.7.0 Big-ontology mode — LOD / Hidden / Super / clustering runtime.
+    // These were defined in the IIFE but never surfaced to the public
+    // ``window.ontoink`` object, so every onclick/oninput in the fence
+    // template silently no-op'd. That's why the slider moved but stayed
+    // at 2 — ``ontoink.setLodLevel`` didn't exist.
+    setLodLevel: setLodLevel,
+    openAtticPanel: openAtticPanel,
+    closeAtticPanel: closeAtticPanel,
+    pinFromAttic: pinFromAttic,
+    toggleSuperNodes: toggleSuperNodes,
+    expandSuperNode: expandSuperNode,
+    collapseSuperNode: collapseSuperNode,
+    loadSideStore: loadSideStore,
+    applyPredicatePolicyToElements: applyPredicatePolicyToElements,
+    renderNodeBadges: renderNodeBadges,
+    // v0.7.3 — Faceted browsing (#33)
+    openFacetsPanel: openFacetsPanel,
+    closeFacetsPanel: closeFacetsPanel,
+    toggleFacet: toggleFacet,
+    selectAllFacets: selectAllFacets,
+    clearFacet: clearFacet,
+    // v0.7.3 — Metrics dashboard splash (#38)
+    openMetricsSplash: openMetricsSplash,
+    closeMetricsSplash: closeMetricsSplash,
+    _exploreFromSplash: _exploreFromSplash,
+    triplesToElements: triplesToElements,
+    // v0.7.4 — Live editor with D2-inspired DSL. See ontoink-dsl.js
+    // for the parser and demo/docs/live-editor.md for the page.
+    // NOTE: `liveEditor` (declared as `var liveEditor = (function(){})()`)
+    // is only bound AFTER this object literal evaluates. Reading it
+    // here would capture `undefined`. Instead we bind api.liveEditor
+    // right after the IIFE assigns it below.
+    // liveEditor: liveEditor,   (bound at bottom of file — see line ~end)
+    // v0.7.4 — Style presets (Chowlk / Graffoo / VOWL / UML-ODM).
+    applyStylePreset: applyStylePreset,
+    listStylePresets: listStylePresets
+  };
+
+  // ==========================================================================
+  // v0.7.4 — Style presets.
+  //
+  // A dropdown in the Edit Layout panel lets users swap ontoink's default
+  // stylesheet for one of the canonical ontology-viz notations. Each preset
+  // is a Cytoscape.js style array; on first apply we snapshot cy.style()
+  // to `inst._originalStyle` so the "Ontoink default" option can revert
+  // faithfully.
+  //
+  // The presets are approximations — not every OWL construct maps 1:1 to
+  // Cytoscape.js shape/color, and the source tools (drawio, yEd, WebVOWL)
+  // have their own quirks. Where the canonical rendering can't be
+  // matched (Chowlk's underlined individuals, VOWL's edge-midpoint
+  // property chips), we use the closest Cytoscape idiom and note the
+  // compromise inline.
+
+  function _chowlkStyle() {
+    // Chowlk (Chávez-Feria et al., ESWC 2022).
+    // Canonical reference: https://chowlk.linkeddata.es/notation
+    //
+    // The Chowlk notation is deliberately austere: white rectangles with
+    // thin black borders, hand-drawable on a whiteboard. Distinction
+    // between element kinds is by BORDER STYLE and TEXT DECORATION, not
+    // by fill color (the paper explicitly leaves fill color free for
+    // namespace tinting).
+    //
+    //  - Class:        white rect + solid black border
+    //  - Individual:   white rect + solid border + UNDERLINED label
+    //    (Cytoscape can't underline node labels — italic is our proxy)
+    //  - Datatype:     white rect + DASHED border
+    //  - Restriction:  white round-rect + DASHED border with the
+    //                  restriction expression as label
+    //  - subClassOf:   solid line + hollow triangle head (UML idiom)
+    //  - rdf:type:     dashed line + hollow triangle
+    //  - Object prop:  solid line + FILLED triangle head, straight not bezier
+    return [
+      { selector: "node", style: {
+        shape: "rectangle",
+        "background-color": "#ffffff",
+        "border-color": "#000000", "border-width": 1, "border-style": "solid",
+        color: "#000000", "font-family": "'Helvetica','Arial',sans-serif",
+        "font-size": "12px", label: "data(label)",
+        "text-valign": "center", "text-halign": "center",
+        width: "label", height: "label", padding: "10px",
+        "text-wrap": "wrap", "text-max-width": "180px"
+      }},
+      { selector: 'node[type="Class"]', style: { "border-style": "solid" }},
+      { selector: 'node[type="Individual"]', style: { "font-style": "italic" }},
+      { selector: 'node[type="Literal"]', style: { "border-style": "dashed" }},
+      { selector: 'node[?isBlankNode]', style: { shape: "ellipse", "border-style": "solid" }},
+      { selector: 'node[?isSuperNode]', style: { shape: "hexagon", "border-width": 3, "border-style": "double" }},
+      { selector: 'node[?isClusterHull]', style: { shape: "round-rectangle", "background-opacity": 0.15, "border-style": "dashed" }},
+      { selector: "edge", style: {
+        "curve-style": "straight",   // Chowlk uses straight lines, not bezier
+        "line-color": "#000000", "target-arrow-color": "#000000",
+        "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
+        width: 1, label: "data(label)",
+        "font-family": "'Helvetica','Arial',sans-serif", "font-size": "10px", color: "#000000",
+        "text-background-color": "#ffffff", "text-background-opacity": 1, "text-background-padding": "2px"
+      }},
+      { selector: 'edge[edgeType="subclass"]', style: { "target-arrow-fill": "hollow" }},
+      { selector: 'edge[edgeType="rdf-type"]', style: { "line-style": "dashed", "target-arrow-fill": "hollow" }},
+    ];
+  }
+
+  function _graffooStyle() {
+    // Graffoo (Falco, Gangemi, Peroni, Shotton, Vitali — ESWC 2014).
+    // Canonical reference: https://essepuntato.it/graffoo/
+    //
+    // Faithful reproduction of the notation:
+    //  - Bright-yellow rectangles (#FFFF66) with black borders for classes
+    //  - Small filled circles (~14px navy) for individuals with the label
+    //    positioned OUTSIDE (below) the shape — this is Graffoo's signature
+    //  - Green parallelograms for datatype/literal
+    //  - Object-property arrows: BLUE with a filled dot at the SOURCE end
+    //    (the `●━━━▶` pattern is the visual signature that distinguishes
+    //    Graffoo from every other ontology notation)
+    //  - Data-property arrows: GREEN, same source-dot idiom
+    //  - Straight edges (not bezier) matching the paper's diagrams
+    //  - Property labels in blue italic (dark blue for object, dark green
+    //    for data properties)
+    return [
+      { selector: "node", style: {
+        label: "data(label)",
+        "text-valign": "center", "text-halign": "center",
+        "font-family": "'Helvetica','Arial',sans-serif", "font-size": "11px",
+        color: "#000000",
+        width: "label", height: "label", padding: "8px",
+        "text-wrap": "wrap", "text-max-width": "180px"
+      }},
+      // Class: bright yellow ROUND-RECTANGLE with black border
+      // (per the Graffoo legend at essepuntato.it/graffoo/graffoo-legend.pdf)
+      { selector: 'node[type="Class"]', style: {
+        shape: "round-rectangle",
+        "background-color": "#FFFF00",   // canonical bright Graffoo yellow
+        "border-color": "#000000",
+        "border-width": 1,
+        "font-weight": "500",
+        padding: "10px"
+      }},
+      // Individuals: small PINK/MAGENTA filled circle with dark border
+      // and label BELOW (per Graffoo legend "an instance of a class").
+      { selector: 'node[type="Individual"]', style: {
+        shape: "ellipse",
+        "background-color": "#FF66CC",    // Graffoo pink
+        "border-color": "#B00060",
+        "border-width": 2,
+        width: 18, height: 18,
+        color: "#000000",
+        "text-valign": "bottom",
+        "text-halign": "center",
+        "text-margin-y": 6,
+        "font-style": "italic",
+        padding: "0px"
+      }},
+      // Datatype / literal: GREEN parallelogram (rhomboid) per Graffoo spec
+      { selector: 'node[type="Literal"]', style: {
+        shape: "rhomboid",
+        "background-color": "#98FB98",    // Graffoo pale green
+        "border-color": "#000000", "border-width": 1,
+        "font-style": "italic",
+        padding: "8px"
+      }},
+      // Blank node / anonymous class expression: DASHED yellow round-rect
+      // (Graffoo "class restriction" idiom — same yellow, dashed border).
+      { selector: 'node[?isBlankNode]', style: {
+        shape: "round-rectangle",
+        "background-color": "#FFFF99", "border-color": "#000000",
+        "border-style": "dashed", "border-width": 1
+      }},
+      { selector: 'node[?isSuperNode]', style: {
+        shape: "hexagon", "background-color": "#FFFF00",
+        "border-width": 2, "border-color": "#000000", "border-style": "double"
+      }},
+      { selector: 'node[?isClusterHull]', style: {
+        shape: "round-rectangle",
+        "background-color": "#FFFFCC", "background-opacity": 0.35,
+        "border-style": "dashed", "border-color": "#000000"
+      }},
+      { selector: "edge", style: {
+        // Straight lines match Graffoo diagrams; bezier curves don't
+        "curve-style": "straight",
+        label: "data(label)",
+        "font-size": "10px", "font-family": "'Helvetica','Arial',sans-serif",
+        "font-style": "italic",
+        "target-arrow-shape": "triangle",
+        "target-arrow-fill": "filled",
+        width: 1.5,
+        "text-background-color": "#ffffff",
+        "text-background-opacity": 0.95,
+        "text-background-padding": "2px"
+      }},
+      // Subclass: solid black line + hollow triangle head (UML generalisation)
+      { selector: 'edge[edgeType="subclass"]', style: {
+        "line-color": "#000000", "target-arrow-color": "#000000",
+        "target-arrow-fill": "hollow", color: "#000000",
+        "font-style": "normal"
+      }},
+      // rdf:type: dotted black with hollow triangle head
+      { selector: 'edge[edgeType="rdf-type"]', style: {
+        "line-color": "#000000", "target-arrow-color": "#000000",
+        "line-style": "dotted", color: "#000000",
+        "target-arrow-fill": "hollow",
+        "font-style": "normal"
+      }},
+      // Object property: DARK-BLUE line + FILLED source circle + filled
+      // triangle target. The source-dot is Graffoo's signature (●━━━▶).
+      { selector: 'edge[edgeType="object-property"]', style: {
+        "line-color": "#0000CD", "target-arrow-color": "#0000CD",
+        "source-arrow-shape": "circle", "source-arrow-color": "#0000CD",
+        "source-arrow-fill": "filled",
+        "target-arrow-fill": "filled",
+        color: "#0000CD",
+        width: 1.5
+      }},
+      // Data property: GREEN line + HOLLOW source circle + HOLLOW triangle
+      // (per Graffoo legend: ○━━━▷ green — datatype-side is hollow).
+      { selector: 'edge[edgeType="data-property"]', style: {
+        "line-color": "#008000", "target-arrow-color": "#008000",
+        "source-arrow-shape": "circle", "source-arrow-color": "#008000",
+        "source-arrow-fill": "hollow",
+        "target-arrow-fill": "hollow",
+        color: "#008000",
+        width: 1.5
+      }},
+      // Annotation property: ORANGE/BROWN line + HOLLOW source circle +
+      // HOLLOW triangle target (per Graffoo legend "annotation property").
+      { selector: 'edge[edgeType="annotation-property"]', style: {
+        "line-color": "#C86400", "target-arrow-color": "#C86400",
+        "source-arrow-shape": "circle", "source-arrow-color": "#C86400",
+        "source-arrow-fill": "hollow",
+        "target-arrow-fill": "hollow",
+        color: "#C86400",
+        width: 1.5
+      }},
+    ];
+  }
+
+  function _vowlStyle() {
+    // VOWL 2 / WebVOWL (Lohmann, Negru, Haag, Ertl — Semantic Web Journal 2016).
+    // Canonical reference: http://vowl.visualdataweb.org/webvowl.html
+    //
+    // Faithful VOWL colors:
+    //  - Class:            light blue circle    (#AACCFF fill, #333 border, no border)
+    //  - External class:   dark blue circle     (#3366CC fill, white text)
+    //  - Datatype/Literal: yellow rectangle     (#FFCC33 fill, black text)
+    //  - Individual:       dashed white circle  (small)
+    //  - Object property:  blue chip label on the edge midpoint (#AACCFF chip)
+    //  - Data property:    green chip label on the edge midpoint (#99CC66 chip)
+    //  - rdf:type:         thin dotted gray line, small filled triangle
+    //  - subClassOf:       darker line + hollow triangle head
+    return [
+      { selector: "node", style: {
+        label: "data(label)",
+        "text-valign": "center", "text-halign": "center",
+        "font-family": "'Helvetica','Arial',sans-serif", "font-size": "11px",
+        "font-weight": "500",
+        color: "#000000",
+        "text-wrap": "wrap", "text-max-width": "120px"
+      }},
+      { selector: 'node[type="Class"]', style: {
+        shape: "ellipse",
+        "background-color": "#AACCFF",   // canonical WebVOWL light blue
+        "border-color": "#000000", "border-width": 0,
+        width: 78, height: 78, padding: "14px"
+      }},
+      { selector: 'node[?external]', style: {
+        "background-color": "#3366CC", color: "#ffffff", "border-color": "#1F4788"
+      }},
+      { selector: 'node[type="Individual"]', style: {
+        shape: "ellipse",
+        "background-color": "#ffffff", "border-color": "#333333",
+        "border-style": "dashed", "border-width": 2,
+        width: 48, height: 48, padding: "6px",
+        "font-size": "10px"
+      }},
+      // Datatype / Literal: yellow rectangle per VOWL 2 spec
+      { selector: 'node[type="Literal"]', style: {
+        shape: "rectangle",
+        "background-color": "#FFCC33", "border-color": "#000000", "border-width": 0,
+        padding: "10px"
+      }},
+      { selector: 'node[?isBlankNode]', style: {
+        shape: "ellipse",
+        "background-color": "#ffffff", "border-color": "#000000",
+        width: 24, height: 24
+      }},
+      { selector: 'node[?isSuperNode]', style: { shape: "hexagon", "background-color": "#AACCFF", "border-width": 3, "border-color": "#3366CC", "border-style": "double" }},
+      { selector: 'node[?isClusterHull]', style: { shape: "round-rectangle", "background-color": "#DDEEFF", "background-opacity": 0.35, "border-style": "dashed", "border-color": "#3366CC" }},
+      { selector: "edge", style: {
+        "curve-style": "straight",   // VOWL uses straight lines with midpoint labels
+        label: "data(label)",
+        "font-size": "10px", "font-family": "'Helvetica','Arial',sans-serif",
+        "font-weight": "500",
+        "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
+        // VOWL "chip" label: colored rectangle background on the edge midpoint
+        "text-background-color": "#AACCFF",
+        "text-background-opacity": 1,
+        "text-background-padding": "5px",
+        "text-background-shape": "rectangle",
+        "text-border-color": "#3366CC",
+        "text-border-opacity": 1,
+        "text-border-width": 1,
+        color: "#000000", width: 2
+      }},
+      // Subclass: gray with hollow triangle, no chip
+      { selector: 'edge[edgeType="subclass"]', style: {
+        "line-color": "#000000", "target-arrow-color": "#000000",
+        "target-arrow-fill": "hollow",
+        "text-background-color": "#f0f0f0",
+        "text-border-color": "#777777"
+      }},
+      // rdf:type: thin dotted gray, small target arrow, no chip color
+      { selector: 'edge[edgeType="rdf-type"]', style: {
+        "line-color": "#999999", "target-arrow-color": "#999999",
+        "line-style": "dotted", width: 1,
+        "text-background-color": "#f8f8f8", "text-border-color": "#cccccc",
+        "target-arrow-fill": "filled"
+      }},
+      // Object property: BLUE chip label (WebVOWL signature)
+      { selector: 'edge[edgeType="object-property"]', style: {
+        "line-color": "#3366CC", "target-arrow-color": "#3366CC",
+        "text-background-color": "#AACCFF", "text-border-color": "#3366CC"
+      }},
+      // Data property: GREEN chip label (WebVOWL signature)
+      { selector: 'edge[edgeType="data-property"]', style: {
+        "line-color": "#5A5A5A", "target-arrow-color": "#5A5A5A",
+        "text-background-color": "#99CC66", "text-border-color": "#4A8020"
+      }},
+      // Annotation property: PURPLE-tint chip
+      { selector: 'edge[edgeType="annotation-property"]', style: {
+        "line-color": "#999999", "target-arrow-color": "#999999",
+        "text-background-color": "#EBE1F5", "text-border-color": "#9467BD"
+      }},
+    ];
+  }
+
+  var _STYLE_PRESETS = {
+    ontoink:  null,             // sentinel — restore snapshot
+    chowlk:   _chowlkStyle,
+    graffoo:  _graffooStyle,
+    vowl:     _vowlStyle
+  };
+
+  function listStylePresets() {
+    return [
+      { id: "ontoink", label: "Ontoink default" },
+      { id: "chowlk",  label: "Chowlk (white rectangles, black borders)" },
+      { id: "graffoo", label: "Graffoo (yellow classes, green individuals)" },
+      { id: "vowl",    label: "VOWL / WebVOWL (blue circles)" }
+    ];
+  }
+  function applyStylePreset(id, presetName) {
+    var inst = instances[id];
+    if (!inst || !inst.cy) {
+      console.warn("[ontoink] applyStylePreset: no cy instance for '" + id + "'");
+      return;
+    }
+    var cy = inst.cy;
+    inst.stylePreset = presetName;
+    if (presetName === "ontoink") {
+      // v0.7.4-fix — Restoring the original stylesheet reliably requires
+      // capturing it before we swapped it. `cy.style().json()` returns a
+      // normalised form that doesn't round-trip cleanly through fromJson
+      // on every Cytoscape version; rather than ship a fragile restore,
+      // tell the user to reload for the default. The snapshot is kept
+      // as a best-effort attempt for people who want to script it.
+      if (inst._originalStyle) {
+        try { cy.style(inst._originalStyle); console.info("[ontoink] restored Ontoink default"); return; }
+        catch (e) { console.warn("[ontoink] snapshot restore failed; reload the page for Ontoink default:", e); return; }
+      }
+      console.info("[ontoink] Reload the page to restore Ontoink default style.");
+      return;
+    }
+    if (!_STYLE_PRESETS[presetName]) {
+      console.warn("[ontoink] applyStylePreset: unknown preset '" + presetName + "'");
+      return;
+    }
+    // Snapshot the CURRENT stylesheet as best-effort so a later revert
+    // has SOMETHING to try. Fails silently — not the critical path.
+    if (!inst._originalStyle) {
+      try { inst._originalStyle = cy.style().json(); }
+      catch (e) { inst._originalStyle = null; }
+    }
+    var factory = _STYLE_PRESETS[presetName];
+    var stylesheet = (typeof factory === "function") ? factory() : factory;
+    try {
+      cy.style(stylesheet);
+      console.info("[ontoink] applied style preset '" + presetName + "' (" + stylesheet.length + " selectors)");
+    } catch (e) {
+      console.error("[ontoink] applyStylePreset failed for '" + presetName + "':", e);
+    }
+  }
+
+  // ==========================================================================
+  // v0.7.4 — Live editor. Small module that binds a <textarea> DSL editor to
+  // an ontoink graph + a Turtle preview. Not a full ontoink instance — no
+  // clustering, no facets — just a live viz of the parsed triples.
+  //
+  // Requires the ontoink-dsl.js sibling script to be loaded first
+  // (demo/docs/live-editor.md includes it via <script src="…">).
+
+  var liveEditor = (function() {
+
+    // Style block for the live-editor graph. Deliberately simpler than the
+    // playground: no OWL restrictions, no SHACL, no clustering — just
+    // Class / Individual / Literal / BlankNode with the four common edge
+    // types. Matches the ontoink defaults so the visuals feel continuous.
+    function _leStyle() {
+      return [
+        { selector: "node", style: {
+          "label":"data(label)","background-color":"data(color)",
+          "text-valign":"center","text-halign":"center",
+          "width":"label","height":"label","padding":"12px",
+          "font-size":"12px","font-family":"'Inter','Segoe UI',system-ui,sans-serif",
+          "text-wrap":"wrap","text-max-width":"160px",
+          "border-width":1,"border-color":"#94a3b8","color":"#111827"
+        }},
+        { selector: 'node[type="Class"]', style: { "shape":"rectangle","border-width":2,"border-color":"#0891b2","font-weight":"600" }},
+        { selector: 'node[type="Individual"]', style: { "shape":"ellipse" }},
+        { selector: 'node[type="Literal"]', style: { "shape":"round-rectangle","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#65a30d","background-color":"#f0fdf4","color":"#365314" }},
+        { selector: 'node[?isBlankNode]', style: { "shape":"round-diamond","background-color":"#f3f4f6","border-style":"dashed","border-color":"#9ca3af","color":"#6b7280","font-style":"italic","opacity":0.75 }},
+        { selector: "edge", style: {
+          "label":"data(label)","curve-style":"bezier",
+          "target-arrow-shape":"triangle","target-arrow-fill":"filled",
+          "line-color":"#64748b","target-arrow-color":"#64748b",
+          "width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,
+          "color":"#334155","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px",
+          "font-family":"'Inter','Segoe UI',system-ui,sans-serif"
+        }},
+        { selector: "edge[edgeType='subclass']", style: { "line-color":"#374151","target-arrow-color":"#374151","target-arrow-fill":"hollow","target-arrow-shape":"triangle","width":2 }},
+        { selector: "edge[edgeType='rdf-type']", style: { "line-color":"#9ca3af","target-arrow-color":"#9ca3af","line-style":"dashed" }},
+        { selector: "edge[edgeType='data-property']", style: { "line-color":"#16a34a","target-arrow-color":"#16a34a","target-arrow-fill":"hollow" }},
+        { selector: "edge[edgeType='object-property']", style: { "line-color":"#2563eb","target-arrow-color":"#2563eb" }},
+      ];
+    }
+
+    // Mount the editor into #<containerId>. Locates the textarea + graph
+    // + TTL preview by known IDs (#le-editor / #le-graph / #le-ttl-output
+    // / #le-errors / #le-graph-stats), sets up the cytoscape instance
+    // registered under 'le-graph' so ontoink.setLodLevel works, wires
+    // the debounced re-parse, and seeds the tutorial text.
+    var _leState = {};
+    function mount(containerId) {
+      if (typeof window === "undefined") return;
+      if (!window.ontoinkDsl) {
+        console.warn("[ontoink.liveEditor] ontoink-dsl.js not loaded — skipping mount");
+        return;
+      }
+      var editor = document.getElementById("le-editor");
+      var graphContainer = document.getElementById("le-graph");
+      var ttlOut = document.getElementById("le-ttl-output");
+      var errBox = document.getElementById("le-errors");
+      var stats = document.getElementById("le-graph-stats");
+      if (!editor || !graphContainer || !ttlOut) return;
+      var canvas = graphContainer.querySelector(".ov-canvas");
+      if (!canvas) return;
+
+      // Seed with the tutorial DSL.
+      if (!editor.value) editor.value = window.ontoinkDsl.exampleText();
+
+      var cy = cytoscape({
+        container: canvas,
+        elements: { nodes: [], edges: [] },
+        style: _leStyle(),
+        layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 },
+        wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
+        hideEdgesOnViewport: true, hideLabelsOnViewport: true, textureOnViewport: true, pixelRatio: 1
+      });
+
+      // Register a minimal ontoink instance so LOD works.
+      instances["le-graph"] = {
+        cy: cy,
+        data: { nodes: [], edges: [], prefixes: {}, namespaces: {}, activeNamespaces: {} },
+        editor: null, originalTtl: "",
+        sideStore: {}, attic: new Map(),
+        lodLevel: 6,
+        policy: { hide_at_level: {}, node_badges: {}, hide: [], fold: [], badge: [] },
+        expandedSuperNodes: new Set(),
+        showSuperNodes: true,
+        _nodeBadgesRendered: new Set(),
+        facetSelections: null,
+        facets: null,
+        _isLiveEditor: true
+      };
+
+      _leState[containerId] = { editor: editor, ttlOut: ttlOut, errBox: errBox, stats: stats, cy: cy, debounce: null };
+
+      // v0.7.4 — populate the Examples dropdown with predefined templates.
+      _populateExamplesDropdown();
+      // v0.7.5 — install Ctrl+Space autocomplete on the editor textarea.
+      _installAutocomplete(containerId, editor);
+
+      function refresh() {
+        try { _refresh(containerId); } catch (e) {
+          console.error("[ontoink.liveEditor] refresh failed", e);
+        }
+      }
+      editor.addEventListener("input", function() {
+        var st = _leState[containerId]; if (!st) return;
+        if (st.debounce) clearTimeout(st.debounce);
+        st.debounce = setTimeout(refresh, 350);
+      });
+      // Initial render.
+      refresh();
+    }
+
+    // v0.7.5 — Ctrl+Space autocomplete popup. Wraps the editor textarea:
+    //  - Ctrl+Space (or Cmd+Space on Mac) opens a floating suggestions
+    //    list anchored at the caret; up/down navigates; Enter/Tab picks;
+    //    Esc dismisses. Typing after opening filters live.
+    //  - Suggestions come from ontoinkDsl.autocompleteSearch() which
+    //    ranks the 144 well-known terms (RDF/RDFS/OWL/XSD/SKOS/FOAF/
+    //    DC/PROV/BFO/RO/IAO/SIO/SHACL) plus user prefixes in the
+    //    current document.
+    //  - Picking a term auto-inserts the CURIE at the caret AND
+    //    prepends `@prefix name: <IRI>` if the prefix isn't declared.
+    function _installAutocomplete(containerId, editor) {
+      var popup = null;      // floating <div> when open
+      var items = [];        // current suggestion list
+      var activeIdx = 0;
+      var triggerStart = -1; // index in editor.value where the current word starts
+
+      function _tokenStart(text, pos) {
+        var i = pos;
+        while (i > 0) {
+          var ch = text.charAt(i - 1);
+          if (/[\s(),\-{}"]/.test(ch)) break;
+          i--;
+        }
+        return i;
+      }
+
+      function _caretRect() {
+        // Approximate caret coordinates using a hidden mirror div.
+        // Textarea doesn't expose caret pixel coords directly.
+        var r = editor.getBoundingClientRect();
+        var pos = editor.selectionStart;
+        var mirror = document.createElement("div");
+        var cs = window.getComputedStyle(editor);
+        [ "font-family","font-size","font-weight","letter-spacing","line-height",
+          "padding-top","padding-left","padding-right","padding-bottom",
+          "border-top-width","border-left-width","border-right-width","border-bottom-width",
+          "box-sizing","white-space","word-wrap","tab-size" ].forEach(function(p){
+          mirror.style[p.replace(/-([a-z])/g,function(_,c){return c.toUpperCase();})] = cs.getPropertyValue(p);
+        });
+        mirror.style.position = "absolute";
+        mirror.style.visibility = "hidden";
+        mirror.style.whiteSpace = "pre-wrap";
+        mirror.style.wordWrap = "break-word";
+        mirror.style.width = editor.clientWidth + "px";
+        mirror.style.height = "auto";
+        mirror.style.top = "0";
+        mirror.style.left = "-9999px";
+        document.body.appendChild(mirror);
+        var before = editor.value.substring(0, pos);
+        var span = document.createElement("span");
+        span.textContent = "|";
+        mirror.textContent = before;
+        mirror.appendChild(span);
+        var sr = span.getBoundingClientRect();
+        var mr = mirror.getBoundingClientRect();
+        var localTop = sr.top - mr.top;
+        var localLeft = sr.left - mr.left;
+        document.body.removeChild(mirror);
+        return {
+          x: r.left - editor.scrollLeft + localLeft,
+          y: r.top - editor.scrollTop + localTop + parseFloat(cs.fontSize) * 1.2
+        };
+      }
+
+      function _extraTermsFromDoc() {
+        // Include user's own @prefix declarations so they can autocomplete
+        // e.g. their `mwo:` terms already seen in the document.
+        var text = editor.value;
+        var out = [];
+        var seen = {};
+        text.split(/\r?\n/).forEach(function(line) {
+          var m = line.match(/@prefix\s+(\w+)\s*:\s*<([^>]+)>/);
+          if (m && !seen["p:" + m[1]]) {
+            seen["p:" + m[1]] = true;
+            out.push({ curie: m[1] + ":", iri: m[2], label: m[1] + " (declared)", kind: "prefix", doc: "User-declared prefix in this document" });
+          }
+        });
+        return out;
+      }
+
+      function _render(query, caret) {
+        if (!window.ontoinkDsl || !window.ontoinkDsl.autocompleteSearch) return;
+        items = window.ontoinkDsl.autocompleteSearch(query, { max: 12, extra: _extraTermsFromDoc() });
+        if (!items.length) { _close(); return; }
+        if (!popup) {
+          popup = document.createElement("div");
+          popup.className = "le-autocomplete";
+          document.body.appendChild(popup);
+        }
+        popup.style.left = caret.x + "px";
+        popup.style.top  = caret.y + "px";
+        var kindColors = {
+          class: "#0891b2", objectProperty: "#2563eb", dataProperty: "#16a34a",
+          annotationProperty: "#7c3aed", datatype: "#c2410c", individual: "#374151",
+          prefix: "#065f46"
+        };
+        var html = "";
+        for (var i = 0; i < items.length; i++) {
+          var t = items[i];
+          var color = kindColors[t.kind] || "#374151";
+          html += '<div class="le-ac-row' + (i === activeIdx ? " le-ac-active" : "") +
+                  '" data-idx="' + i + '">' +
+                  '<span class="le-ac-kind" style="background:' + color + '">' + _escHtml((t.kind || "").substring(0, 3)) + '</span>' +
+                  '<span class="le-ac-curie">' + _escHtml(t.curie) + '</span>' +
+                  '<span class="le-ac-label">' + _escHtml(t.label || "") + '</span>' +
+                  '<div class="le-ac-doc">' + _escHtml(t.doc || "") + '</div>' +
+                  '</div>';
+        }
+        popup.innerHTML = html;
+        popup.style.display = "block";
+        var rows = popup.querySelectorAll(".le-ac-row");
+        for (var r2 = 0; r2 < rows.length; r2++) {
+          (function(idx) {
+            rows[idx].addEventListener("mousedown", function(ev) {
+              ev.preventDefault();
+              activeIdx = idx;
+              _pick();
+            });
+          })(r2);
+        }
+      }
+
+      function _close() {
+        if (popup) { popup.style.display = "none"; }
+        items = [];
+        triggerStart = -1;
+      }
+
+      function _pick() {
+        var t = items[activeIdx];
+        if (!t) return _close();
+        var v = editor.value;
+        var caret = editor.selectionStart;
+        var before = v.substring(0, triggerStart);
+        var after = v.substring(caret);
+        var insert = t.curie || t.label || "";
+        // If the CURIE has a prefix that isn't declared in the document,
+        // prepend an @prefix declaration.
+        var prefix = "";
+        var colonIdx = insert.indexOf(":");
+        if (colonIdx > 0 && t.iri) {
+          var pfxName = insert.substring(0, colonIdx);
+          if (v.indexOf("@prefix " + pfxName + ":") < 0) {
+            // Strip the trailing local part from the IRI to get the namespace.
+            var localLen = insert.length - colonIdx - 1;
+            var ns = t.iri.substring(0, t.iri.length - localLen);
+            prefix = "@prefix " + pfxName + ": <" + ns + ">\n";
+          }
+        }
+        var newVal = prefix + before + insert + after;
+        editor.value = newVal;
+        var newCaret = prefix.length + before.length + insert.length;
+        editor.setSelectionRange(newCaret, newCaret);
+        _close();
+        editor.dispatchEvent(new Event("input"));
+        editor.focus();
+      }
+
+      editor.addEventListener("keydown", function(ev) {
+        // Ctrl+Space (or Cmd+Space): open the popup.
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === " ") {
+          ev.preventDefault();
+          var pos = editor.selectionStart;
+          triggerStart = _tokenStart(editor.value, pos);
+          var query = editor.value.substring(triggerStart, pos);
+          activeIdx = 0;
+          _render(query, _caretRect());
+          return;
+        }
+        if (!popup || popup.style.display === "none") return;
+        if (ev.key === "ArrowDown") {
+          ev.preventDefault(); activeIdx = (activeIdx + 1) % Math.max(1, items.length);
+          _render(editor.value.substring(triggerStart, editor.selectionStart), _caretRect());
+        } else if (ev.key === "ArrowUp") {
+          ev.preventDefault(); activeIdx = (activeIdx - 1 + items.length) % Math.max(1, items.length);
+          _render(editor.value.substring(triggerStart, editor.selectionStart), _caretRect());
+        } else if (ev.key === "Enter" || ev.key === "Tab") {
+          ev.preventDefault(); _pick();
+        } else if (ev.key === "Escape") {
+          ev.preventDefault(); _close();
+        }
+      });
+      editor.addEventListener("input", function() {
+        if (!popup || popup.style.display === "none") return;
+        var pos = editor.selectionStart;
+        if (pos < triggerStart) { _close(); return; }
+        var query = editor.value.substring(triggerStart, pos);
+        activeIdx = 0;
+        _render(query, _caretRect());
+      });
+      editor.addEventListener("blur", function() {
+        // Delay close so mousedown on a row can fire first.
+        setTimeout(_close, 200);
+      });
+    }
+
+    function _refresh(containerId) {
+      var st = _leState[containerId]; if (!st) return;
+      var text = st.editor.value;
+      var parsed = window.ontoinkDsl.parse(text);
+
+      // Error panel.
+      if (st.errBox) {
+        if (parsed.errors && parsed.errors.length) {
+          var html = "";
+          for (var i = 0; i < parsed.errors.length; i++) {
+            var e = parsed.errors[i];
+            html += '<div class="le-err-row"><span class="le-err-loc">' + e.line + ":" + e.col + '</span>' + _escHtml(e.message) + '</div>';
+          }
+          st.errBox.innerHTML = html;
+          st.errBox.style.display = "block";
+        } else {
+          st.errBox.innerHTML = "";
+          st.errBox.style.display = "none";
+        }
+      }
+
+      // Turtle preview.
+      if (st.ttlOut) st.ttlOut.textContent = window.ontoinkDsl.toTurtle(parsed);
+
+      // Graph render.
+      var graph = window.ontoinkDsl.toGraphData(parsed);
+      var cy = st.cy;
+      cy.elements().remove();
+      if (graph.nodes.length) cy.add(graph.nodes);
+      if (graph.edges.length) cy.add(graph.edges);
+      try { cy.layout({ name: "dagre", rankDir: "BT", animate: false, fit: true, padding: 30 }).run(); } catch (e) {}
+
+      // v0.7.5 — Run the full ontoink pipeline on the live graph so the
+      // playground-class toolbar works: flag blank nodes, auto-cluster
+      // on big graphs, rebuild facets, then re-apply LOD.
+      var inst = instances["le-graph"];
+      if (inst) {
+        inst.data.nodes = graph.nodes;
+        inst.data.edges = graph.edges;
+        inst.data.prefixes = parsed.prefixes;
+        inst.data.namespaces = parsed.prefixes;
+        inst.data.activeNamespaces = parsed.prefixes;
+        // Reset the ns-clusterer's idempotency guard so a fresh parse
+        // re-clusters cleanly (the DSL editor changes ontology shape
+        // between keystrokes; we can't cache).
+        inst._nsClustered = false;
+        inst.sideStore = {};
+        inst._memberToCid = null;
+        inst._origEdges = null;
+        inst.expandedSuperNodes = new Set();
+        try { _flagBlankNodes(cy); } catch (e2) {}
+        try { _autoClusterByNamespace("le-graph"); } catch (e3) {}
+        try { _buildFacets(inst); } catch (e4) {}
+        try { setLodLevel("le-graph", inst.lodLevel); } catch (e5) {}
+      }
+
+      if (st.stats) st.stats.textContent = graph.nodes.length + " nodes · " + graph.edges.length + " edges" +
+        (parsed.errors && parsed.errors.length ? (" · " + parsed.errors.length + " error" + (parsed.errors.length === 1 ? "" : "s")) : "");
+    }
+
+    function _escHtml(s) {
+      return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function reset(containerId) {
+      var st = _leState[containerId]; if (!st) return;
+      st.editor.value = window.ontoinkDsl.exampleText();
+      _refresh(containerId);
+    }
+    // v0.7.4 — Load one of the predefined DSL examples into the editor.
+    // Wired to the "Examples" dropdown in demo/docs/live-editor.md.
+    function loadExample(containerId, exampleId) {
+      var st = _leState[containerId]; if (!st) return;
+      var examples = (window.ontoinkDsl && window.ontoinkDsl.examples && window.ontoinkDsl.examples()) || [];
+      var found = null;
+      for (var i = 0; i < examples.length; i++) {
+        if (examples[i].id === exampleId) { found = examples[i]; break; }
+      }
+      if (!found) return;
+      st.editor.value = found.text;
+      _refresh(containerId);
+    }
+    // v0.7.4-fix — Fill the Examples <select> with the predefined
+    // options at mount time. Idempotent; if the dropdown already has
+    // more than the initial single option we leave it alone.
+    function _populateExamplesDropdown() {
+      var sel = document.getElementById("le-example-select");
+      if (!sel || sel.options.length > 1) return;
+      var examples = (window.ontoinkDsl && window.ontoinkDsl.examples && window.ontoinkDsl.examples()) || [];
+      // Preserve the first "placeholder" option added by the markdown.
+      for (var i = 0; i < examples.length; i++) {
+        var e = examples[i];
+        var opt = document.createElement("option");
+        opt.value = e.id; opt.textContent = e.label;
+        sel.appendChild(opt);
+      }
+    }
+    function copyTtl(containerId) {
+      var st = _leState[containerId]; if (!st || !st.ttlOut) return;
+      var text = st.ttlOut.textContent || "";
+      try {
+        navigator.clipboard.writeText(text);
+      } catch (e) {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch (e2) {}
+        document.body.removeChild(ta);
+      }
+    }
+    function _download(text, filename, mime) {
+      try {
+        var blob = new Blob([text], { type: mime || "text/plain" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 500);
+      } catch (e) { console.error("[ontoink.liveEditor] download failed", e); }
+    }
+    function downloadTtl(containerId) {
+      var st = _leState[containerId]; if (!st || !st.ttlOut) return;
+      _download(st.ttlOut.textContent || "", "ontoink-live.ttl", "text/turtle");
+    }
+    function downloadNTriples(containerId) {
+      var st = _leState[containerId]; if (!st) return;
+      var parsed = window.ontoinkDsl.parse(st.editor.value);
+      // N-Triples: each triple on one line with fully-expanded IRIs.
+      var lines = [];
+      parsed.triples.forEach(function(t) {
+        lines.push(_ntTerm(t.s, parsed.prefixes) + " " + _ntTerm(t.p, parsed.prefixes) + " " + _ntObj(t.o, parsed.prefixes) + " .");
+      });
+      _download(lines.join("\n") + (lines.length ? "\n" : ""), "ontoink-live.nt", "application/n-triples");
+    }
+    function _ntTerm(t, prefixes) {
+      if (!t) return "";
+      if (t.kind === "iri")   return "<" + t.value + ">";
+      if (t.kind === "curie") return "<" + ((prefixes[t.prefix] || (t.prefix + ":")) + t.local) + ">";
+      if (t.kind === "blank") return "_:" + t.value;
+      return "";
+    }
+    function _ntObj(o, prefixes) {
+      if (!o) return "";
+      if (o.kind !== "literal") return _ntTerm(o, prefixes);
+      var v = '"' + String(o.value).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+      if (o.lang) return v + "@" + o.lang;
+      if (o.datatype) {
+        var dt = o.datatype;
+        if (dt.indexOf(":") > 0 && dt.indexOf("<") < 0) {
+          var p = dt.split(":");
+          if (prefixes[p[0]]) return v + "^^<" + prefixes[p[0]] + p[1] + ">";
+        }
+        return v + "^^" + dt;
+      }
+      return v;
+    }
+
+    return {
+      mount: mount,
+      reset: reset,
+      copyTtl: copyTtl,
+      downloadTtl: downloadTtl,
+      downloadNTriples: downloadNTriples,
+      loadExample: loadExample
+    };
+  })();
+
+  // v0.7.4-fix — Bind the liveEditor export NOW that the IIFE above has
+  // finished. The `api` object literal higher up ran BEFORE `liveEditor`
+  // was assigned; putting `liveEditor: liveEditor` there captured
+  // `undefined`, and `ontoink.liveEditor` was silently null for callers
+  // like fence toolbars and the live-editor page.
+  api.liveEditor = liveEditor;
+
+  // v0.7.4-fix — Auto-mount the live editor when the page has one.
+  //
+  // The user's first attempt of the live editor rendered nothing: the
+  // page-side `<script>DOMContentLoaded -> mount<\/script>` fired BEFORE  // (escape the closing tag — else the HTML parser truncates the inlined JS)
+  // the mkdocs plugin's injected `ontoink.js` had finished executing
+  // (mkdocs-material can defer inline script execution), so at wake time
+  // `window.ontoink` was still undefined and the listener silently
+  // returned. Moving the auto-mount into ontoink.js itself guarantees
+  // it runs strictly AFTER the IIFE has exported `liveEditor` — the
+  // whole module + the DSL sibling are all present, no page-side
+  // script needed.
+  //
+  // A small polling fallback handles the (rare) case where cytoscape
+  // is still loading when we're first ready.
+  if (typeof document !== "undefined") {
+    var _autoMountAttempts = 0;
+    function _autoMountLiveEditor() {
+      var host = document.getElementById("live-editor-app");
+      if (!host) return; // not a live-editor page
+      if (typeof cytoscape === "undefined" || typeof window.ontoinkDsl === "undefined") {
+        if (_autoMountAttempts++ < 40) {
+          setTimeout(_autoMountLiveEditor, 100);
+        } else {
+          console.warn("[ontoink] live editor deps never loaded (cytoscape or ontoinkDsl missing)");
+        }
+        return;
+      }
+      try { liveEditor.mount("live-editor-app"); }
+      catch (e) { console.error("[ontoink] live editor mount failed", e); }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", _autoMountLiveEditor);
+    } else {
+      // DOM already parsed — fire on next tick so the rest of this IIFE
+      // finishes attaching to `window` before mount runs.
+      setTimeout(_autoMountLiveEditor, 0);
+    }
+  }
+
+  // v0.7.4-fix — Emit the fully-populated api object out of the IIFE
+  // (assigned to window.ontoink at the top). This MUST be the last
+  // statement in the IIFE — any code after `return` becomes dead code
+  // (which is exactly the bug this commit fixes).
+  return api;
 })();

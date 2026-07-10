@@ -9,6 +9,25 @@
   --ov-pass: #16a34a;
   --ov-fail: #dc2626;
   --ov-radius: 8px;
+
+  /* v0.7.0 — Big-ontology mode accents.
+     Attic panel uses slate so it stays visually distinct from the five
+     existing panels (editor cyan, reasoning purple, stats indigo,
+     pathfinder amber, sparql green). Super-node & badge tokens live here
+     too so downstream themes can override in one place. */
+  --ov-attic-accent: #64748b;         /* slate — Attic panel top stripe */
+  --ov-attic-bg:     #f8fafc;         /* slate-50 — panel body */
+  --ov-attic-row-hover: #f1f5f9;      /* slate-100 */
+  --ov-attic-row-border: #e5e7eb;
+  --ov-super-accent: var(--ov-accent);/* super-node overlay chip = brand cyan */
+  --ov-badge-bg:     #eef2ff;         /* indigo-50 */
+  --ov-badge-fg:     #3730a3;         /* indigo-800 */
+  --ov-badge-border: #c7d2fe;         /* indigo-200 */
+  --ov-restriction-bg:     #fef3c7;   /* amber-100 */
+  --ov-restriction-fg:     #78350f;   /* amber-900 */
+  --ov-restriction-border: #fcd34d;   /* amber-300 */
+  --ov-muted:        #6b7280;         /* neutral text on controls */
+  --ov-text:         #374151;         /* control text */
 }
 
 /* ── Container ─────────────────────────────────────────────────── */
@@ -410,10 +429,499 @@
 
 .ov-error { color: var(--ov-fail); background: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: var(--ov-radius); margin: 1em 0; font-family: var(--ov-font); font-size: 13px; }
 
+/* ── v0.7.0 Big-ontology mode ─────────────────────────────────────
+   LOD slider, Attic panel, super-node overlay, node badges, close btn.
+   All new components consume the --ov-* tokens from :root so themes and
+   the isolation:isolate contract on .ontoink-container are preserved. */
+
+/* Toolbar: LOD slider group — sits inside its own .ov-toolbar-group so
+   the existing group-divider ::after picks it up. `align-items:center`
+   from .ov-toolbar keeps label/slider/value/checkbox on one baseline;
+   `flex-wrap:wrap` on the group lets the slider stack cleanly on narrow
+   viewports instead of squishing the search box. */
+.ov-lod-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ov-muted);
+  margin: 0 4px 0 2px;
+  user-select: none;
+  white-space: nowrap;
+}
+/* v0.7.4 — LOD dropdown. Replaces the slider that was slipping onto
+   its own line at medium widths and made picking L1 fiddly. */
+.ov-lod-select {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--ov-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ov-text);
+  cursor: pointer;
+  max-width: 220px;
+}
+.ov-lod-select:focus {
+  outline: 2px solid #67e8f9;
+  outline-offset: 1px;
+}
+.ov-lod-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 110px;
+  height: 4px;
+  border-radius: 4px;
+  background: #e5e7eb;
+  outline: none;
+  accent-color: var(--ov-accent);
+  cursor: pointer;
+  margin: 0 4px;
+  vertical-align: middle;
+}
+.ov-lod-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--ov-accent);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  cursor: pointer;
+}
+.ov-lod-slider::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--ov-accent);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  cursor: pointer;
+}
+.ov-lod-slider:focus {
+  box-shadow: 0 0 0 2px rgba(8,145,178,0.20);
+}
+.ov-lod-value {
+  min-width: 14px;
+  display: inline-block;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ov-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+.ov-super-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ov-text);
+  font-family: var(--ov-font);
+  cursor: pointer;
+  user-select: none;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.ov-super-toggle input[type="checkbox"] {
+  accent-color: var(--ov-accent);
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Attic panel — right-docked drawer, below the sticky toolbar and above
+   the container's inner bottom edge. `.ontoink-container` has
+   `isolation:isolate` (0.6.1) so this z-index stays contained. Toolbar
+   sits at z-index:100, popup at z-index:1000; the Attic slots between
+   at z-index:400 (above canvas + minimap, below popups). */
+.ov-attic-panel {
+  position: absolute;
+  top: 44px;                     /* clears sticky toolbar (approx height) */
+  right: 8px;
+  bottom: 8px;
+  width: 320px;
+  max-width: calc(100% - 16px);  /* survives narrow container */
+  z-index: 400;
+  background: var(--ov-attic-bg);
+  border: 1px solid var(--ov-border);
+  border-top: 3px solid var(--ov-attic-accent);
+  border-radius: 0 0 var(--ov-radius) var(--ov-radius);
+  box-shadow: -4px 4px 16px rgba(15,23,42,.10);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--ov-font);
+  animation: ov-popup-in .18s ease-out;
+}
+.ov-attic-panel .ov-editor-header,
+.ov-attic-panel .ov-panel-head {
+  flex: 0 0 auto;
+  background: #fff;
+  border-bottom: 1px solid var(--ov-attic-row-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--ov-text);
+}
+.ov-attic-body {
+  flex: 1 1 auto;
+  padding: 4px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.ov-attic-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ov-attic-row-border);
+  font-size: 13px;
+  color: #111827;
+}
+.ov-attic-row:hover { background: var(--ov-attic-row-hover); }
+.ov-attic-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-attic-row-type {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: #e5e7eb;
+  color: var(--ov-text);
+  letter-spacing: .02em;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.ov-attic-row-pin {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ov-attic-accent);
+  border-color: var(--ov-attic-accent);
+  background: #fff;
+}
+.ov-attic-row-pin:hover { background: var(--ov-attic-row-hover); }
+
+/* Reusable close button — used by Attic head and other v0.7 panels. */
+.ov-btn-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ov-muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.ov-btn-close:hover { color: #111827; }
+
+/* Node-badge overlay — one absolutely-positioned layer per canvas,
+   populated by renderNodeBadges(). Individual chips are `.ov-node-badge`.
+   `pointer-events:none` on the layer lets clicks pass through to the
+   Cytoscape canvas underneath; a chip can opt back in if needed. */
+.ov-node-badge-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.ov-node-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--ov-badge-bg);
+  color: var(--ov-badge-fg);
+  font-size: 10.5px;
+  font-weight: 600;
+  border: 1px solid var(--ov-badge-border);
+  margin: 1px;
+  line-height: 1.35;
+  font-family: var(--ov-font);
+  white-space: nowrap;
+}
+.ov-node-badge-layer .ov-node-badge {
+  /* Chips inside the layer are absolutely positioned by the JS renderer;
+     the outer wrapper is stateless — collapse padding so multiple chips
+     stack without ghost spacing. */
+  padding: 0;
+  border: none;
+  background: transparent;
+  margin: 0;
+}
+.ov-node-badge-layer .ov-node-badge > .ov-node-badge {
+  /* Nested chip = actual visible pill */
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--ov-badge-bg);
+  color: var(--ov-badge-fg);
+  border: 1px solid var(--ov-badge-border);
+  margin: 0 2px 0 0;
+}
+
+/* Super-node — heavier visual weight and a "N members" chip that hovers
+   over the top-right corner of the node. Cytoscape draws the node shape
+   itself, so we use an HTML overlay chip; the node's own heavier border
+   is set in the JS style block. */
+.ov-supernode-glyph {
+  position: absolute;
+  background: var(--ov-super-accent);
+  color: #fff;
+  border-radius: 12px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--ov-font);
+  letter-spacing: .02em;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* L3 restriction pill — surfaces OWL restriction counts on a node when
+   the LOD slider hits level 3. */
+.ov-restriction-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--ov-restriction-bg);
+  color: var(--ov-restriction-fg);
+  border: 1px solid var(--ov-restriction-border);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: var(--ov-font);
+  cursor: pointer;
+  margin: 1px;
+  white-space: nowrap;
+}
+.ov-restriction-pill:hover { filter: brightness(0.97); }
+
+/* SPARQL live-source indicator — a small pill that runSparql() surfaces
+   inside .ov-sparql-result when the query has materialised triples into
+   the graph. Clustering is a build-time step, so live results can't be
+   collapsed — this makes the trade-off visible in-place. */
+.ov-sparql-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #78350f;
+  border: 1px solid #fcd34d;
+  font-size: 11.5px;
+  font-family: var(--ov-font);
+}
+.ov-sparql-note::before {
+  content: "i";
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #78350f; color: #fef3c7;
+  font-family: 'Georgia', serif; font-style: italic; font-weight: 700;
+  font-size: 10px;
+}
+
 /* ── Responsive ────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
   .ov-editor-split { grid-template-columns: 1fr; }
   .ov-editor-left { border-right: none; border-bottom: 1px solid #e5e7eb; }
   .ov-legend-content { flex-direction: column; gap: 8px; }
+  /* Attic panel: fill the container width on narrow viewports so it
+     doesn't slide off the right edge. Toolbar height also grows here
+     because buttons wrap, so start a bit lower. */
+  .ov-attic-panel {
+    top: 88px;
+    right: 4px; left: 4px;
+    width: auto;
+    max-width: none;
+  }
+  /* Slider fits with the other controls on tablets; on phones, let the
+     LOD group wrap onto its own row instead of shrinking. */
+  .ov-lod-slider { width: 90px; }
+}
+
+/* v0.7.3 — Facets panel (#33). Reuses the .ov-attic-panel drawer chrome
+   so it docks in the same spot with the same z-order; the rows here are
+   compact checkboxes with a name and a count on the right. */
+.ov-facet-section-head {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ov-text);
+  padding: 8px 12px 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--ov-attic-row-border);
+  background: #f9fafb;
+}
+.ov-facet-section-head .ov-chip {
+  margin-left: auto;
+}
+.ov-facet-note {
+  color: #9ca3af;
+  font-weight: 400;
+  font-size: 11px;
+}
+.ov-facet-list {
+  display: block;
+  padding: 4px 0 8px 0;
+}
+.ov-facet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #111827;
+  cursor: pointer;
+}
+.ov-facet-row:hover {
+  background: var(--ov-attic-row-hover);
+}
+.ov-facet-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-facet-count {
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* v0.7.3 — Metrics dashboard splash (#38). Full-container overlay
+   with a centered card. Sits above canvas + panels but below popups. */
+.ov-metrics-splash {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ov-popup-in .18s ease-out;
+}
+.ov-metrics-panel {
+  background: #fff;
+  border: 1px solid var(--ov-border);
+  border-radius: var(--ov-radius);
+  width: 640px;
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+  font-family: var(--ov-font);
+}
+.ov-metrics-head {
+  padding: 14px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid var(--ov-attic-row-border);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ov-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ov-metrics-body {
+  padding: 12px 16px 16px 16px;
+  overflow-y: auto;
+}
+.ov-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ov-metric-card {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.ov-metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0e7490;
+  font-variant-numeric: tabular-nums;
+}
+.ov-metric-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+.ov-metrics-section-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+  margin: 12px 0 6px 0;
+}
+.ov-metrics-bars {
+  display: block;
+}
+.ov-metrics-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.ov-metrics-bar-label {
+  flex: 0 0 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111827;
+}
+.ov-metrics-bar {
+  flex: 1 1 auto;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ov-metrics-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #0891b2, #06b6d4);
+}
+.ov-metrics-bar-count {
+  flex: 0 0 auto;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  min-width: 40px;
+  text-align: right;
+}
+.ov-metrics-lod-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 12px;
+  margin: 4px 0 8px 0;
+}
+.ov-metrics-lod-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.ov-metrics-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

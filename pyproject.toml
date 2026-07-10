@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ontoink"
-version = "0.6.3"
+version = "0.7.0"
 description = "Interactive ontology visualization, SHACL validation, and live TTL editing plugin for MkDocs"
 readme = "README.md"
 license = "MIT"
@@ -61,6 +61,8 @@ dev = [
     "pytest-cov",
     "owlready2>=0.25",
 ]
+cluster = ["igraph>=0.11", "leidenalg>=0.10"]
+topic   = ["anthropic>=0.34", "openai>=1.40"]
 
 [project.urls]
 Homepage = "https://github.com/ISE-FIZKarlsruhe/ontoink"

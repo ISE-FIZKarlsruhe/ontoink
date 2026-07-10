@@ -32,12 +32,37 @@ class OntoinkPlugin(BasePlugin):
 
     def on_post_page(self, output, page, config):
         """Inject CDN scripts and plugin JS/CSS into pages that use ontoink."""
-        if "data-ontoink-graph" not in output and "ontoink.playground" not in output:
+        # v0.7.4 — Also trigger on the live editor page. The DSL parser
+        # lives in a sibling script (`ontoink-dsl.js`) inlined below.
+        if (
+            "data-ontoink-graph" not in output
+            and "ontoink.playground" not in output
+            and "ontoink.liveEditor" not in output
+        ):
             return output
 
         resources_dir = Path(__file__).parent / "resources"
         js_content = (resources_dir / "ontoink.js").read_text(encoding="utf-8")
         css_content = (resources_dir / "ontoink.css").read_text(encoding="utf-8")
+        # v0.7.4 — DSL parser module, only inlined when live-editor is on the page.
+        dsl_path = resources_dir / "ontoink-dsl.js"
+        dsl_content = dsl_path.read_text(encoding="utf-8") if dsl_path.exists() else ""
+
+        # v0.7.4-fix — Belt-and-braces escape for `</script>` sequences inside
+        # the JS content. The HTML parser doesn't know about JS comments or
+        # string literals — any bare `</script>` (even inside a `// comment`)
+        # terminates the outer <script> tag, truncating the IIFE mid-code
+        # and leaving `window.ontoink` undefined. This bug shipped in
+        # v0.7.4 initial (a comment mentioning "<script>DOMContentLoaded →
+        # mount</script>"): every page rendered blank until it was found.
+        # Escape defensively here so a future edit can't reintroduce the
+        # trap. `<\/script>` is a valid JS string that produces the exact
+        # bytes `</script>` at runtime, so the JS behavior is unchanged.
+        def _safe_inline(js: str) -> str:
+            return js.replace("</script>", "<\\/script>").replace("</SCRIPT>", "<\\/SCRIPT>")
+
+        js_content = _safe_inline(js_content)
+        dsl_content = _safe_inline(dsl_content)
 
         cdn_tags = "\n".join([
             # Cytoscape.js core + dagre layout
@@ -61,7 +86,10 @@ class OntoinkPlugin(BasePlugin):
         asset_base = "../" * page_url.count("/") + "assets/"
         base_tag = f"<script>window.ONTOINK_ASSET_BASE={json.dumps(asset_base)};</script>\n"
 
-        inline_assets = f"<style>\n{css_content}\n</style>\n<script>\n{js_content}\n</script>\n"
+        # DSL parser goes BEFORE ontoink.js so `window.ontoinkDsl` is set
+        # by the time the live-editor mount code runs.
+        dsl_tag = f"<script>\n{dsl_content}\n</script>\n" if dsl_content else ""
+        inline_assets = f"<style>\n{css_content}\n</style>\n{dsl_tag}<script>\n{js_content}\n</script>\n"
 
         output = output.replace("</body>", cdn_tags + "\n" + base_tag + inline_assets + "</body>")
         return output

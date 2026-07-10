@@ -77,6 +77,22 @@ Connect to any SPARQL endpoint, discover the schema, explore classes and propert
           <div class="ov-toolbar-group">
             <input class="ov-search-input" type="text" placeholder="Search..." oninput="ontoink.search('spx-schema-container',this.value)">
           </div>
+          <!-- v0.7.1 — Big-ontology mode on the endpoint's class-hierarchy view. -->
+          <div class="ov-toolbar-group" title="Level of Detail slider + Hidden panel. Drag right for more content, click Hidden to see what's been filtered out.">
+            <span class="ov-lod-label">LOD</span>
+            <select class="ov-lod-select" onchange="ontoink.setLodLevel('spx-schema-container',this.value)" title="Pick a level of detail">
+              <option value="0">L0 · classes only</option>
+              <option value="1">L1 · + hierarchy</option>
+              <option value="2">L2 · + individuals & object props</option>
+              <option value="3">L3 · + OWL restrictions</option>
+              <option value="4">L4 · + data props & literals</option>
+              <option value="5">L5 · everything except inferred</option>
+              <option value="6" selected>L6 · everything</option>
+            </select>
+            <button class="ov-btn" onclick="ontoink.openAtticPanel('spx-schema-container')" title="Open the Hidden panel — everything the current LOD level has removed, with a Pin button to re-add any of it">Hidden</button>
+            <label class="ov-super-toggle" title="Group by namespace — collapse each namespace into one hexagon super-node. Uncheck to flatten every group; click a hexagon to expand just that namespace."><input type="checkbox" checked onchange="ontoink.toggleSuperNodes('spx-schema-container',this.checked)"> Group</label>
+            <button class="ov-btn" onclick="ontoink.openFacetsPanel('spx-schema-container')" title="Facets">Facets</button>
+          </div>
           <div class="ov-toolbar-group">
             <button class="ov-btn" onclick="ontoink.exportPNG('spx-schema-container')">PNG</button>
             <button class="ov-btn" onclick="ontoink.exportSVG('spx-schema-container')">SVG</button>
@@ -89,6 +105,17 @@ Connect to any SPARQL endpoint, discover the schema, explore classes and propert
           <div class="ov-minimap" style="position:absolute;top:8px;right:8px;width:150px;height:100px;border:1px solid #d1d5db;border-radius:6px;background:rgba(255,255,255,0.9);overflow:hidden;"></div>
         </div>
         <div class="ov-stats-panel" style="display:none;"></div>
+        <!-- v0.7.1 — Hidden-by-LOD side panel for the class-hierarchy view. -->
+        <div class="ov-attic-panel" id="spx-schema-container-attic" style="display:none;">
+          <div class="ov-editor-header ov-panel-head">Hidden by LOD  ·  pin to reveal<button class="ov-btn-close" onclick="ontoink.closeAtticPanel('spx-schema-container')" title="Close">&times;</button></div>
+          <div class="ov-attic-body" id="spx-schema-container-attic-body"></div>
+          <div class="ov-sparql-note" style="margin:8px;font-size:11px;">Namespaces with 4+ classes group into hexagon super-nodes on load. Uncheck <b>Group</b> to flatten, or click a hexagon to expand that namespace.</div>
+        </div>
+        <!-- v0.7.3 Facets panel (#33) for schema view. -->
+        <div class="ov-facets-panel ov-attic-panel" id="spx-schema-container-facets" style="display:none;">
+          <div class="ov-editor-header ov-panel-head">Facets  ·  narrow the view<button class="ov-btn-close" onclick="ontoink.closeFacetsPanel('spx-schema-container')" title="Close">&times;</button></div>
+          <div class="ov-attic-body" id="spx-schema-container-facets-body"></div>
+        </div>
       </div>
     </div>
     <div class="spx-sidebar">
@@ -154,6 +181,22 @@ Connect to any SPARQL endpoint, discover the schema, explore classes and propert
           <option value="dagre">Dagre</option><option value="cose">Force</option><option value="circle">Circle</option>
         </select>
       </div>
+      <!-- v0.7.1 — Big-ontology mode controls on SPARQL endpoint results. -->
+      <div class="ov-toolbar-group" title="Level of Detail slider + Hidden panel. Drag right for more content, click Hidden to see what's been filtered out.">
+        <span class="ov-lod-label">LOD</span>
+        <select class="ov-lod-select" onchange="ontoink.setLodLevel('spx-result-container',this.value)" title="Pick a level of detail">
+          <option value="0">L0 · classes only</option>
+          <option value="1">L1 · + hierarchy</option>
+          <option value="2">L2 · + individuals & object props</option>
+          <option value="3">L3 · + OWL restrictions</option>
+          <option value="4">L4 · + data props & literals</option>
+          <option value="5">L5 · everything except inferred</option>
+          <option value="6" selected>L6 · everything</option>
+        </select>
+        <button class="ov-btn" onclick="ontoink.openAtticPanel('spx-result-container')" title="Open the Hidden panel — everything the current LOD level has removed, with a Pin button to re-add any of it">Hidden</button>
+        <label class="ov-super-toggle" title="Group by namespace — collapse each namespace into one hexagon super-node. Uncheck to flatten every group; click a hexagon to expand just that namespace."><input type="checkbox" checked onchange="ontoink.toggleSuperNodes('spx-result-container',this.checked)"> Group</label>
+        <button class="ov-btn" onclick="ontoink.openFacetsPanel('spx-result-container')" title="Facets">Facets</button>
+      </div>
       <div class="ov-toolbar-group">
         <button class="ov-btn" onclick="ontoink.exportPNG('spx-result-container')">PNG</button>
         <button class="ov-btn" onclick="ontoink.exportSVG('spx-result-container')">SVG</button>
@@ -163,6 +206,17 @@ Connect to any SPARQL endpoint, discover the schema, explore classes and propert
       <div class="ov-canvas" style="width:100%;height:100%;"></div>
       <div class="ov-legend-overlay ov-draggable" style="bottom:12px;left:12px;"></div>
       <div class="ov-ns-overlay ov-draggable" style="bottom:12px;right:12px;"></div>
+    </div>
+    <!-- v0.7.1 — Hidden-by-LOD side panel for SPARQL-endpoint result graphs. -->
+    <div class="ov-attic-panel" id="spx-result-container-attic" style="display:none;">
+      <div class="ov-editor-header ov-panel-head">Hidden by LOD  ·  pin to reveal<button class="ov-btn-close" onclick="ontoink.closeAtticPanel('spx-result-container')" title="Close">&times;</button></div>
+      <div class="ov-attic-body" id="spx-result-container-attic-body"></div>
+      <div class="ov-sparql-note" style="margin:8px;font-size:11px;">Namespaces with 4+ subjects group into hexagon super-nodes on load. Uncheck <b>Group</b> to flatten, or click a hexagon to expand that namespace.</div>
+    </div>
+    <!-- v0.7.3 Facets panel (#33) for endpoint result view. -->
+    <div class="ov-facets-panel ov-attic-panel" id="spx-result-container-facets" style="display:none;">
+      <div class="ov-editor-header ov-panel-head">Facets  ·  narrow the view<button class="ov-btn-close" onclick="ontoink.closeFacetsPanel('spx-result-container')" title="Close">&times;</button></div>
+      <div class="ov-attic-body" id="spx-result-container-facets-body"></div>
     </div>
   </div>
 </div>

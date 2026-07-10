@@ -21,19 +21,6 @@ ontoink is a MkDocs plugin that transforms RDF/Turtle files into interactive, pu
 - Minimap for navigation on large graphs
 - Auto-focus on most-connected node for large ontologies (>30 nodes)
 
-### Visual Notation
-
-| Element | Shape | Default Color |
-|---------|-------|---------------|
-| Class | Rectangle (solid border) | By ontology source |
-| Individual | Ellipse | `#E6E6E6` |
-| Literal | Ellipse (dashed border) | `#93D053` |
-| Object Property | Blue solid line, filled arrow | `#2563eb` |
-| Data Property | Green line, hollow arrow | `#16a34a` |
-| rdf:type | Grey dashed line | `#9ca3af` |
-| rdfs:subClassOf | Black solid line | `#374151` |
-| SHACL Constraint | Cyan dashed bold line | `#0891b2` |
-
 ### Click Popups & IRI Dereferencing
 - Node label, type badge, full IRI (clickable)
 - Copy Label / Copy IRI buttons

@@ -1,5 +1,215 @@
 # Changelog
 
+## [0.7.0] - 2026-07-10
+
+### Added — Live editor with a D2-inspired DSL
+- **New `/live-editor/` page**: a compact ontology DSL on the left, live
+  ontoink graph + generated Turtle on the right. Debounced render on every
+  keystroke, line-precise error diagnostics, and 13 predefined templates
+  (Tutorial · Hello · Class hierarchy · Individuals · Subject blocks ·
+  Multi-value · Literals · FOAF · OWL restrictions · Property chains ·
+  SHACL shapes · Class expressions · Blank nodes).
+- **DSL grammar**: predicate shortcuts (`-a->`, `-isa->`, `-chain->`),
+  subject blocks (`{…}`), multi-object comma lists, multi-subject comma
+  lists, typed / language-tagged literals, inline blank nodes
+  (`[pred obj; pred obj]`), OWL restrictions
+  (`(some prop C)`, `(only prop C)`, `(value prop v)`, `(min N prop [C])`,
+  `(max N prop [C])`, `(exactly N prop [C])`), class expressions
+  (`(C and D)`, `(C or D)`, `(not C)`), and property chains
+  (`-chain->` → `owl:propertyChainAxiom` rdf:List). Expressions expand to
+  standards-compliant blank-node axioms in the generated Turtle.
+- **Ctrl+Space autocomplete** with 145 well-known terms from RDF, RDFS,
+  OWL, XSD, SKOS, FOAF, Dublin Core, PROV, schema.org, BFO 2, RO, IAO,
+  SIO, SHACL. Fuzzy search over CURIE, label, IRI; keyboard nav;
+  auto-inserts `@prefix` if the picked term's prefix isn't declared.
+- **Copy / save**: Copy TTL, Save `.ttl`, Save `.nt` from the toolbar.
+
+### Added — Big-ontology mode
+- **LOD ladder L0..L6** with a dropdown (was a slider) that replaces
+  elements in cy on level change — no `display:none` anti-pattern. Every
+  edgeType has an explicit floor; nodes get floors by type + inference.
+  Hidden panel exposes atticed elements with a Pin-to-reveal button.
+- **Group by namespace** (renamed from the previously-inert "Super"
+  toggle). Client-side clustering fires on any ontology; build-time
+  Leiden clustering ships via `cluster: true` in fence YAML when
+  `ontoink[cluster]` (python-igraph + leidenalg) is installed. Expanded
+  clusters render as **dashed rounded-rectangle hulls** you can drag to
+  move all members together; click the header to collapse.
+- **Edge fanning**: cross-cluster edges aggregate into weighted "bundle"
+  arrows with `weight` + `fan` predicates; popup lists the underlying
+  relations.
+- **Faceted browsing** side panel: namespace / has-restriction /
+  has-annotation checkboxes intersect with LOD.
+- **Metrics dashboard splash** for big (≥ 500 subjects) ontologies — a
+  card grid + LOD radio picker replaces the older `prompt()`. Cards
+  cover subjects · relations · orphans · blank nodes · restricted
+  classes · annotated · SHACL shapes, plus by-type / by-namespace bars.
+- **Position cache** in localStorage (djb2-hashed TTL key, 30-day TTL,
+  saves on `layoutstop` + debounced `dragfree`). Second open of the
+  same ontology reuses the previous layout.
+- **Richer cluster labels**: hexagons show the per-cluster type
+  breakdown (`nfdicore · 217 · 141C · 76I`).
+- **Blank-node styling**: dashed grey round-diamonds; instances of
+  `_:` are no longer mis-typed as Individuals in the metrics splash.
+- **Viewport perf flags**: `hideEdgesOnViewport`, `hideLabelsOnViewport`,
+  `textureOnViewport` on both cytoscape instances.
+
+### Added — Style presets
+- Swap the stylesheet between **Ontoink default**, **Chowlk**,
+  **Graffoo**, and **VOWL / WebVOWL** faithful reproductions via the
+  Style dropdown on every ontoink toolbar (fence pages, playground,
+  SPARQL Explorer, live editor).
+
+### Fixed
+- **LOD Literal floor**: was 2 but data-property edge floor was 4, so
+  literals appeared without their carrying edges (disconnected labels).
+  Both are now 4.
+- **`</script>` in a JS comment** was truncating the inlined `<script>`
+  in every ontoink page, blank-paging everything. Escaped at source and
+  belt-and-braces auto-escape added in the mkdocs plugin.
+- **Dead-code IIFE**: an early `return` in ontoink.js hid the entire
+  live-editor + style-preset block from the runtime. Restructured to
+  `var api = {…}` + `return api` at the very end.
+- Cross-cluster edges no longer disappear silently when a namespace is
+  facet-hidden and then re-selected.
+- Endpoint check on attic-restore prevents "nonexistent source/target"
+  crashes when only one endpoint is currently visible.
+- Boundary-attic purge is scoped to the cluster being rebuilt (was
+  nuking every cluster's edges).
+- Metrics splash miscounted Leiden-clustered ontologies (now unpacks
+  super-nodes to real member counts).
+- DSL parser: `readInlineBlank` no longer eats the leading `a` of
+  predicates like `age` / `apple` / `about`; `_coalescePropertyChain`
+  respects source-statement boundaries so two separate `-chain->`
+  axioms on the same subject stay separate; `materializeTerm` memoizes
+  by term identity so multi-object lines and blocks sharing an
+  inline-blank subject resolve to one blank node, not N duplicates.
+
+### Added — Semantic-Tile foundations (original 0.7.0 bundle)
+- **Big-ontology mode — Semantic-Tile bundle** — a coordinated set of
+  build-time + runtime knobs that let a single ontoink diagram scale from a
+  10-node example ontology to a 100 000-triple one without swamping the
+  browser. The bundle is opt-in — a fence with no YAML config renders
+  exactly the same graph 0.6.1 rendered — but a single top-level key in the
+  fence body activates each layer. Nothing about the default rendering path
+  changed.
+  - **Build-time literal-fold + predicate-policy YAML config** —
+    `parse_ttl_to_cytoscape(..., policy=...)` accepts a `predicates:` block
+    with three lists: `hide_predicates:` (drop the triple entirely),
+    `fold_into_badge:` (subject-object literals migrate into
+    `node_badges[iri]` and the literal node/edge pair disappears), and
+    `badge_predicates:` (object-property statements surface as badges on the
+    subject instead of separate edges). CURIEs are resolved against the
+    graph's own `@prefix` bindings first, with a built-in fallback map
+    (`rdf`/`rdfs`/`owl`/`xsd`/`sh`/`skos`/`dct`/`dc`/`prov`/`schema`);
+    wildcard form `prov:*` matches every predicate under a namespace URI.
+    Compilation is a single pass — see `apply_predicate_policy` — so the
+    Step-2 walk becomes a no-op when no policy is given, guaranteeing
+    bit-identical output to 0.6.1 for existing diagrams.
+  - **Leiden clustering with LLM-titled super-nodes and JSON side-store** —
+    when `ontoink[cluster]` (python-igraph + leidenalg) is installed and the
+    graph is large enough to warrant it, `ontoink.cluster.detect_clusters`
+    partitions the graph into communities (Leiden by default;
+    Louvain/fastgreedy/walktrap available), collapses each community into a
+    single `SuperNode` (hexagon, double cyan border, `·N` member count)
+    with a **synthetic super-edge weight = crossing-edge count**, and stores
+    the interior sub-graph in a side-store the client re-hydrates on
+    expand. `ontoink.cluster_titles.title_clusters` optionally rewrites each
+    super-node's placeholder title via an Anthropic or OpenAI call
+    (`ontoink[topic]`); missing library or missing API key falls back to a
+    deterministic synthetic title derived from the top-two member local
+    names — the pipeline never fails just because LLM titling was
+    requested but couldn't run.
+  - **Element-removing semantic zoom (L0..L6) slider** — a new toolbar
+    range control (default = L2) sets an `lodLevel` on every element, and
+    the client hides nodes/edges whose LOD floor exceeds the slider
+    position. **L0** = super-nodes + top-K central classes only; **L1** =
+    all classes + super-nodes; **L2** = class hierarchy + object
+    properties; **L3** = OWL restrictions (rendered as amber `∃/∀/=`
+    pills); **L4** = individuals; **L5** = data properties; **L6** =
+    everything, including SHACL constraints and inferred triples. Elements
+    hidden by a slider drop are snapshotted into an in-memory `attic`
+    (Map) so nothing is destroyed — dragging the slider back restores them
+    in place.
+  - **Attic side panel for reversible progressive disclosure** — a docked
+    right-hand drawer (`.ov-attic-panel`) lists everything the current LOD
+    has hidden, virtualised by type, with a pin button that re-adds an
+    individual node/edge to the canvas regardless of the slider. Because
+    `.ontoink-container` sets `isolation: isolate` (0.6.1), the panel's
+    z-index is scoped to the diagram — it cannot overwrite the host site's
+    chrome. Full-width on narrow viewports via the existing
+    `max-width:768px` media block.
+- **Optional dependency groups** — `pip install ontoink[cluster]` pulls
+  `python-igraph>=0.11` and `leidenalg>=0.10` for build-time community
+  detection; `pip install ontoink[topic]` pulls `anthropic>=0.34` and
+  `openai>=1.40` for LLM-backed super-node titling. Neither is required for
+  the default rendering path — a missing extra emits a `RuntimeWarning` and
+  falls back cleanly.
+- **SPARQL endpoint result graphs get the same LOD slider + Attic** — when a
+  built-in SPARQL SELECT projects `?s ?p ?o`, the result rows now
+  materialise into the live Cytoscape graph via `triplesToElements`, are
+  sanitised through the same `applyPredicatePolicyToElements` that the
+  fence graph uses (so `fold_into_badge` / `hide_predicates` behave
+  identically on live queries), receive their LOD floors, and settle into
+  the Attic when the slider position hides them — no per-query code path.
+  Community detection is build-time only; a small `.ov-sparql-note` chip
+  reads *"SPARQL results — clustering unavailable for live queries"* to
+  make that explicit.
+- **`data-ontoink-side-store` payload attribute** — the fence handler now
+  splits the cluster side-store off from the initial payload and emits it
+  as its own base64 attribute on `.ontoink-container`, so the first paint
+  isn't blocked by decoding thousands of interior triples that only get
+  expanded on user click.
+
+### Changed
+- **Fence toolbar layout** — a new toolbar group between search and export
+  hosts the LOD slider, LOD value badge, **Attic** button, and **Super**
+  checkbox. The existing `.ov-toolbar-group:not(:last-child)::after`
+  divider extends to the new group so the visual grouping remains
+  consistent; `flex-wrap:wrap` on the toolbar keeps narrow viewports from
+  breaking.
+- **Super-node styling** — Cytoscape now styles `node[?isSuperNode]` as a
+  hexagon with a double 3-px cyan border and a chunkier font, and appends
+  the member count to the label (e.g. *"People and Addresses  ·  42"*).
+  Selected super-nodes darken the border. Tapping a super-node routes to
+  `expandSuperNode` / `collapseSuperNode` instead of firing the ordinary
+  node popup.
+- **CSS design tokens for the new controls** — `:root` gains
+  `--ov-attic-accent`, `--ov-attic-bg`, `--ov-attic-row-hover`,
+  `--ov-attic-row-border`, `--ov-super-accent`, `--ov-badge-*`,
+  `--ov-restriction-*`, `--ov-muted`, `--ov-text`. All new selectors go
+  through these tokens — no hardcoded colours — so the Edit-Layout panel
+  can restyle the LOD/Attic/Super chrome the same way it themes the
+  rest of the diagram.
+- **GitHub Pages deploy workflow rationale** — the `ci.yml`
+  `build-demo` + `deploy-demo` jobs (added in 0.6.3 as a downloadable
+  starter) are the recommended way to publish a big-ontology diagram to
+  a static site: the LOD slider + Attic + side-store bundle is
+  static-only (no server code), so a `git push` to `main` is enough to
+  ship an ontology of any size to `https://<org>.github.io/<repo>/`.
+  The workflow uploads `demo/site` as a Pages artifact and calls
+  `actions/deploy-pages@v4`; sub-path deploys resolve their assets via
+  the `window.ONTOINK_ASSET_BASE` shim added in 0.6.3.
+
+### Fixed
+- **Predicate-policy no-op fast path** — when no policy is supplied to
+  `parse_ttl_to_cytoscape`, `apply_predicate_policy` returns empty sets
+  and `fold_literals_into_badges` short-circuits at the first `if not
+  fold_set and not fold_prefixes: return`, so the Step-2 walk keeps the
+  exact triple-by-triple output shape 0.6.1 emitted. This is verified by
+  the existing `test_ttl_parser` / `test_fence` suites, which pass with
+  no changes.
+- **Clustering-off fast path** — `detect_clusters` is only invoked when
+  the caller explicitly imports it, and even then a missing `igraph`
+  install emits a single `RuntimeWarning` and returns the caller's
+  original `nodes` / `edges` unchanged; the fence handler pops
+  `_side_store` with a default of `{}`, so the JS `loadSideStore` call
+  becomes a no-op on any diagram that did not run through clustering.
+- **Attic z-index isolation** — the Attic panel sits inside
+  `.ontoink-container`, which sets `isolation: isolate` (0.6.1), so its
+  `z-index: 400` is scoped to the diagram's stacking context and cannot
+  bleed over the host site's sticky chrome.
+
 ## [0.6.3] - 2026-06-10
 
 ### Added

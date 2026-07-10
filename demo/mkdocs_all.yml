@@ -48,6 +48,8 @@ theme:
 nav:
   - Home: index.md
   - Playground: playground.md
+  - Live Editor: live-editor.md
+  - Live Editor Syntax: live-editor-syntax.md
   - SHACL Editor: shacl-editor.md
   - SPARQL Explorer: sparql-explorer.md
   - OntoSniff: ontosniff.md
