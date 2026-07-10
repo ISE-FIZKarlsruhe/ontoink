@@ -43,7 +43,12 @@ classifiers = [
 dependencies = [
     "mkdocs>=1.4",
     "rdflib>=6.0",
-    "pyshacl>=0.25.0",
+    # pyshacl 0.30 dropped Python 3.9 and uses `str | X` PEP 604 unions at
+    # class-body import time — crashes on 3.9 with `TypeError: unsupported
+    # operand type(s) for |: 'type' and 'ABCMeta'`. Pin below 0.30 on 3.9;
+    # let 3.10+ pull the latest.
+    "pyshacl>=0.25.0,<0.30; python_version < '3.10'",
+    "pyshacl>=0.25.0; python_version >= '3.10'",
     "pymdown-extensions>=10.0",
     "pyyaml>=6.0",
 ]
