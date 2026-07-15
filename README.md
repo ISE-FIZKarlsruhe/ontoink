@@ -244,6 +244,85 @@ namespaces: true
 ```
 ````
 
+## Embedding ontoink in your own page
+
+Since **0.7.2**, ontoink can be embedded in any HTML page — a portal, a dashboard,
+a hand-written docs page — not just MkDocs, and it runs under a strict
+`Content-Security-Policy` (`script-src 'self'`): **no CDN, no inline event
+handlers, no `eval`**.
+
+### 1. Get the self-contained bundle
+
+From a source checkout:
+
+```bash
+python scripts/build_embed_bundle.py
+# → dist/ontoink.embed.js   (Cytoscape + dagre + cytoscape-dagre + cytoscape-svg
+#                            + CodeMirror + turtle mode + the ontoink runtime)
+# → dist/ontoink.embed.css
+```
+
+Copy both files into your site's static assets. They are fully self-contained —
+no external requests at runtime.
+
+### 2. Add a mount point and call `ontoink.embed`
+
+```html
+<link rel="stylesheet" href="/static/ontoink.embed.css">
+<script src="/static/ontoink.embed.js"></script>
+
+<div id="my-graph" style="height:500px"></div>
+<script src="/static/my-mount.js"></script>   <!-- external file → CSP-safe -->
+```
+
+```js
+// my-mount.js
+ontoink.embed("my-graph", {
+  ttl: `@prefix ex: <http://example.org/> .
+        ex:Alice a ex:Person ; ex:knows ex:Bob .
+        ex:Bob   a ex:Person .`,
+  shape: "",          // optional SHACL Turtle → constraint overlay
+  layout: "cose",     // dagre | cose | circle | concentric | breadthfirst | grid
+  height: "500px",
+  editor: false,      // hide the Edit & Validate panel
+});
+```
+
+`ontoink.embed(elOrId, opts)` gives you the full runtime: layout switching, IRI
+dereferencing, LOD levels, facets, namespace grouping, style presets, in-graph
+SPARQL, and PNG/SVG/TTL export.
+
+> **CSP note.** ontoink wires its toolbar and every dynamic panel via
+> `data-oi-on*` attributes plus an eval-free interpreter, so you do **not** need
+> `'unsafe-inline'` or `'unsafe-eval'`. Keep your own mount code in an external
+> `.js` file (as above) rather than an inline `<script>` so your page stays
+> `script-src 'self'`.
+
+### Passing server-produced TTL
+
+If the Turtle is generated on the server, base64-encode it into a `data-`
+attribute and decode it in your external mount script — this keeps the page
+CSP-clean and sidesteps HTML-escaping issues:
+
+```html
+<div class="ontoink-embed" data-ontoink-ttl="{{ ttl_b64 }}"
+     data-ontoink-shape="{{ shape_b64 }}" data-layout="cose"></div>
+```
+
+```js
+document.querySelectorAll(".ontoink-embed").forEach(function (el) {
+  var dec = function (s) { return s ? decodeURIComponent(escape(atob(s))) : ""; };
+  ontoink.embed(el, {
+    ttl: dec(el.getAttribute("data-ontoink-ttl")),
+    shape: dec(el.getAttribute("data-ontoink-shape")) || undefined,
+    layout: el.getAttribute("data-layout") || "cose",
+  });
+});
+```
+
+(This is exactly how the NFDI-MatWerk curation portal shows an ontoink
+neighbourhood graph on every entity page and its SHACL shapes.)
+
 ## How It Works
 
 1. **Build time (Python):** The plugin parses your TTL files with rdflib, classifies nodes (Class/Individual/Literal), resolves labels, detects ontology sources for color coding, extracts SHACL constraints, and runs pySHACL validation. The result is serialized as JSON and embedded in the HTML.

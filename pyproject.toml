@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ontoink"
-version = "0.7.1"
+version = "0.7.2"
 description = "Interactive ontology visualization, SHACL validation, and live TTL editing plugin for MkDocs"
 readme = "README.md"
 license = "MIT"
@@ -82,7 +82,9 @@ ontoink = "ontoink.plugin:OntoinkPlugin"
 where = ["."]
 
 [tool.setuptools.package-data]
-ontoink = ["resources/*.js", "resources/*.css"]
+# resources/vendor/* ships the self-hosted third-party libs (Cytoscape, dagre,
+# CodeMirror…) so the plugin can serve them from the built site instead of a CDN.
+ontoink = ["resources/*.js", "resources/*.css", "resources/vendor/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

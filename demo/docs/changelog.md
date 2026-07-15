@@ -8,6 +8,27 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.2] — 2026-07-15
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.2/)
+ &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.2)
+
+### Added — Embeddable, CSP-safe build
+
+- **`ontoink.embed(el, {ttl, shape, layout, height, editor, reasoning})`** — mount an interactive ontoink diagram from a Turtle string into any element on any page, no MkDocs required. It builds the toolbar/canvas/panels, parses the TTL client-side (the same path as `ontoink.playground`), and returns the container id. `shape` overlays SHACL constraints; `layout` sets the initial layout. See the new [Embedding](embedding.md) guide.
+- **`scripts/build_embed_bundle.py`** — bundles the vendored libraries + the ontoink runtime into a single self-contained `dist/ontoink.embed.js` (+ `dist/ontoink.embed.css`). Drop the two files next to your page, add a `<div class="ontoink-embed">`, and call `ontoink.embed()`.
+
+### Changed — CSP-safe by default (no inline handlers, no CDN)
+
+- **Every event handler is now CSP-safe.** All inline `on*=` handlers — in the fence toolbar and the runtime-generated panels/popups — are emitted as `data-oi-on*` attributes and attached with `addEventListener` by a small, eval-free interpreter (plus a `MutationObserver` for dynamically-created UI). ontoink now runs under a strict `Content-Security-Policy` (`script-src 'self'`, no `'unsafe-inline'`), both embedded and on its own MkDocs pages.
+- **Third-party libraries are self-hosted, not loaded from a CDN.** Cytoscape, dagre, cytoscape-dagre, cytoscape-svg and CodeMirror (+ turtle mode) are vendored under `ontoink/resources/vendor/`; the plugin copies them into the built site (`on_files` → `<site>/vendor/`) and injects local `<script>` tags. Pages now build and run fully offline and behind strict CSPs.
+
+### Fixed
+
+- **API version drift** — `ontoink.api` (`/health`, the FastAPI app title, and the deref `User-Agent`) reported `0.6.3` while the package had moved to `0.7.x`; it now reports the current version.
+
+---
+
 ## [0.7.1] — 2026-07-10
 
 [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.1/)

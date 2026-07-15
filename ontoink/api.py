@@ -31,7 +31,7 @@ from rdflib import Graph
 from .ttl_parser import _run_reasoning, _extract_namespaces
 
 
-app = FastAPI(title="ontoink", version="0.6.3", description="OWL reasoning & SHACL validation")
+app = FastAPI(title="ontoink", version="0.7.2", description="OWL reasoning & SHACL validation")
 
 
 # Cross-origin isolation headers — enable SharedArrayBuffer (required by the
@@ -64,7 +64,7 @@ def health() -> Dict[str, Any]:
     return {
         "status": "ok",
         "reasoner": os.environ.get("ONTOINK_REASONER", "auto"),
-        "version": "0.6.3",
+        "version": "0.7.2",
     }
 
 
@@ -217,7 +217,7 @@ def _deref_fetch(iri: str):
             raise _DerefError(f"refused to fetch non-public URL: {current}", status=400)
         req = urllib.request.Request(current, headers={
             "Accept": _DEREF_ACCEPT,
-            "User-Agent": "ontoink-deref/0.6.3 (+https://github.com/ISE-FIZKarlsruhe/ontoink)",
+            "User-Agent": "ontoink-deref/0.7.2 (+https://github.com/ISE-FIZKarlsruhe/ontoink)",
         })
         try:
             resp = opener.open(req, timeout=_DEREF_TIMEOUT)

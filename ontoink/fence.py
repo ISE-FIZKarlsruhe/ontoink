@@ -184,11 +184,11 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
 
         editor_btn = ""
         if show_editor:
-            editor_btn = f'<button class="ov-btn ov-btn-accent" onclick="ontoink.toggleEditor(\'{graph_id}\')" title="Edit TTL & Validate">Edit &amp; Validate</button>\n'
+            editor_btn = f'<button class="ov-btn ov-btn-accent" data-oi-onclick="ontoink.toggleEditor(\'{graph_id}\')" title="Edit TTL & Validate">Edit &amp; Validate</button>\n'
 
         reasoning_btn = ""
         if show_reasoning:
-            reasoning_btn = f'<button class="ov-btn" onclick="ontoink.toggleReasoning(\'{graph_id}\')" title="Show/hide inferred triples">Reasoning</button>\n'
+            reasoning_btn = f'<button class="ov-btn" data-oi-onclick="ontoink.toggleReasoning(\'{graph_id}\')" title="Show/hide inferred triples">Reasoning</button>\n'
 
         return (
             f'<div id="{graph_id}" class="ontoink-container" '
@@ -199,17 +199,17 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'data-show-ns="{str(show_ns).lower()}">\n'
             f'  <div class="ov-toolbar">\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <button class="ov-btn" onclick="ontoink.zoomIn(\'{graph_id}\')" title="Zoom in">+</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.zoomOut(\'{graph_id}\')" title="Zoom out">&minus;</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.fit(\'{graph_id}\')" title="Fit to view">Fit</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.fullscreen(\'{graph_id}\')" title="Fullscreen">&#x26F6;</button>\n'
-            f'      <select class="ov-layout-select" onchange="ontoink.changeLayout(\'{graph_id}\',this.value)" title="Layout algorithm">\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.zoomIn(\'{graph_id}\')" title="Zoom in">+</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.zoomOut(\'{graph_id}\')" title="Zoom out">&minus;</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.fit(\'{graph_id}\')" title="Fit to view">Fit</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.fullscreen(\'{graph_id}\')" title="Fullscreen">&#x26F6;</button>\n'
+            f'      <select class="ov-layout-select" data-oi-onchange="ontoink.changeLayout(\'{graph_id}\',this.value)" title="Layout algorithm">\n'
             f'        <option value="dagre">Dagre</option><option value="cose">Force</option><option value="circle">Circle</option>\n'
             f'        <option value="concentric">Concentric</option><option value="breadthfirst">Tree</option><option value="grid">Grid</option>\n'
             f'      </select>\n'
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <input class="ov-search-input" type="text" placeholder="Search..." oninput="ontoink.search(\'{graph_id}\',this.value)" title="Fuzzy search nodes &amp; edges">\n'
+            f'      <input class="ov-search-input" type="text" placeholder="Search..." data-oi-oninput="ontoink.search(\'{graph_id}\',this.value)" title="Fuzzy search nodes &amp; edges">\n'
             f'    </div>\n'
             # v0.7.0 — Big-ontology controls: LOD slider + Hidden drawer +
             # "Group by namespace" toggle (renamed from "Super" in v0.7.2 —
@@ -224,7 +224,7 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             # struggled to hit L1 precisely. A <select> is precise, wraps
             # cleanly, and the descriptive text lives in each <option>.
             f'      <label class="ov-lod-label" title="Level of Detail — pick a discrete slice of the ontology">LOD</label>\n'
-            f'      <select class="ov-lod-select" onchange="ontoink.setLodLevel(\'{graph_id}\',this.value)" title="Pick a level of detail">\n'
+            f'      <select class="ov-lod-select" data-oi-onchange="ontoink.setLodLevel(\'{graph_id}\',this.value)" title="Pick a level of detail">\n'
             f'        <option value="0">L0 · classes only</option>\n'
             f'        <option value="1">L1 · + hierarchy</option>\n'
             f'        <option value="2">L2 · + individuals &amp; object props</option>\n'
@@ -233,15 +233,15 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'        <option value="5">L5 · everything except inferred</option>\n'
             f'        <option value="6" selected>L6 · everything</option>\n'
             f'      </select>\n'
-            f'      <button class="ov-btn" onclick="ontoink.openAtticPanel(\'{graph_id}\')" title="Open the Hidden panel — everything the current LOD level has removed, with a Pin button to re-add any of it">Hidden</button>\n'
-            f'      <label class="ov-super-toggle" title="Group by namespace — collapse each namespace into one hexagon super-node. Uncheck to see every node flat; click a hexagon to expand just that namespace."><input type="checkbox" checked onchange="ontoink.toggleSuperNodes(\'{graph_id}\',this.checked)"> Group</label>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.openAtticPanel(\'{graph_id}\')" title="Open the Hidden panel — everything the current LOD level has removed, with a Pin button to re-add any of it">Hidden</button>\n'
+            f'      <label class="ov-super-toggle" title="Group by namespace — collapse each namespace into one hexagon super-node. Uncheck to see every node flat; click a hexagon to expand just that namespace."><input type="checkbox" checked data-oi-onchange="ontoink.toggleSuperNodes(\'{graph_id}\',this.checked)"> Group</label>\n'
             # v0.7.3 — Faceted browsing (#33). Left-rail panel with
             # namespace / has-restriction / has-annotation checkboxes.
-            f'      <button class="ov-btn" onclick="ontoink.openFacetsPanel(\'{graph_id}\')" title="Facets — narrow the view to one or more namespaces, or to nodes with OWL restrictions / annotations">Facets</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.openFacetsPanel(\'{graph_id}\')" title="Facets — narrow the view to one or more namespaces, or to nodes with OWL restrictions / annotations">Facets</button>\n'
             # v0.7.4 — Style preset dropdown. Ontoink default vs. Chowlk / Graffoo /
             # VOWL — swaps the cytoscape stylesheet; the "Ontoink default" option
             # restores the pre-preset snapshot via applyStylePreset.
-            f'      <select class="ov-lod-select" onchange="ontoink.applyStylePreset(\'{graph_id}\',this.value)" title="Ontology visualization style preset">\n'
+            f'      <select class="ov-lod-select" data-oi-onchange="ontoink.applyStylePreset(\'{graph_id}\',this.value)" title="Ontology visualization style preset">\n'
             f'        <option value="ontoink" selected>Style: Ontoink</option>\n'
             f'        <option value="chowlk">Style: Chowlk</option>\n'
             f'        <option value="graffoo">Style: Graffoo</option>\n'
@@ -249,16 +249,16 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'      </select>\n'
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <button class="ov-btn" onclick="ontoink.exportPNG(\'{graph_id}\')" title="Export PNG">PNG</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.exportSVG(\'{graph_id}\')" title="Export SVG">SVG</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.downloadTTL(\'{graph_id}\')" title="Download TTL">TTL</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.exportPNG(\'{graph_id}\')" title="Export PNG">PNG</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.exportSVG(\'{graph_id}\')" title="Export SVG">SVG</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.downloadTTL(\'{graph_id}\')" title="Download TTL">TTL</button>\n'
             f'    </div>\n'
             f'    <div class="ov-toolbar-group">\n'
-            f'      <button class="ov-btn" onclick="ontoink.toggleColors(\'{graph_id}\')" title="Edit layout, colors and shapes">Edit Layout</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.abstractView(\'{graph_id}\')" title="Show abstract model (classes only)">Abstract</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.toggleStats(\'{graph_id}\')" title="Graph statistics">Stats</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.togglePathFinder(\'{graph_id}\')" title="Find paths between nodes">Paths</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.toggleSparql(\'{graph_id}\')" title="SPARQL query">SPARQL</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.toggleColors(\'{graph_id}\')" title="Edit layout, colors and shapes">Edit Layout</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.abstractView(\'{graph_id}\')" title="Show abstract model (classes only)">Abstract</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.toggleStats(\'{graph_id}\')" title="Graph statistics">Stats</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.togglePathFinder(\'{graph_id}\')" title="Find paths between nodes">Paths</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.toggleSparql(\'{graph_id}\')" title="SPARQL query">SPARQL</button>\n'
             f'      {reasoning_btn}'
             f'      <select class="ov-reasoner-select" title="Select reasoner backend"></select>\n'
             f'      {editor_btn}'
@@ -275,7 +275,7 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             # its z-index contained under the host site's chrome.
             f'    <div class="ov-attic-panel" id="{graph_id}-attic" style="display:none;">\n'
             f'      <div class="ov-editor-header ov-panel-head">Hidden by LOD  ·  pin to reveal'
-            f'<button class="ov-btn-close" onclick="ontoink.closeAtticPanel(\'{graph_id}\')" title="Close">&times;</button></div>\n'
+            f'<button class="ov-btn-close" data-oi-onclick="ontoink.closeAtticPanel(\'{graph_id}\')" title="Close">&times;</button></div>\n'
             f'      <div class="ov-attic-body" id="{graph_id}-attic-body"></div>\n'
             f'    </div>\n'
             # v0.7.3 — Facets side panel (#33). Same layout language as
@@ -283,7 +283,7 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             # `_renderFacetsList`.
             f'    <div class="ov-facets-panel ov-attic-panel" id="{graph_id}-facets" style="display:none;">\n'
             f'      <div class="ov-editor-header ov-panel-head">Facets  ·  narrow the view'
-            f'<button class="ov-btn-close" onclick="ontoink.closeFacetsPanel(\'{graph_id}\')" title="Close">&times;</button></div>\n'
+            f'<button class="ov-btn-close" data-oi-onclick="ontoink.closeFacetsPanel(\'{graph_id}\')" title="Close">&times;</button></div>\n'
             f'      <div class="ov-attic-body" id="{graph_id}-facets-body"></div>\n'
             f'    </div>\n'
             f'  </div>\n'
@@ -291,16 +291,16 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'  <div class="ov-pathfinder-panel" style="display:none;"></div>\n'
             f'  <div class="ov-sparql-panel" style="display:none;"></div>\n'
             f'  <div class="ov-reasoning-panel" style="display:none;">\n'
-            f'    <div class="ov-editor-header ov-panel-head">Inferred Triples (OWL-RL)<button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>\n'
+            f'    <div class="ov-editor-header ov-panel-head">Inferred Triples (OWL-RL)<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>\n'
             f'    <div class="ov-reasoning-content"></div>\n'
             f'    <div class="ov-editor-actions">\n'
             f'      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-family:var(--ov-font);cursor:pointer;">'
-            f'<input type="checkbox" class="ov-reasoning-graph-toggle" onchange="ontoink.toggleInferredOnGraph(\'{graph_id}\',this.checked)"> Show on graph</label>\n'
-            f'      <button class="ov-btn" onclick="ontoink.validateWithReasoning(\'{graph_id}\')">Validate with Inferences</button>\n'
+            f'<input type="checkbox" class="ov-reasoning-graph-toggle" data-oi-onchange="ontoink.toggleInferredOnGraph(\'{graph_id}\',this.checked)"> Show on graph</label>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.validateWithReasoning(\'{graph_id}\')">Validate with Inferences</button>\n'
             f'    </div>\n'
             f'  </div>\n'
             f'  <div class="ov-editor-panel" style="display:none;">\n'
-            f'    <div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" onclick="this.closest(\'.ov-editor-panel\').style.display=\'none\'">&times;</button></div>\n'
+            f'    <div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-editor-panel\').style.display=\'none\'">&times;</button></div>\n'
             f'    <div class="ov-editor-split">\n'
             f'      <div class="ov-editor-left">\n'
             f'        <div class="ov-editor-header">Source (data TTL)</div>\n'
@@ -316,9 +316,9 @@ def render_ontoink(source, language, class_name, options, md, **kwargs):
             f'      <div class="ov-validation-output"></div>\n'
             f'    </div>\n'
             f'    <div class="ov-editor-actions">\n'
-            f'      <button class="ov-btn ov-btn-primary" onclick="ontoink.validate(\'{graph_id}\')">Validate</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.updateGraph(\'{graph_id}\')">Update Graph</button>\n'
-            f'      <button class="ov-btn" onclick="ontoink.resetEditor(\'{graph_id}\')">Reset</button>\n'
+            f'      <button class="ov-btn ov-btn-primary" data-oi-onclick="ontoink.validate(\'{graph_id}\')">Validate</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.updateGraph(\'{graph_id}\')">Update Graph</button>\n'
+            f'      <button class="ov-btn" data-oi-onclick="ontoink.resetEditor(\'{graph_id}\')">Reset</button>\n'
             f'    </div>\n'
             f'  </div>\n'
             f'</div>\n'

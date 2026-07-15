@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.7.1 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.7.2 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -854,7 +854,7 @@ var ontoink = (function () {
       }
       h += '<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
         + '<a href="' + esc(iri) + '" target="_blank" style="font-size:11px;color:#2563eb;">Open IRI \u2197</a>'
-        + '<button class="ov-btn ov-deref-fetch-btn" style="font-size:10px;padding:2px 8px;" onclick="ontoink.derefIriRemote(\'' + esc(iri).replace(/'/g, "\\'") + '\',this)">Fetch from web</button>'
+        + '<button class="ov-btn ov-deref-fetch-btn" style="font-size:10px;padding:2px 8px;" data-oi-onclick="ontoink.derefIriRemote(\'' + esc(iri).replace(/'/g, "\\'") + '\',this)">Fetch from web</button>'
         + '</div>';
       el.innerHTML = h;
       if (inst) { if (!inst._derefCache) inst._derefCache = {}; inst._derefCache[iri] = info; }
@@ -1831,7 +1831,7 @@ var ontoink = (function () {
       html += '<div class="ov-attic-row">' +
               '<span class="ov-attic-row-label" title="' + esc(d.id || "") + '">' + esc(label) + '</span>' +
               '<span class="ov-attic-row-type">' + esc(typeLabel) + '</span>' +
-              '<button class="ov-chip ov-attic-row-pin" onclick="ontoink.pinFromAttic(\'' + id + '\',\'' + safeKey + '\')">Pin</button>' +
+              '<button class="ov-chip ov-attic-row-pin" data-oi-onclick="ontoink.pinFromAttic(\'' + id + '\',\'' + safeKey + '\')">Pin</button>' +
               '</div>';
     }
     body.insertAdjacentHTML("beforeend", html);
@@ -1883,15 +1883,15 @@ var ontoink = (function () {
     var selNs = inst.facetSelections && inst.facetSelections.namespaces;
 
     var html = '<div class="ov-facet-section-head">Namespaces <span class="ov-facet-note">' + entries.length + '</span>';
-    html += ' <button class="ov-chip" onclick="ontoink.selectAllFacets(\'' + id + '\',\'namespaces\')">All</button>';
-    html += ' <button class="ov-chip" onclick="ontoink.clearFacet(\'' + id + '\',\'namespaces\')">Clear</button></div>';
+    html += ' <button class="ov-chip" data-oi-onclick="ontoink.selectAllFacets(\'' + id + '\',\'namespaces\')">All</button>';
+    html += ' <button class="ov-chip" data-oi-onclick="ontoink.clearFacet(\'' + id + '\',\'namespaces\')">Clear</button></div>';
     html += '<div class="ov-facet-list">';
     entries.forEach(function(e) {
       var label = _shortNsLabel(e.ns, prefixes);
       var checked = (!selNs || selNs.has(e.ns)) ? "checked" : "";
       var safeNs = e.ns.replace(/'/g, "\\'").replace(/"/g, '&quot;');
       html += '<label class="ov-facet-row" title="' + esc(e.ns) + '">' +
-              '<input type="checkbox" ' + checked + ' onchange="ontoink.toggleFacet(\'' + id + '\',\'namespaces\',\'' + safeNs + '\',this.checked)"> ' +
+              '<input type="checkbox" ' + checked + ' data-oi-onchange="ontoink.toggleFacet(\'' + id + '\',\'namespaces\',\'' + safeNs + '\',this.checked)"> ' +
               '<span class="ov-facet-label">' + esc(label) + '</span>' +
               '<span class="ov-facet-count">' + e.n + '</span>' +
               '</label>';
@@ -1903,11 +1903,11 @@ var ontoink = (function () {
     html += '<div class="ov-facet-section-head">Only</div>';
     html += '<div class="ov-facet-list">';
     html += '<label class="ov-facet-row"><input type="checkbox" ' + (restrOn ? "checked" : "") +
-            ' onchange="ontoink.toggleFacet(\'' + id + '\',\'hasRestrictions\',null,this.checked)"> ' +
+            ' data-oi-onchange="ontoink.toggleFacet(\'' + id + '\',\'hasRestrictions\',null,this.checked)"> ' +
             '<span class="ov-facet-label">Has OWL restriction</span>' +
             '<span class="ov-facet-count">' + ((inst.facets && inst.facets.hasRestrictions) || 0) + '</span></label>';
     html += '<label class="ov-facet-row"><input type="checkbox" ' + (annOn ? "checked" : "") +
-            ' onchange="ontoink.toggleFacet(\'' + id + '\',\'hasAnnotations\',null,this.checked)"> ' +
+            ' data-oi-onchange="ontoink.toggleFacet(\'' + id + '\',\'hasAnnotations\',null,this.checked)"> ' +
             '<span class="ov-facet-label">Has annotation</span>' +
             '<span class="ov-facet-count">' + ((inst.facets && inst.facets.hasAnnotations) || 0) + '</span></label>';
     html += '</div>';
@@ -2170,7 +2170,7 @@ var ontoink = (function () {
 
     var html = '<div class="ov-metrics-panel">' +
       '<div class="ov-metrics-head">Ontology overview' +
-        '<button class="ov-btn-close" onclick="ontoink.closeMetricsSplash(\'' + id + '\')" title="Close">&times;</button>' +
+        '<button class="ov-btn-close" data-oi-onclick="ontoink.closeMetricsSplash(\'' + id + '\')" title="Close">&times;</button>' +
       '</div>' +
       '<div class="ov-metrics-body">' +
         '<div class="ov-metrics-grid">' +
@@ -2191,7 +2191,7 @@ var ontoink = (function () {
         '<div class="ov-metrics-section-head">Start rendering at</div>' +
         '<div class="ov-metrics-lod-list">' + lodRadios + '</div>' +
         '<div class="ov-metrics-actions">' +
-          '<button class="ov-btn ov-btn-accent" onclick="ontoink._exploreFromSplash(\'' + id + '\')">Explore the graph</button>' +
+          '<button class="ov-btn ov-btn-accent" data-oi-onclick="ontoink._exploreFromSplash(\'' + id + '\')">Explore the graph</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -2907,7 +2907,7 @@ var ontoink = (function () {
     // Per-type stroke colors for the node icon outlines
     var STROKE = { Class:"#555", Individual:"#999", Literal:"#6a9", Datatype:"#6a9", "SHACL Shape":"#0891b2" };
 
-    var html = '<div class="ov-overlay-head"><span>Legend</span><button class="ov-overlay-close" onclick="this.closest(\'.ov-legend-overlay\').style.display=\'none\'">&times;</button></div>';
+    var html = '<div class="ov-overlay-head"><span>Legend</span><button class="ov-overlay-close" data-oi-onclick="this.closest(\'.ov-legend-overlay\').style.display=\'none\'">&times;</button></div>';
     html += '<div class="ov-overlay-body"><div class="ov-overlay-cols">';
 
     // Nodes
@@ -2957,8 +2957,8 @@ var ontoink = (function () {
     var cid = container.id;
     var hasHidden = allKeys.length > activeKeys.length;
     var html = '<div class="ov-overlay-head"><span>Prefixes</span>';
-    if (hasHidden) html += '<button class="ov-ns-toggle" onclick="ontoink.toggleAllNs(\'' + cid + '\')">Show all</button>';
-    html += '<button class="ov-overlay-close" onclick="this.closest(\'.ov-ns-overlay\').style.display=\'none\'">&times;</button></div>';
+    if (hasHidden) html += '<button class="ov-ns-toggle" data-oi-onclick="ontoink.toggleAllNs(\'' + cid + '\')">Show all</button>';
+    html += '<button class="ov-overlay-close" data-oi-onclick="this.closest(\'.ov-ns-overlay\').style.display=\'none\'">&times;</button></div>';
     html += '<div class="ov-overlay-body"><div class="ov-ns-tags">';
     activeKeys.forEach(function(p) { html += '<span class="ov-ns-tag"><b>' + esc(p) + ':</b> ' + esc(activeNs[p]) + '</span>'; });
     if (hasHidden) {
@@ -3643,7 +3643,7 @@ var ontoink = (function () {
     if (!edgeStyles["inferred"]) edgeStyles["inferred"] = { color: "#a855f7", lineStyle: "dotted", arrowShape: "triangle" };
 
     var panel=document.createElement("div");panel.className="ov-color-panel";
-    var h='<div class="ov-color-panel-head"><strong>Edit Layout</strong><button class="ov-popup-close" onclick="this.closest(\'.ov-color-panel\').remove()">&times;</button></div>';
+    var h='<div class="ov-color-panel-head"><strong>Edit Layout</strong><button class="ov-popup-close" data-oi-onclick="this.closest(\'.ov-color-panel\').remove()">&times;</button></div>';
 
     // Node Types section: color + shape
     h+='<div class="ov-color-section"><div class="ov-color-section-title">Node Types</div>';
@@ -3986,9 +3986,9 @@ var ontoink = (function () {
         return '<tr><td>' + esc(t.sLabel || t.s) + '</td><td>' + esc(t.pLabel || t.p) + '</td><td>' + esc(t.oLabel || t.o) + '</td></tr>';
       }).join("");
       panel.innerHTML =
-        '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+        '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
         '<div class="ov-reasoning-body">' +
-          '<div style="padding:8px 12px;color:#374151;font-size:13px;background:#f0fdf4;border-bottom:1px solid #d1d5db;"><strong>' + pre.length + '</strong> pre-computed inference' + (pre.length === 1 ? '' : 's') + ' from build time. <a href="#" onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\');ontoink.togglePlaygroundReasoning(\'' + id + '\');event.preventDefault();return false;">Re-run with selected backend ↻</a></div>' +
+          '<div style="padding:8px 12px;color:#374151;font-size:13px;background:#f0fdf4;border-bottom:1px solid #d1d5db;"><strong>' + pre.length + '</strong> pre-computed inference' + (pre.length === 1 ? '' : 's') + ' from build time. <a href="#" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\');ontoink.togglePlaygroundReasoning(\'' + id + '\');event.preventDefault();return false;">Re-run with selected backend ↻</a></div>' +
           '<table class="ov-reasoning-table"><thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead><tbody>' + rows + '</tbody></table>' +
         '</div>';
     } else {
@@ -4522,7 +4522,7 @@ var ontoink = (function () {
       var c = document.getElementById(containerId);
       var hint = document.createElement("div");
       hint.className = "ov-focus-hint";
-      hint.innerHTML = 'Focused on <strong>' + esc(best.data("label")) + '</strong> (most connected). <button class="ov-chip" onclick="ontoink.resetFocus(\'' + containerId + '\');this.parentElement.remove();">Show All</button>';
+      hint.innerHTML = 'Focused on <strong>' + esc(best.data("label")) + '</strong> (most connected). <button class="ov-chip" data-oi-onclick="ontoink.resetFocus(\'' + containerId + '\');this.parentElement.remove();">Show All</button>';
       c.querySelector(".ov-canvas-wrap").appendChild(hint);
     }
   }
@@ -4563,7 +4563,7 @@ var ontoink = (function () {
     cy.nodes().forEach(function(n) { degrees.push({ label: n.data("label") || n.id(), degree: n.degree() }); });
     degrees.sort(function(a, b) { return b.degree - a.degree; });
 
-    var h = '<div class="ov-editor-header ov-panel-head">Graph Statistics &amp; Ontology Metrics<button class="ov-panel-close" onclick="this.closest(\'.ov-stats-panel\').style.display=\'none\'">&times;</button></div><div class="ov-stats-body">';
+    var h = '<div class="ov-editor-header ov-panel-head">Graph Statistics &amp; Ontology Metrics<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-stats-panel\').style.display=\'none\'">&times;</button></div><div class="ov-stats-body">';
 
     // Consistency badge
     var conBg = consistency.status === "consistent" ? "#dcfce7" : consistency.status === "inconsistent" ? "#fef2f2" : "#f3f4f6";
@@ -4625,7 +4625,7 @@ var ontoink = (function () {
       h += '<span class="ov-badge" style="background:#dcfce7;color:#16a34a;">' + metrics.shaclCoveredClasses + ' covered</span> ';
       if (uncov.length) {
         h += '<span class="ov-badge" style="background:#fef2f2;color:#dc2626;">' + uncov.length + ' uncovered</span>';
-        h += ' <button class="ov-chip" onclick="ontoink.showCoverage(\'' + id + '\')">Show on graph</button>';
+        h += ' <button class="ov-chip" data-oi-onclick="ontoink.showCoverage(\'' + id + '\')">Show on graph</button>';
       }
       h += '</div>';
     }
@@ -4759,7 +4759,7 @@ var ontoink = (function () {
     var c = document.getElementById(id);
     var old = c.querySelector(".ov-abstract-hint"); if (old) old.remove();
     var hint = document.createElement("div"); hint.className = "ov-focus-hint ov-abstract-hint";
-    hint.innerHTML = 'Abstract Model View (' + keepNodes.length + ' classes). <button class="ov-chip" onclick="ontoink.fullView(\'' + id + '\');this.parentElement.remove();">Show Full Graph</button>';
+    hint.innerHTML = 'Abstract Model View (' + keepNodes.length + ' classes). <button class="ov-chip" data-oi-onclick="ontoink.fullView(\'' + id + '\');this.parentElement.remove();">Show Full Graph</button>';
     c.querySelector(".ov-canvas-wrap").appendChild(hint);
   }
 
@@ -4784,12 +4784,12 @@ var ontoink = (function () {
     cy.nodes().forEach(function(n) {
       nodeOpts += '<option value="' + esc(n.id()) + '">' + esc(n.data("label") || n.id()) + '</option>';
     });
-    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">Path Finder<button class="ov-panel-close" onclick="this.closest(\'.ov-pathfinder-panel\').style.display=\'none\'">&times;</button></div>'
+    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">Path Finder<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-pathfinder-panel\').style.display=\'none\'">&times;</button></div>'
       + '<div class="ov-pathfinder-body">'
       + '<div class="ov-pf-row"><label>From:</label><select class="ov-pf-select" id="pf-from-' + id + '">' + nodeOpts + '</select></div>'
       + '<div class="ov-pf-row"><label>To:</label><select class="ov-pf-select" id="pf-to-' + id + '">' + nodeOpts + '</select></div>'
-      + '<div class="ov-pf-row"><button class="ov-btn ov-btn-primary" onclick="ontoink.findPath(\'' + id + '\')">Find Path</button>'
-      + '<button class="ov-btn" onclick="ontoink.clearPath(\'' + id + '\')">Clear</button></div>'
+      + '<div class="ov-pf-row"><button class="ov-btn ov-btn-primary" data-oi-onclick="ontoink.findPath(\'' + id + '\')">Find Path</button>'
+      + '<button class="ov-btn" data-oi-onclick="ontoink.clearPath(\'' + id + '\')">Clear</button></div>'
       + '<div class="ov-pf-result" id="pf-result-' + id + '"></div>'
       + '</div>';
   }
@@ -4995,16 +4995,16 @@ var ontoink = (function () {
 
     var isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
     var acHint = isMac ? "⌥/ (Option-Slash) for autocomplete" : "Ctrl+Space or Alt+/ for autocomplete";
-    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">SPARQL Query <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;">' + acHint + '</span><button class="ov-panel-close" onclick="this.closest(\'.ov-sparql-panel\').style.display=\'none\'">&times;</button></div>'
+    panel.innerHTML = '<div class="ov-editor-header ov-panel-head">SPARQL Query <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;">' + acHint + '</span><button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-sparql-panel\').style.display=\'none\'">&times;</button></div>'
       + '<div class="ov-sparql-body">'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
-      + '<select class="ov-shape-select" onchange="ontoink.sparqlTemplate(\'' + id + '\',this.value)"><option value="">Template...</option><option value="all">All triples</option><option value="type">Instances of class</option><option value="props">Properties of class</option><option value="label">Find by label</option></select>'
+      + '<select class="ov-shape-select" data-oi-onchange="ontoink.sparqlTemplate(\'' + id + '\',this.value)"><option value="">Template...</option><option value="all">All triples</option><option value="type">Instances of class</option><option value="props">Properties of class</option><option value="label">Find by label</option></select>'
       + '<select class="ov-shape-select ov-sparql-class-sel">' + dd.classOpts + '</select>'
       + '<select class="ov-shape-select ov-sparql-prop-sel">' + dd.propOpts + '</select>'
       + '</div>'
       + '<div style="position:relative;"><textarea class="ov-sparql-textarea" rows="6">SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o\n} LIMIT 20</textarea></div>'
-      + '<div class="ov-editor-actions"><button class="ov-btn ov-btn-primary" onclick="ontoink.runSparql(\'' + id + '\')">Run Query</button>'
-      + '<button class="ov-btn" onclick="ontoink.sparqlHighlight(\'' + id + '\')">Highlight Results</button></div>'
+      + '<div class="ov-editor-actions"><button class="ov-btn ov-btn-primary" data-oi-onclick="ontoink.runSparql(\'' + id + '\')">Run Query</button>'
+      + '<button class="ov-btn" data-oi-onclick="ontoink.sparqlHighlight(\'' + id + '\')">Highlight Results</button></div>'
       + '<div class="ov-sparql-result"></div>'
       + '</div>';
 
@@ -5064,7 +5064,7 @@ var ontoink = (function () {
     var displayLabel = item.label || item.short || localName;
     // Show label AND local name when they differ (so user sees both human label and IRI fragment)
     var showLocalName = item.iri && localName && displayLabel !== localName;
-    return '<div style="padding:5px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f3f4f6;" onmousedown="ontoink.selectSparqlAC(\'' + id + '\',' + i + ')">'
+    return '<div style="padding:5px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f3f4f6;" data-oi-onmousedown="ontoink.selectSparqlAC(\'' + id + '\',' + i + ')">'
       + '<span style="background:'+typeColor+';color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;">'+item.type+'</span>'
       + '<span style="color:#1f2937;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(displayLabel) + '</span>'
       + (showLocalName ? '<span style="color:#9ca3af;font-size:10px;white-space:nowrap;" title="'+esc(item.iri)+'">'+esc(localName)+'</span>' : '')
@@ -5583,14 +5583,14 @@ var ontoink = (function () {
         statusHtml =
           '<div style="padding:10px 12px;color:#b91c1c;">' +
             '<strong>Reasoning failed:</strong> ' + esc(msg) +
-            ' <button class="ov-chip" onclick="ontoink.diagnoseReasoner(\'' + id + '\')" style="margin-left:8px;">Run diagnostic</button>' +
-            ' <button class="ov-chip" onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\')" style="margin-left:4px;">↻ Retry</button>' +
+            ' <button class="ov-chip" data-oi-onclick="ontoink.diagnoseReasoner(\'' + id + '\')" style="margin-left:8px;">Run diagnostic</button>' +
+            ' <button class="ov-chip" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\')" style="margin-left:4px;">↻ Retry</button>' +
           '</div>' +
           (stack ? '<details style="padding:0 12px 8px;font-size:11px;color:#6b7280;" open><summary style="cursor:pointer;">Stack trace</summary><pre style="background:#111827;color:#fbbf24;padding:10px;border-radius:6px;overflow:auto;max-height:240px;font-family:\'JetBrains Mono\',\'Fira Code\',ui-monospace,monospace;font-size:11px;line-height:1.4;margin:6px 0 0 0;">' + esc(stack) + '</pre></details>' : '');
       }
 
       // Build the panel HTML
-      var headHtml = '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>';
+      var headHtml = '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>';
       var logsHtml = '<details class="ov-reasoning-logs"' + (state === "error" ? ' open' : '') + '><summary>Reasoning log (' + logs.length + ' entries)</summary><pre>' + esc(logs.join("\n")) + '</pre></details>';
 
       if (state === "done") {
@@ -5694,10 +5694,10 @@ var ontoink = (function () {
       '</div>';
 
     var actionsHtml = '<div class="ov-reasoning-actions">' +
-      '<label class="ov-overlay-toggle"><input type="checkbox" ' + (overlayOn ? "checked" : "") + ' onchange="ontoink.setInferredOverlay(\'' + id + '\',this.checked)"> Show inferences on graph</label>' +
-      (count ? ' <button class="ov-chip" onclick="ontoink.downloadInferences(\'' + id + '\')">Download (N-Triples)</button>' +
-               ' <button class="ov-chip" onclick="ontoink.copyInferences(\'' + id + '\')">Copy JSON</button>' : '') +
-      ' <button class="ov-chip" onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\',true)" style="margin-left:auto;">↻ Re-run</button>' +
+      '<label class="ov-overlay-toggle"><input type="checkbox" ' + (overlayOn ? "checked" : "") + ' data-oi-onchange="ontoink.setInferredOverlay(\'' + id + '\',this.checked)"> Show inferences on graph</label>' +
+      (count ? ' <button class="ov-chip" data-oi-onclick="ontoink.downloadInferences(\'' + id + '\')">Download (N-Triples)</button>' +
+               ' <button class="ov-chip" data-oi-onclick="ontoink.copyInferences(\'' + id + '\')">Copy JSON</button>' : '') +
+      ' <button class="ov-chip" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\',true)" style="margin-left:auto;">↻ Re-run</button>' +
       '</div>';
 
     var resultHtml;
@@ -5717,7 +5717,7 @@ var ontoink = (function () {
 
     panel.style.display = "block";
     panel.innerHTML =
-      '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+      '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
       '<div class="ov-reasoning-body">' + statsHtml + actionsHtml + resultHtml + logsHtml + '</div>';
 
     // If overlay was on previously, ensure it's still applied (e.g. after a Re-run replaced inferences)
@@ -5789,7 +5789,7 @@ var ontoink = (function () {
 
     panel.style.display = "block";
     var diagnosticHtml =
-      '<div class="ov-panel-head">Reasoner diagnostic <button class="ov-panel-close" onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+      '<div class="ov-panel-head">Reasoner diagnostic <button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
       '<div class="ov-reasoning-body"><div style="padding:8px 12px;color:#374151;font-size:12px;">Capability check for the browser WASM reasoner. If any row is red, browser reasoning will fail — use the <em>Server</em> option in the dropdown instead.</div>' +
       '<table style="width:100%;border-collapse:collapse;font-size:12px;"><tbody>' + lines.join("") + '</tbody></table>' +
       '<div style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:12px;"><strong>Try loading the WASM module now:</strong> <button class="ov-chip" id="' + id + '-probe-wasm">Probe</button> <span id="' + id + '-probe-result" style="margin-left:8px;color:#6b7280;"></span></div>' +
@@ -5843,12 +5843,255 @@ var ontoink = (function () {
     navigator.clipboard.writeText(JSON.stringify(inst._lastReasoning, null, 2)).catch(function() {});
   }
 
+  // ==========================================================================
+  // CSP-safe event wiring + programmatic embedding (embeddable build).
+  //
+  // A strict Content-Security-Policy (script-src 'self', no 'unsafe-inline')
+  // blocks inline on* handlers — that is exactly the policy the NFDI-MatWerk
+  // curation portal ships. So the fence/runtime markup emits its handlers as
+  // data-oi-on* attributes (which the browser never executes as scripts) and
+  // this shim attaches the real listeners with addEventListener, interpreting
+  // the small fixed handler grammar WITHOUT eval(). It runs on every ontoink
+  // page (MkDocs and embedded alike), so the whole library is now CSP-safe.
+  // ==========================================================================
+  var _OI_EVT = {
+    "data-oi-onclick": "click", "data-oi-onchange": "change",
+    "data-oi-oninput": "input", "data-oi-onmousedown": "mousedown",
+    "data-oi-onkeydown": "keydown"
+  };
+  var _embedSeq = 0;
+
+  function _oiSplitTop(code, sep) {
+    // Split on `sep` at the top level, ignoring separators inside quotes.
+    var out = [], cur = "", q = null;
+    for (var i = 0; i < code.length; i++) {
+      var c = code[i];
+      if (q) { cur += c; if (c === q && code[i - 1] !== "\\") q = null; }
+      else if (c === "'" || c === '"') { q = c; cur += c; }
+      else if (c === sep) { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+    if (cur.length) out.push(cur);
+    return out;
+  }
+
+  function _oiArg(a, el, ev) {
+    a = a.trim();
+    if (a === "this") return el;
+    if (a === "this.value") return el.value;
+    if (a === "this.checked") return el.checked;
+    if (a === "event") return ev;
+    if (a === "true") return true;
+    if (a === "false") return false;
+    if (a === "null") return null;
+    if (/^-?\d+(\.\d+)?$/.test(a)) return parseFloat(a);
+    var m = a.match(/^(['"])([\s\S]*)\1$/);
+    if (m) return m[2].replace(/\\'/g, "'").replace(/\\"/g, '"');
+    return a;
+  }
+
+  function _oiRun(stmt, el, ev) {
+    stmt = stmt.trim();
+    if (!stmt) return;
+    if (stmt === "return false") { if (ev) ev.preventDefault(); return; }
+    if (stmt === "event.preventDefault()") { if (ev) ev.preventDefault(); return; }
+    if (stmt === "this.parentElement.remove()") {
+      if (el.parentElement) el.parentElement.remove(); return;
+    }
+    var m;
+    if ((m = stmt.match(/^ontoink\.([A-Za-z_$][\w$]*)\(([\s\S]*)\)$/))) {
+      var fn = api[m[1]];
+      if (typeof fn !== "function") return;
+      var args = m[2].trim()
+        ? _oiSplitTop(m[2], ",").map(function (a) { return _oiArg(a, el, ev); })
+        : [];
+      fn.apply(api, args);
+      return;
+    }
+    if ((m = stmt.match(/^this\.closest\((['"])([\s\S]+?)\1\)\.style\.display=(['"])([\s\S]*?)\3$/))) {
+      var t = el.closest(m[2]); if (t) t.style.display = m[4]; return;
+    }
+    if ((m = stmt.match(/^this\.closest\((['"])([\s\S]+?)\1\)\.remove\(\)$/))) {
+      var t2 = el.closest(m[2]); if (t2) t2.remove(); return;
+    }
+    // Unknown statement shape — ignored on purpose (no eval, stays strict).
+  }
+
+  function _oiWireEl(el) {
+    if (!el || el.nodeType !== 1 || el.__oiWired) return;
+    var wired = false;
+    Object.keys(_OI_EVT).forEach(function (attr) {
+      if (!el.hasAttribute(attr)) return;
+      var code = el.getAttribute(attr), evName = _OI_EVT[attr];
+      el.addEventListener(evName, function (ev) {
+        _oiSplitTop(code, ";").forEach(function (st) {
+          try { _oiRun(st, el, ev); } catch (e) { /* one bad stmt shouldn't break the UI */ }
+        });
+      });
+      wired = true;
+    });
+    if (wired) el.__oiWired = true;
+  }
+
+  var _OI_SEL = "[" + Object.keys(_OI_EVT).join("],[") + "]";
+  function wireHandlers(root) {
+    if (!root) return;
+    if (root.nodeType === 1) _oiWireEl(root);
+    if (root.querySelectorAll) root.querySelectorAll(_OI_SEL).forEach(_oiWireEl);
+  }
+
+  var _oiObserving = false;
+  function _oiInstallObserver() {
+    if (_oiObserving || typeof MutationObserver === "undefined" || !document.body) return;
+    _oiObserving = true;
+    // Dynamically-created panels/popups (facets, stats, SPARQL, node popups…)
+    // carry data-oi-on* handlers too; wire them the moment they're inserted.
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var added = muts[i].addedNodes;
+        for (var j = 0; j < added.length; j++) wireHandlers(added[j]);
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+
+  // The interactive toolbar + canvas + panels, identical to the MkDocs fence
+  // (ontoink/fence.py) but emitted with data-oi-on* handlers so it works under
+  // a strict CSP. Kept in sync with fence.py.
+  function _oiEmbedSkeleton(id, o) {
+    var height = o.height || "500px";
+    var showEditor = o.editor !== false;
+    var showReasoning = o.reasoning !== false;
+    var editorBtn = showEditor
+      ? '<button class="ov-btn ov-btn-accent" data-oi-onclick="ontoink.toggleEditor(\'' + id + '\')" title="Edit TTL & Validate">Edit &amp; Validate</button>' : "";
+    var reasoningBtn = showReasoning
+      ? '<button class="ov-btn" data-oi-onclick="ontoink.toggleReasoning(\'' + id + '\')" title="Show/hide inferred triples">Reasoning</button>' : "";
+    return '' +
+      '<div class="ov-toolbar">' +
+        '<div class="ov-toolbar-group">' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.zoomIn(\'' + id + '\')" title="Zoom in">+</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.zoomOut(\'' + id + '\')" title="Zoom out">&minus;</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.fit(\'' + id + '\')" title="Fit to view">Fit</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.fullscreen(\'' + id + '\')" title="Fullscreen">&#x26F6;</button>' +
+          '<select class="ov-layout-select" data-oi-onchange="ontoink.changeLayout(\'' + id + '\',this.value)" title="Layout algorithm">' +
+            '<option value="dagre">Dagre</option><option value="cose">Force</option><option value="circle">Circle</option>' +
+            '<option value="concentric">Concentric</option><option value="breadthfirst">Tree</option><option value="grid">Grid</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="ov-toolbar-group">' +
+          '<input class="ov-search-input" type="text" placeholder="Search..." data-oi-oninput="ontoink.search(\'' + id + '\',this.value)" title="Fuzzy search nodes &amp; edges">' +
+        '</div>' +
+        '<div class="ov-toolbar-group">' +
+          '<label class="ov-lod-label" title="Level of Detail">LOD</label>' +
+          '<select class="ov-lod-select" data-oi-onchange="ontoink.setLodLevel(\'' + id + '\',this.value)" title="Pick a level of detail">' +
+            '<option value="0">L0 · classes only</option>' +
+            '<option value="1">L1 · + hierarchy</option>' +
+            '<option value="2">L2 · + individuals &amp; object props</option>' +
+            '<option value="3">L3 · + OWL restrictions</option>' +
+            '<option value="4">L4 · + data props &amp; literals</option>' +
+            '<option value="5">L5 · everything except inferred</option>' +
+            '<option value="6" selected>L6 · everything</option>' +
+          '</select>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.openAtticPanel(\'' + id + '\')" title="Open the Hidden panel">Hidden</button>' +
+          '<label class="ov-super-toggle" title="Group by namespace"><input type="checkbox" checked data-oi-onchange="ontoink.toggleSuperNodes(\'' + id + '\',this.checked)"> Group</label>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.openFacetsPanel(\'' + id + '\')" title="Facets">Facets</button>' +
+          '<select class="ov-lod-select" data-oi-onchange="ontoink.applyStylePreset(\'' + id + '\',this.value)" title="Ontology visualization style preset">' +
+            '<option value="ontoink" selected>Style: Ontoink</option>' +
+            '<option value="chowlk">Style: Chowlk</option>' +
+            '<option value="graffoo">Style: Graffoo</option>' +
+            '<option value="vowl">Style: VOWL</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="ov-toolbar-group">' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.exportPNG(\'' + id + '\')" title="Export PNG">PNG</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.exportSVG(\'' + id + '\')" title="Export SVG">SVG</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.downloadTTL(\'' + id + '\')" title="Download TTL">TTL</button>' +
+        '</div>' +
+        '<div class="ov-toolbar-group">' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.toggleColors(\'' + id + '\')" title="Edit layout, colors and shapes">Edit Layout</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.abstractView(\'' + id + '\')" title="Show abstract model (classes only)">Abstract</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.toggleStats(\'' + id + '\')" title="Graph statistics">Stats</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.togglePathFinder(\'' + id + '\')" title="Find paths between nodes">Paths</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.toggleSparql(\'' + id + '\')" title="SPARQL query">SPARQL</button>' +
+          reasoningBtn +
+          '<select class="ov-reasoner-select" title="Select reasoner backend"></select>' +
+          editorBtn +
+        '</div>' +
+      '</div>' +
+      '<div class="ov-canvas-wrap" style="position:relative;width:100%;height:' + height + ';">' +
+        '<div class="ov-canvas" style="width:100%;height:100%;"></div>' +
+        '<div class="ov-legend-overlay ov-draggable" style="bottom:12px;left:12px;"></div>' +
+        '<div class="ov-ns-overlay ov-draggable" style="bottom:12px;right:12px;"></div>' +
+        '<div class="ov-minimap" style="position:absolute;top:8px;right:8px;width:150px;height:100px;border:1px solid #d1d5db;border-radius:6px;background:rgba(255,255,255,0.9);overflow:hidden;"></div>' +
+        '<div class="ov-attic-panel" id="' + id + '-attic" style="display:none;">' +
+          '<div class="ov-editor-header ov-panel-head">Hidden by LOD  ·  pin to reveal<button class="ov-btn-close" data-oi-onclick="ontoink.closeAtticPanel(\'' + id + '\')" title="Close">&times;</button></div>' +
+          '<div class="ov-attic-body" id="' + id + '-attic-body"></div>' +
+        '</div>' +
+        '<div class="ov-facets-panel ov-attic-panel" id="' + id + '-facets" style="display:none;">' +
+          '<div class="ov-editor-header ov-panel-head">Facets  ·  narrow the view<button class="ov-btn-close" data-oi-onclick="ontoink.closeFacetsPanel(\'' + id + '\')" title="Close">&times;</button></div>' +
+          '<div class="ov-attic-body" id="' + id + '-facets-body"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ov-stats-panel" style="display:none;"></div>' +
+      '<div class="ov-pathfinder-panel" style="display:none;"></div>' +
+      '<div class="ov-sparql-panel" style="display:none;"></div>' +
+      '<div class="ov-reasoning-panel" style="display:none;">' +
+        '<div class="ov-editor-header ov-panel-head">Inferred Triples (OWL-RL)<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+        '<div class="ov-reasoning-content"></div>' +
+        '<div class="ov-editor-actions">' +
+          '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" class="ov-reasoning-graph-toggle" data-oi-onchange="ontoink.toggleInferredOnGraph(\'' + id + '\',this.checked)"> Show on graph</label>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.validateWithReasoning(\'' + id + '\')">Validate with Inferences</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ov-editor-panel" style="display:none;">' +
+        '<div class="ov-editor-header ov-panel-head">Edit &amp; Validate<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-editor-panel\').style.display=\'none\'">&times;</button></div>' +
+        '<div class="ov-editor-split">' +
+          '<div class="ov-editor-left"><div class="ov-editor-header">Source (data TTL)</div><textarea class="ov-editor-textarea"></textarea></div>' +
+          '<div class="ov-editor-right"><div class="ov-editor-header">SHACL Shapes</div><textarea class="ov-editor-shapes-textarea"></textarea></div>' +
+        '</div>' +
+        '<div class="ov-editor-report"><div class="ov-editor-header">Validation Report</div><div class="ov-validation-output"></div></div>' +
+        '<div class="ov-editor-actions">' +
+          '<button class="ov-btn ov-btn-primary" data-oi-onclick="ontoink.validate(\'' + id + '\')">Validate</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.updateGraph(\'' + id + '\')">Update Graph</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.resetEditor(\'' + id + '\')">Reset</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Programmatic embedding: render an ontoink diagram from a TTL string into any
+  // element, no MkDocs required. opts: {ttl|source, shape|shacl, layout, height,
+  // editor, reasoning, legend, namespaces, reasoner}.
+  function embed(elOrId, opts) {
+    opts = opts || {};
+    var el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
+    if (!el) { console.warn("[ontoink] embed: element not found:", elOrId); return null; }
+    if (!el.id) el.id = "ontoink-embed-" + (++_embedSeq);
+    var id = el.id;
+    el.classList.add("ontoink-container");
+    el.setAttribute("data-show-legend", String(opts.legend !== false));
+    el.setAttribute("data-show-ns", String(opts.namespaces !== false));
+    el.setAttribute("data-reasoner", opts.reasoner || "");
+    el.innerHTML = _oiEmbedSkeleton(id, opts);
+    wireHandlers(el);
+    _oiInstallObserver();
+    try { populateReasonerSelect(el.querySelector(".ov-reasoner-select")); } catch (e) {}
+    var ttl = opts.ttl || opts.source || "";
+    var shape = opts.shape || opts.shacl || "";
+    try { playground(id, ttl, shape); }
+    catch (e) { console.error("[ontoink] embed render failed", e); }
+    if (opts.layout) { try { changeLayout(id, opts.layout); } catch (e2) {} }
+    return id;
+  }
+
   // Populate any reasoner dropdowns once DOM is ready
   document.addEventListener("DOMContentLoaded", function() {
     document.querySelectorAll(".ov-reasoner-select").forEach(populateReasonerSelect);
   });
 
-  document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll(".ontoink-container").forEach(function(el){initGraph(el.id);});});
+  document.addEventListener("DOMContentLoaded",function(){
+    document.querySelectorAll(".ontoink-container").forEach(function(el){initGraph(el.id);});
+    wireHandlers(document);      // CSP-safe: attach real listeners to data-oi-on* markup
+    _oiInstallObserver();        // …and to any panels/popups created later
+  });
 
   // v0.7.4-fix — This was `return { ... };` but the giant IIFE had a
   // LOT of code below this point (style presets, live-editor module,
@@ -5894,7 +6137,10 @@ var ontoink = (function () {
     // liveEditor: liveEditor,   (bound at bottom of file — see line ~end)
     // v0.7.4 — Style presets (Chowlk / Graffoo / VOWL / UML-ODM).
     applyStylePreset: applyStylePreset,
-    listStylePresets: listStylePresets
+    listStylePresets: listStylePresets,
+    // Embeddable build — CSP-safe handler wiring + programmatic mount.
+    embed: embed,
+    wireHandlers: wireHandlers
   };
 
   // ==========================================================================

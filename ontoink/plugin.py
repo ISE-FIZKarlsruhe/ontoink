@@ -30,6 +30,28 @@ class OntoinkPlugin(BasePlugin):
 
         return config
 
+    def on_files(self, files, config):
+        """Copy the self-hosted third-party libs (Cytoscape, dagre, CodeMirror…)
+        into the built site so pages load them from the same origin instead of a
+        CDN — required for offline use and for any host with a strict CSP
+        (script-src 'self'). Served at ``<site>/vendor/``."""
+        from mkdocs.structure.files import File
+
+        res = Path(__file__).parent / "resources"
+        vendor = res / "vendor"
+        if vendor.is_dir():
+            for p in sorted(vendor.iterdir()):
+                if p.is_file():
+                    files.append(
+                        File(
+                            f"vendor/{p.name}",
+                            str(res),
+                            config["site_dir"],
+                            config.get("use_directory_urls", True),
+                        )
+                    )
+        return files
+
     def on_post_page(self, output, page, config):
         """Inject CDN scripts and plugin JS/CSS into pages that use ontoink."""
         # v0.7.4 — Also trigger on the live editor page. The DSL parser
@@ -64,26 +86,26 @@ class OntoinkPlugin(BasePlugin):
         js_content = _safe_inline(js_content)
         dsl_content = _safe_inline(dsl_content)
 
-        cdn_tags = "\n".join([
-            # Cytoscape.js core + dagre layout
-            '<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.4/dist/cytoscape.min.js"></script>',
-            '<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>',
-            '<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>',
-            # Cytoscape SVG export
-            '<script src="https://cdn.jsdelivr.net/npm/cytoscape-svg@0.4.0/cytoscape-svg.min.js"></script>',
-            # CodeMirror for TTL editing
-            '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">',
-            '<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js"></script>',
-            '<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/turtle/turtle.min.js"></script>',
-        ])
-
-        # Relative path from this page to the site root's assets/ dir, so
-        # dynamic ESM imports (e.g. the SHACL validator at assets/shacl/shacl.mjs)
-        # resolve correctly both at the site root (Docker `all`, localhost/) and
-        # under a sub-path (GitHub Pages, /ontoink/…). mkdocs computes the same
-        # "../"-per-level prefix for its own assets; we mirror it from page.url.
+        # Relative path from this page to the site root, so both the vendored
+        # libs (<site>/vendor/, copied by on_files) and dynamic ESM imports
+        # (assets/shacl/shacl.mjs) resolve at the site root (Docker `all`,
+        # localhost/) and under a sub-path (GitHub Pages, /ontoink/…). mkdocs
+        # computes the same "../"-per-level prefix for its own assets.
         page_url = getattr(page, "url", "") or ""
-        asset_base = "../" * page_url.count("/") + "assets/"
+        root = "../" * page_url.count("/")
+        asset_base = root + "assets/"
+        vendor_base = root + "vendor/"
+
+        # Self-hosted third-party libs (no CDN) — offline + strict-CSP friendly.
+        cdn_tags = "\n".join([
+            f'<script src="{vendor_base}cytoscape.min.js"></script>',
+            f'<script src="{vendor_base}dagre.min.js"></script>',
+            f'<script src="{vendor_base}cytoscape-dagre.js"></script>',
+            f'<script src="{vendor_base}cytoscape-svg.min.js"></script>',
+            f'<link rel="stylesheet" href="{vendor_base}codemirror.min.css">',
+            f'<script src="{vendor_base}codemirror.min.js"></script>',
+            f'<script src="{vendor_base}codemirror-turtle.min.js"></script>',
+        ])
         base_tag = f"<script>window.ONTOINK_ASSET_BASE={json.dumps(asset_base)};</script>\n"
 
         # DSL parser goes BEFORE ontoink.js so `window.ontoinkDsl` is set

@@ -52,6 +52,7 @@ nav:
   - Live Editor Syntax: live-editor-syntax.md
   - SHACL Editor: shacl-editor.md
   - Getting Started: getting-started.md
+  - Embedding: embedding.md
   - Examples:
     - FOAF Person: examples/foaf-person.md
     - Schema.org Article: examples/schema-article.md
