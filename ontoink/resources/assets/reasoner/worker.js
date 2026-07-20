@@ -15,6 +15,17 @@
  */
 // At runtime this file lives in `dist/` alongside `dist/konclude.mjs`.
 // The module is mocked in unit tests (see tests/unit/worker.test.ts).
+//
+// ontoink v0.7.3 vendor patch: the `classify` case below swallows the
+// Emscripten Asyncify "unwind" exit sentinel. Konclude's C++ core calls
+// exit() after finishing classification; with ASYNCIFY that surfaces as a
+// thrown "unwind" AFTER the results are already computed. The upstream
+// worker forwarded it as an RPC error, which made the main thread's
+// reason() reject before its getInferredNTriples harvest step could run —
+// so the browser always reported "aborted with 'unwind' before producing
+// any inferences" even though the inferences existed in worker memory.
+// (The Node build swallows the same sentinel, which is why the Server
+// backends never showed this.)
 import createKoncludeModule from "./konclude.mjs";
 // ---------------------------------------------------------------------------
 // Eager initialisation
@@ -73,7 +84,17 @@ export async function handleMessage(event) {
                 break;
             }
             case "classify": {
-                result = reasoner.classify();
+                try {
+                    result = reasoner.classify();
+                }
+                catch (err) {
+                    // Emscripten throws "unwind" when Konclude exits after a
+                    // successful run — treat it as success so the follow-up
+                    // getInferredNTriples RPC can harvest the results.
+                    const m = err instanceof Error ? (err.message || err.name) : String(err);
+                    if (!/unwind/i.test(m)) throw err;
+                    result = true;
+                }
                 break;
             }
             case "isConsistent": {

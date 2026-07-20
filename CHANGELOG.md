@@ -41,6 +41,28 @@
   `/assets/*` and leave the actual pages uncovered — a footgun the
   previous `demo/docs/assets/coi-serviceworker.js` placement had.
 
+### Fixed — Browser reasoner "aborted with 'unwind'" losing its results
+
+- **The vendored `worker.js` now swallows Emscripten's `unwind` exit
+  sentinel inside the `classify` RPC.** Konclude's C++ core calls
+  `exit()` after finishing classification; with ASYNCIFY that surfaces
+  as a thrown `"unwind"` *after* the inferences are already computed.
+  The upstream worker forwarded it as an RPC **error**, so the main
+  thread's `reason()` rejected before its `getInferredNTriples`
+  harvest step ever ran — the browser backend always failed with
+  "Konclude WASM aborted with 'unwind' before producing any
+  inferences" even though the inferred triples were sitting in worker
+  memory. (The Node build swallows the same sentinel, which is why the
+  Server backends never exhibited this.) The same patch is applied in
+  `docker/bundle-reasoner.sh` for the Docker image's copy, with a
+  guard that fails the build loudly if upstream's worker shape changes.
+- **Belt-and-braces recovery in `reasonInBrowser`** — if an `unwind`
+  still escapes (e.g. the esm.sh CDN fallback ships the unpatched
+  upstream worker), ontoink now asks the still-alive worker instance
+  directly for `getInferredNTriples`, parses the N-Triples, and
+  recovers the results — time-boxed to 15 s so a genuinely dead worker
+  still yields the actionable error instead of a hung panel.
+
 ### Fixed — Browser reasoner bundle URL on sub-path deploys
 
 - **The vendored bundle is now imported relative to the page, not the

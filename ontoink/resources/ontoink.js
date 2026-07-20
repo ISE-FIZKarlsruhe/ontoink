@@ -5548,14 +5548,26 @@ var ontoink = (function () {
         );
       }).then(function() {
         log("Running classification + realization…");
+        function quadRow(q) {
+          var s = q.subject.value, p = q.predicate.value, o = q.object;
+          var isLit = o.termType === "Literal";
+          return {
+            s: s, p: p, o: o.value, isLiteral: isLit,
+            sLabel: s.split(/[#/]/).pop(),
+            pLabel: p.split(/[#/]/).pop(),
+            oLabel: isLit ? o.value : o.value.split(/[#/]/).pop(),
+          };
+        }
         var unwound = false;
         return ctx.reasoner.reason(store).catch(function(e) {
           // Emscripten unwinds the WASM call stack on program exit by throwing a
-          // sentinel value ("unwind" / "Error: unwind"). The Node build swallows
-          // it; the esbuild browser bundle lets it escape. If Konclude already
-          // populated the inferred graph, the run actually succeeded — so treat
-          // an 'unwind' as non-fatal and let the collector below verify. Any
-          // other error is a real failure and is re-thrown.
+          // sentinel value ("unwind" / "Error: unwind"). Our vendored worker.js
+          // swallows it in the classify RPC (v0.7.3), but the esm.sh fallback
+          // ships the UNPATCHED upstream worker where the sentinel escapes and
+          // reason() rejects BEFORE its getInferredNTriples harvest step. If
+          // Konclude already populated the inferred graph, the run actually
+          // succeeded — treat 'unwind' as non-fatal and let the collector below
+          // verify / recover. Any other error is a real failure, re-thrown.
           var m = (e && (e.message || e.name)) || String(e);
           if (!/unwind/i.test(m)) throw e;
           unwound = true;
@@ -5563,23 +5575,36 @@ var ontoink = (function () {
         }).then(function() {
           var inferred = store.getQuads(null, null, null, ctx.Konclude.INFERRED_GRAPH_IRI);
           if (unwound && !inferred.length) {
-            throw new Error(
+            // v0.7.3 — reason() rejected before its own harvest step, but the
+            // C++ reasoner instance in the worker survives the unwind (the
+            // Node build relies on the same fact). Ask it directly for the
+            // inferred triples instead of giving up. Timeboxed: if the worker
+            // really is dead the RPC would otherwise hang forever.
+            log("No results in the store after unwind — harvesting directly from the worker…");
+            var fail = new Error(
               "Konclude WASM aborted with 'unwind' before producing any inferences — " +
               "an Emscripten exit/Asyncify issue in the in-browser worker. Pick a " +
               "Server reasoner in the dropdown (same Konclude engine, runs in Node and works)."
             );
+            if (!ctx.reasoner || typeof ctx.reasoner._call !== "function") throw fail;
+            var harvest = ctx.reasoner._call("getInferredNTriples").then(function(nt) {
+              return new Promise(function(resolve, reject) {
+                var got = [];
+                new ctx.N3.Parser({ format: "N-Triples" }).parse(String(nt || ""), function(err, quad) {
+                  if (err) return reject(fail);
+                  if (quad) { got.push(quad); return; }
+                  log("Recovered " + got.length + " inferred triple(s) from the worker after unwind");
+                  resolve(got.map(quadRow));
+                });
+              });
+            }, function() { throw fail; });
+            var timeout = new Promise(function(_, reject) {
+              setTimeout(function() { reject(fail); }, 15000);
+            });
+            return Promise.race([harvest, timeout]);
           }
           log("Konclude finished. Collecting " + inferred.length + " inferred quad(s)…");
-          return inferred.map(function(q) {
-            var s = q.subject.value, p = q.predicate.value, o = q.object;
-            var isLit = o.termType === "Literal";
-            return {
-              s: s, p: p, o: o.value, isLiteral: isLit,
-              sLabel: s.split(/[#/]/).pop(),
-              pLabel: p.split(/[#/]/).pop(),
-              oLabel: isLit ? o.value : o.value.split(/[#/]/).pop(),
-            };
-          });
+          return inferred.map(quadRow);
         });
       });
     });

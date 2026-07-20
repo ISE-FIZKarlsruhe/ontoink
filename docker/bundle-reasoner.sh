@@ -26,7 +26,37 @@ cp node_modules/rdf-reasoner-konclude/dist/konclude.wasm /opt/reasoner-vendor/
 
 # worker.js is referenced by the bundle as `new Worker(new URL("./worker.js", import.meta.url))`
 # — we must serve it from the same directory or the Worker constructor 404s.
-cp node_modules/rdf-reasoner-konclude/dist/worker.js     /opt/reasoner-vendor/
+#
+# v0.7.3 patch: swallow the Emscripten Asyncify "unwind" exit sentinel inside
+# the classify RPC. Konclude calls exit() after finishing; upstream's worker
+# forwarded the resulting "unwind" throw as an RPC error, so the main thread's
+# reason() rejected BEFORE its getInferredNTriples harvest step — the browser
+# reasoner always failed with "aborted with 'unwind'" despite the inferences
+# existing in worker memory. Keep this in sync with the pre-patched copy in
+# ontoink/resources/assets/reasoner/worker.js.
+python3 - node_modules/rdf-reasoner-konclude/dist/worker.js /opt/reasoner-vendor/worker.js << 'PYEOF'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+old = """            case "classify": {
+                result = reasoner.classify();
+                break;
+            }"""
+new = """            case "classify": {
+                try {
+                    result = reasoner.classify();
+                }
+                catch (err) {
+                    const m = err instanceof Error ? (err.message || err.name) : String(err);
+                    if (!/unwind/i.test(m)) throw err;
+                    result = true;
+                }
+                break;
+            }"""
+if old not in text:
+    sys.exit("bundle-reasoner.sh: classify block not found in worker.js — upstream changed, update the patch")
+open(dst, "w", encoding="utf-8").write(text.replace(old, new))
+PYEOF
 
 # konclude.mjs (Emscripten output) starts with a Node-only `import { createRequire } from 'module'`.
 # Browsers can't resolve the `module` bare specifier — the file fails to parse.
