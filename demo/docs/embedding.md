@@ -112,9 +112,13 @@ validation shapes — all under a strict `script-src 'self'` policy.
 ## Notes & limits
 
 - **OWL reasoning** in the embed uses the browser WASM backend, which needs the
-  page to be [cross-origin isolated](https://web.dev/coop-coep/) (COOP/COEP). If
-  it isn't, point ontoink at a running [API server](index.md) (`/reason`) or omit
-  reasoning.
+  page to be [cross-origin isolated](https://web.dev/coop-coep/) (COOP/COEP).
+  When the host page is served via MkDocs + the ontoink plugin, the plugin
+  ships and auto-injects a service-worker shim so this works on static hosts
+  (GitHub Pages, S3, plain Caddy) with no manual wiring. On other embed hosts,
+  either set COOP/COEP headers server-side, add [`coi-serviceworker`](https://github.com/gzuidhof/coi-serviceworker)
+  to the page yourself, or point ontoink at a running [API server](index.md)
+  (`/reason`) instead.
 - **Live SHACL validation** in the editor loads a same-origin ESM module
   (`assets/shacl/shacl.mjs`); vendor it alongside the bundle if you need the
   in-browser **Validate** button. The build-time SHACL *overlay* (from the

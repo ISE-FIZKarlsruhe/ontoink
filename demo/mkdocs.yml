@@ -99,8 +99,9 @@ extra:
 extra_css:
   - assets/extra.css
 
-# COOP/COEP service worker so the playground's WASM Konclude reasoner
-# can use SharedArrayBuffer / pthreads on static hosts (GitHub Pages).
-# When self-hosting, headers from the server take precedence; this is a no-op.
-extra_javascript:
-  - assets/coi-serviceworker.js
+# v0.7.3 — No extra_javascript needed for the COOP/COEP service worker or
+# the WASM reasoner bundle. The ontoink MkDocs plugin auto-installs both:
+# it copies `coi-serviceworker.js` to the site root and the
+# rdf-reasoner-konclude bundle to `assets/reasoner/`, then injects the
+# service-worker `<script>` tag on every ontoink page. `pip install ontoink`
+# is the whole setup.

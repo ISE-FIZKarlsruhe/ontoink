@@ -84,7 +84,12 @@ where = ["."]
 [tool.setuptools.package-data]
 # resources/vendor/* ships the self-hosted third-party libs (Cytoscape, dagre,
 # CodeMirror…) so the plugin can serve them from the built site instead of a CDN.
-ontoink = ["resources/*.js", "resources/*.css", "resources/vendor/*"]
+ontoink = [
+    "resources/*.js",
+    "resources/*.css",
+    "resources/vendor/*",
+    "resources/reasoner/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

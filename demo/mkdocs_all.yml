@@ -123,8 +123,8 @@ extra:
 extra_css:
   - assets/extra.css
 
-# COOP/COEP service worker so the playground's WASM Konclude reasoner
-# can use SharedArrayBuffer / pthreads on static hosts (GitHub Pages).
-# When self-hosting, headers from the server take precedence; this is a no-op.
-extra_javascript:
-  - assets/coi-serviceworker.js
+# v0.7.3 — Nothing to wire here for reasoning. The ontoink plugin
+# auto-installs `coi-serviceworker.js` at the site root and the WASM
+# Konclude bundle under `assets/reasoner/`; it also injects the SW
+# `<script>` tag on every ontoink page. Server-side COOP/COEP headers
+# take precedence in the `all`/`api` Docker modes anyway.

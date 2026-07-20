@@ -2,6 +2,45 @@
 
 ## [0.7.3] - 2026-07-20
 
+### Added — Plugin auto-installs the browser reasoner bundle + COOP/COEP service worker
+
+- **The ontoink MkDocs plugin now ships a pre-built vendored
+  `rdf-reasoner-konclude` bundle** (`bundle.mjs`, `konclude.mjs`,
+  `konclude.wasm`, `worker.js`) in
+  `ontoink/resources/assets/reasoner/` and copies it verbatim to
+  `<site>/assets/reasoner/` at build time (via `on_files`). Ontoink's
+  browser reasoner does `import("<root>/assets/reasoner/bundle.mjs")`
+  same-origin — without a same-origin copy of the bundle the WASM
+  Worker constructor refused to spawn (browsers reject cross-origin
+  module Workers even with COEP credentialless), so the panel died
+  with "Worker error — the WASM worker died during init" and the
+  esm.sh fallback path never worked on any static host. Previously
+  only ontoink's own Docker image built + placed the bundle (via
+  `docker/bundle-reasoner.sh` → `/opt/reasoner-vendor/*`); every other
+  deploy (GitHub Pages, the FIZ-Karlsruhe matwerk deploy, any
+  downstream MkDocs site using `pip install ontoink`) silently 404'd
+  on `/assets/reasoner/bundle.mjs`. The plugin ships the bundle in the
+  wheel so `pip install ontoink[reasoning]` is sufficient. All 4
+  files land in the SAME directory because `bundle.mjs` contains
+  `new Worker(new URL("./worker.js", import.meta.url))` and Emscripten's
+  glue expects `konclude.wasm` next to `konclude.mjs`.
+- **The plugin also ships `coi-serviceworker.js` and copies it to the
+  built site's ROOT** (via `on_files`), then injects a
+  `<script src="{root}coi-serviceworker.js">` at the very top of every
+  page that uses ontoink (via `on_post_page`, before the Cytoscape /
+  dagre / CodeMirror libs). Downstream sites get
+  `crossOriginIsolated === true` out-of-the-box on static hosts
+  (GitHub Pages, S3, Caddy without header config) with no
+  `extra_javascript` wiring required — which is the OTHER prerequisite
+  for the "Browser: Konclude WASM" reasoner dropdown option. The tag
+  is skipped if the page's HTML already contains `coi-serviceworker.js`
+  (e.g. the user added it manually via `extra_javascript`) so there's
+  no double-registration. Placing the file at the site root is
+  deliberate: a service worker's default scope is its own directory,
+  so nesting it under `assets/` would silently limit coverage to
+  `/assets/*` and leave the actual pages uncovered — a footgun the
+  previous `demo/docs/assets/coi-serviceworker.js` placement had.
+
 ### Fixed — Reasoning panel
 
 - **"0 inferences from a successful build-time reasoner" no longer falls
