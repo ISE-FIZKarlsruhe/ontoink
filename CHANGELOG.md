@@ -41,6 +41,23 @@
   `/assets/*` and leave the actual pages uncovered — a footgun the
   previous `demo/docs/assets/coi-serviceworker.js` placement had.
 
+### Fixed — Browser reasoner bundle URL on sub-path deploys
+
+- **The vendored bundle is now imported relative to the page, not the
+  domain root** — `loadBrowserReasoner` hardcoded
+  `import("/assets/reasoner/bundle.mjs")`, which only resolved when the
+  site was served at the domain root (Docker `all` mode at
+  `http://host:8000/`). On every sub-path deploy — GitHub Pages project
+  sites (`/ontoink/…`), the FIZ matwerk deploy (`/matwerk/…`) — the
+  root-absolute URL pointed outside the site, 404'd, silently fell back
+  to esm.sh, and the cross-origin Worker died with "Worker error — the
+  WASM worker died during init" even though the bundle was sitting
+  right there in `<site>/assets/reasoner/`. The loader now resolves
+  `window.ONTOINK_ASSET_BASE + "reasoner/bundle.mjs"` (the per-page
+  relative prefix the plugin already injects, same mechanism the SHACL
+  validator module uses) and the error message prints the exact
+  absolute URL that was attempted instead of a guessed path.
+
 ### Fixed — Reasoning panel
 
 - **"0 inferences from a successful build-time reasoner" no longer falls

@@ -5476,6 +5476,21 @@ var ontoink = (function () {
     });
   }
 
+  // v0.7.3 — Resolve the vendored bundle RELATIVE to the current page via
+  // ONTOINK_ASSET_BASE (injected per-page by the MkDocs plugin as e.g.
+  // "../../assets/"). The previous hardcoded root-absolute
+  // "/assets/reasoner/bundle.mjs" only worked when the site was served at
+  // the domain root (Docker `all` mode) — on ANY sub-path deploy (GitHub
+  // Pages project sites at /ontoink/…, the FIZ matwerk deploy at
+  // /matwerk/…) it resolved to the domain root, 404'd, silently fell back
+  // to esm.sh, and the cross-origin Worker died during init.
+  function _reasonerBundleUrl() {
+    var base = (typeof window !== "undefined" && window.ONTOINK_ASSET_BASE) || "/assets/";
+    // Make it absolute so error messages show exactly what was fetched.
+    try { return new URL(base + "reasoner/bundle.mjs", location.href).href; }
+    catch (e) { return base + "reasoner/bundle.mjs"; }
+  }
+
   function loadBrowserReasoner() {
     if (_wasmReasoner) return Promise.resolve(_wasmReasoner);
     if (!isBrowserReasonerAvailable()) {
@@ -5483,9 +5498,9 @@ var ontoink = (function () {
     }
     // Prefer the same-origin vendored bundle (works around the cross-origin
     // Worker restriction that fails for esm.sh). Fall back to esm.sh only if
-    // the bundle is not deployed (e.g. on GitHub Pages without the vendor copy).
+    // the bundle is not deployed (e.g. an embed host without the vendor copy).
     function loadVendored() {
-      return import("/assets/reasoner/bundle.mjs").then(function(mod) {
+      return import(_reasonerBundleUrl()).then(function(mod) {
         // The bundle re-exports both rdf-reasoner-konclude AND n3 Store/Parser
         return { Konclude: mod, N3: mod };
       });
@@ -5523,13 +5538,13 @@ var ontoink = (function () {
         // "Worker error" comes from an internal Worker.onerror handler that
         // strips detail. Capture what we can and rethrow with a clearer message.
         var msg = (e && e.message) || String(e);
-        var origin = location.origin;
         throw new Error(
           msg + " — the WASM worker died during init. Likely cause: " +
           "the reasoner bundle is being loaded cross-origin (browsers refuse " +
           "to spawn cross-origin module workers even with COEP credentialless). " +
-          "Verify /assets/reasoner/bundle.mjs is reachable from " + origin + " — " +
-          "if it 404s, vendor the bundle (see TESTING.md §Reasoning), or use a Server reasoner instead."
+          "Verify " + _reasonerBundleUrl() + " is reachable — " +
+          "if it 404s, rebuild the site with ontoink >= 0.7.3 (the plugin " +
+          "ships and installs the bundle automatically), or use a Server reasoner instead."
         );
       }).then(function() {
         log("Running classification + realization…");
