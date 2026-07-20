@@ -5429,6 +5429,10 @@ var ontoink = (function () {
     var options = [
       { value: "auto",            label: "Auto (best available)", enabled: true },
       { value: "browser",         label: browserOk ? "Browser: Konclude WASM" : "Browser: Konclude WASM (needs cross-origin isolation)", enabled: browserOk },
+      // v0.7.3 — dependency-free JS materializer; works in every browser,
+      // no isolation, no server. Also the automatic fallback when the
+      // Konclude WASM worker crashes.
+      { value: "browser-js",      label: "Browser: OWL-RL (JS, always available)", enabled: true },
       { value: "server:auto",     label: "Server: Auto",                  enabled: true,  isServer: true },
       { value: "server:konclude", label: "Server: Konclude (native)",     enabled: true,  isServer: true },
       { value: "server:owlready2",label: "Server: HermiT (owlready2)",    enabled: true,  isServer: true },
@@ -5476,6 +5480,123 @@ var ontoink = (function () {
     });
   }
 
+  // v0.7.3 — Built-in pure-JS OWL-RL materializer. A dependency-free
+  // fixpoint over the OWL-RL rule subset that matters for the diagrams
+  // ontoink renders (class/property hierarchies, domains/ranges,
+  // inverses, symmetric/transitive properties, equivalences, sameAs).
+  // It always works: no WASM, no SharedArrayBuffer, no cross-origin
+  // isolation, no server. Used as the "Browser: OWL-RL (JS)" backend
+  // and as the automatic fallback when the Konclude WASM worker dies
+  // (its nested pthread workers are unreliable under service-worker
+  // -emulated COOP/COEP, especially in Firefox).
+  function _owlRlMaterialize(triples) {
+    var RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    var RDFS = "http://www.w3.org/2000/01/rdf-schema#";
+    var OWL = "http://www.w3.org/2002/07/owl#";
+    var SUB_C = RDFS + "subClassOf", SUB_P = RDFS + "subPropertyOf";
+    var DOM = RDFS + "domain", RNG = RDFS + "range";
+    var EQ_C = OWL + "equivalentClass", EQ_P = OWL + "equivalentProperty";
+    var INV = OWL + "inverseOf", SAME = OWL + "sameAs";
+    var SYM = OWL + "SymmetricProperty", TRN = OWL + "TransitiveProperty";
+
+    function isIri(t) { return typeof t === "string" && /^[a-z][a-z0-9+.-]*:/i.test(t) && t.charAt(0) !== '"'; }
+    function key(s, p, o) { return s + "" + p + "" + o; }
+
+    var seen = {};   // key -> true for EVERY triple (input + derived)
+    var input = {};  // key -> true for input triples only
+    var all = [];    // working list [{s,p,o}]
+    triples.forEach(function(t) {
+      if (!t || !t.s || !t.p || !t.o) return;
+      var k = key(t.s, t.p, t.o);
+      if (seen[k]) return;
+      seen[k] = true; input[k] = true;
+      all.push({ s: t.s, p: t.p, o: t.o });
+    });
+
+    var derived = [];
+    var MAX_DERIVED = 5000, MAX_ROUNDS = 30;
+    function add(s, p, o) {
+      if (!s || !p || !o) return;
+      if (s === o && (p === SUB_C || p === SUB_P || p === SAME)) return;  // skip reflexive noise
+      if (!isIri(s)) return;                                             // literals can't be subjects
+      var k = key(s, p, o);
+      if (seen[k]) return;
+      if (derived.length >= MAX_DERIVED) return;
+      seen[k] = true;
+      var t = { s: s, p: p, o: o };
+      all.push(t); derived.push(t);
+      changed = true;
+    }
+
+    var changed = true, rounds = 0;
+    while (changed && rounds++ < MAX_ROUNDS && derived.length < MAX_DERIVED) {
+      changed = false;
+      // Index the current state per round (rebuilt cheaply; graphs here are small).
+      var subC = {}, subP = {}, dom = {}, rng = {}, inv = {}, symP = {}, trnP = {};
+      var byP = {};
+      all.forEach(function(t) {
+        if (t.p === SUB_C) (subC[t.s] = subC[t.s] || []).push(t.o);
+        else if (t.p === EQ_C) { (subC[t.s] = subC[t.s] || []).push(t.o); (subC[t.o] = subC[t.o] || []).push(t.s); }
+        else if (t.p === SUB_P) (subP[t.s] = subP[t.s] || []).push(t.o);
+        else if (t.p === EQ_P) { (subP[t.s] = subP[t.s] || []).push(t.o); (subP[t.o] = subP[t.o] || []).push(t.s); }
+        else if (t.p === DOM) (dom[t.s] = dom[t.s] || []).push(t.o);
+        else if (t.p === RNG) (rng[t.s] = rng[t.s] || []).push(t.o);
+        else if (t.p === INV) { (inv[t.s] = inv[t.s] || []).push(t.o); (inv[t.o] = inv[t.o] || []).push(t.s); }
+        else if (t.p === RDF_TYPE && t.o === SYM) symP[t.s] = true;
+        else if (t.p === RDF_TYPE && t.o === TRN) trnP[t.s] = true;
+        (byP[t.p] = byP[t.p] || []).push(t);
+      });
+      all.slice().forEach(function(t) {
+        // scm-sco / scm-spo: transitivity of the hierarchies themselves
+        if (t.p === SUB_C && subC[t.o]) subC[t.o].forEach(function(c2) { add(t.s, SUB_C, c2); });
+        if (t.p === SUB_P && subP[t.o]) subP[t.o].forEach(function(p2) { add(t.s, SUB_P, p2); });
+        // cax-sco: instance type propagation up the class hierarchy
+        if (t.p === RDF_TYPE && subC[t.o]) subC[t.o].forEach(function(c2) { add(t.s, RDF_TYPE, c2); });
+        // prp-spo1: assertion propagation up the property hierarchy
+        if (subP[t.p]) subP[t.p].forEach(function(p2) { add(t.s, p2, t.o); });
+        // prp-dom / prp-rng
+        if (dom[t.p]) dom[t.p].forEach(function(c) { add(t.s, RDF_TYPE, c); });
+        if (rng[t.p] && isIri(t.o)) rng[t.p].forEach(function(c) { add(t.o, RDF_TYPE, c); });
+        // prp-inv (both directions collapsed into the inv index)
+        if (inv[t.p] && isIri(t.o)) inv[t.p].forEach(function(p2) { add(t.o, p2, t.s); });
+        // prp-symp
+        if (symP[t.p] && isIri(t.o)) add(t.o, t.p, t.s);
+        // prp-trp
+        if (trnP[t.p] && isIri(t.o) && byP[t.p]) byP[t.p].forEach(function(t2) {
+          if (t2.s === t.o) add(t.s, t.p, t2.o);
+        });
+        // sameAs symmetry + transitivity (kept light: no full triple cloning)
+        if (t.p === SAME && isIri(t.o)) {
+          add(t.o, SAME, t.s);
+          if (byP[SAME]) byP[SAME].forEach(function(t2) { if (t2.s === t.o) add(t.s, SAME, t2.o); });
+        }
+      });
+    }
+    return derived;
+  }
+
+  // Run the built-in JS OWL-RL materializer over the diagram's Turtle.
+  function reasonInBrowserJs(ttl, log) {
+    log = log || function() {};
+    return new Promise(function(resolve) {
+      log("Running built-in OWL-RL materializer (pure JS, no WASM)…");
+      var parsed = parseTtlMinimal(ttl);
+      log("Parsed " + parsed.triples.length + " triples");
+      var t0 = performance.now();
+      var derived = _owlRlMaterialize(parsed.triples);
+      log("Materialized " + derived.length + " new triple(s) in " + (performance.now() - t0).toFixed(0) + " ms");
+      resolve(derived.map(function(t) {
+        var isLit = t.o.charAt(0) === '"';
+        return {
+          s: t.s, p: t.p, o: isLit ? t.o.replace(/^"|"$/g, "") : t.o, isLiteral: isLit,
+          sLabel: t.s.split(/[#/]/).pop(),
+          pLabel: t.p.split(/[#/]/).pop(),
+          oLabel: isLit ? t.o.replace(/^"|"$/g, "") : t.o.split(/[#/]/).pop(),
+        };
+      }));
+    });
+  }
+
   // v0.7.3 — Resolve the vendored bundle RELATIVE to the current page via
   // ONTOINK_ASSET_BASE (injected per-page by the MkDocs plugin as e.g.
   // "../../assets/"). The previous hardcoded root-absolute
@@ -5518,7 +5639,35 @@ var ontoink = (function () {
     });
   }
 
+  // v0.7.3 — Konclude WASM with crash recovery. The nested pthread
+  // workers Konclude spawns are unreliable under service-worker-emulated
+  // COOP/COEP (a nested worker load failure surfaces as an uncaught
+  // "[object ErrorEvent]" and poisons the whole thread pool — every
+  // later classify() exits early with 'unwind' and zero results). On
+  // any crash we discard the cached RdfReasoner (its Worker + pool are
+  // unusable) and retry ONCE with a completely fresh instance before
+  // giving up to the caller's fallback chain.
   function reasonInBrowser(ttl, log) {
+    log = log || function() {};
+    return _reasonInBrowserOnce(ttl, log).catch(function(e) {
+      var msg = (e && e.message) || String(e);
+      log("Browser Konclude failed: " + msg);
+      if (_wasmReasoner) {
+        try { _wasmReasoner.reasoner.terminate(); } catch (e2) {}
+        _wasmReasoner = null;
+      }
+      log("Discarding the crashed WASM worker and retrying once with a fresh instance…");
+      return _reasonInBrowserOnce(ttl, log).catch(function(e2) {
+        if (_wasmReasoner) {
+          try { _wasmReasoner.reasoner.terminate(); } catch (e3) {}
+          _wasmReasoner = null;
+        }
+        throw e2;
+      });
+    });
+  }
+
+  function _reasonInBrowserOnce(ttl, log) {
     log = log || function() {};
     return loadBrowserReasoner().then(function(ctx) {
       log("WASM module loaded. Parsing TTL into N3 store…");
@@ -5582,9 +5731,9 @@ var ontoink = (function () {
             // really is dead the RPC would otherwise hang forever.
             log("No results in the store after unwind — harvesting directly from the worker…");
             var fail = new Error(
-              "Konclude WASM aborted with 'unwind' before producing any inferences — " +
-              "an Emscripten exit/Asyncify issue in the in-browser worker. Pick a " +
-              "Server reasoner in the dropdown (same Konclude engine, runs in Node and works)."
+              "Konclude WASM exited early ('unwind') without computing any inferences — " +
+              "its worker thread pool likely failed to spawn (service-worker-emulated " +
+              "COOP/COEP is unreliable for nested workers, especially in Firefox)."
             );
             if (!ctx.reasoner || typeof ctx.reasoner._call !== "function") throw fail;
             var harvest = ctx.reasoner._call("getInferredNTriples").then(function(nt) {
@@ -5593,6 +5742,13 @@ var ontoink = (function () {
                 new ctx.N3.Parser({ format: "N-Triples" }).parse(String(nt || ""), function(err, quad) {
                   if (err) return reject(fail);
                   if (quad) { got.push(quad); return; }
+                  // v0.7.3 — An EMPTY harvest after an unwind is a failure, not
+                  // "0 inferences": a healthy Konclude run completes its RPCs
+                  // without any unwind escaping (verified against the Node
+                  // build), so unwind + nothing harvested means the engine
+                  // exited before doing the work. Genuine zero-entailment
+                  // inputs take the normal non-unwind path and report 0 quads.
+                  if (!got.length) return reject(fail);
                   log("Recovered " + got.length + " inferred triple(s) from the worker after unwind");
                   resolve(got.map(quadRow));
                 });
@@ -5729,9 +5885,22 @@ var ontoink = (function () {
     log("Input size: " + ttl.length + " chars");
 
     function resolveReasoner() {
+      // v0.7.3 — the built-in JS materializer is the universal last
+      // resort: it works in every browser with no isolation and no
+      // server, so "No reasoner available" is no longer a reachable
+      // outcome on any code path.
+      function jsFallback(reasonWhy) {
+        log(reasonWhy + " Falling back to the built-in OWL-RL materializer (pure JS).");
+        return reasonInBrowserJs(ttl, log);
+      }
       if (choice === "browser") {
         log("Loading rdf-reasoner-konclude (WASM, ~8 MB on first load)…");
-        return reasonInBrowser(ttl, log);
+        return reasonInBrowser(ttl, log).catch(function(e) {
+          return jsFallback("Konclude WASM failed twice (" + ((e && e.message) || e) + ").");
+        });
+      }
+      if (choice === "browser-js") {
+        return reasonInBrowserJs(ttl, log);
       }
       if (choice.indexOf("server:") === 0) {
         var backend = choice.slice("server:".length);
@@ -5742,20 +5911,20 @@ var ontoink = (function () {
           return reasonOnServer(ttl, backend === "auto" ? null : backend, abortCtl);
         });
       }
-      // auto: prefer browser if isolated, else server, else give a clear error
+      // auto: Konclude WASM if isolated → server if reachable → JS materializer.
       if (isBrowserReasonerAvailable()) {
         log("Page is cross-origin isolated. Trying browser WASM reasoner first.");
         return reasonInBrowser(ttl, log).catch(function(e) {
-          log("Browser reasoner failed: " + (e.message || e) + ". Falling back to server.");
+          log("Browser reasoner failed: " + (e.message || e) + ". Probing server…");
           return probeServerReasoner().then(function(ok) {
-            if (!ok) throw new Error("No reasoner available.");
+            if (!ok) return jsFallback("No server reasoner reachable.");
             return reasonOnServer(ttl, null, abortCtl);
           });
         });
       }
-      log("Page is not cross-origin isolated. Routing to server.");
+      log("Page is not cross-origin isolated. Probing server…");
       return probeServerReasoner().then(function(ok) {
-        if (!ok) throw new Error("No reasoner available. Reload the page once for the service worker to register (then pick 'Browser: Konclude WASM'), or restart the container with ONTOINK_MODE=api/all.");
+        if (!ok) return jsFallback("No server reasoner reachable.");
         return reasonOnServer(ttl, null, abortCtl);
       });
     }
@@ -6247,6 +6416,7 @@ var ontoink = (function () {
     toggleSuperNodes: toggleSuperNodes,
     expandSuperNode: expandSuperNode,
     collapseSuperNode: collapseSuperNode,
+    _owlRlMaterialize: _owlRlMaterialize,
     loadSideStore: loadSideStore,
     applyPredicatePolicyToElements: applyPredicatePolicyToElements,
     renderNodeBadges: renderNodeBadges,

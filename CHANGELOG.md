@@ -41,6 +41,38 @@
   `/assets/*` and leave the actual pages uncovered — a footgun the
   previous `demo/docs/assets/coi-serviceworker.js` placement had.
 
+### Added — Built-in "Browser: OWL-RL (JS)" reasoner + automatic fallback
+
+- **New dependency-free OWL-RL materialiser** (`_owlRlMaterialize`) that
+  runs a fixpoint over the RDFS + OWL-RL rule subset ontoink diagrams
+  actually exercise: `rdfs:subClassOf` / `rdfs:subPropertyOf`
+  transitivity and propagation, `rdfs:domain` / `rdfs:range`,
+  `owl:equivalentClass` / `owl:equivalentProperty`, `owl:inverseOf`,
+  `owl:SymmetricProperty`, `owl:TransitiveProperty`, and `owl:sameAs`
+  symmetry/transitivity — with iteration and output caps so pathological
+  inputs can't hang the tab. Verified against 11 rule-level unit cases
+  and against the reasoning-demo pages, where it reproduces the
+  documented expected inferences exactly (`rex a Animal`,
+  `alice hasParent berta`, `bob childOf alice`, `alice ancestorOf dan`, …).
+- **"No reasoner available" is no longer a reachable outcome.** The
+  materialiser appears in the dropdown as "Browser: OWL-RL (JS, always
+  available)" — enabled in every browser, no cross-origin isolation, no
+  server — and every backend path falls back to it: Konclude WASM
+  failure → JS; no server reachable → JS; not isolated + no server → JS.
+- **Konclude WASM crash recovery** — Konclude's nested pthread workers
+  are unreliable under service-worker-emulated COOP/COEP (a nested
+  worker load failure surfaces as an uncaught `[object ErrorEvent]`
+  and poisons the whole thread pool, after which every `classify()`
+  exits early with `'unwind'` and zero results — previously reported as
+  a successful "0 inferences"). ontoink now: (1) treats an empty
+  harvest after an unwind as the failure it is, (2) discards the
+  crashed `RdfReasoner` instance instead of reusing it on the next
+  click, (3) retries once with a completely fresh Worker, and only
+  then (4) falls back to the JS materialiser with an explanatory log
+  line. A healthy Konclude run (verified against the Node build: 2
+  inferred triples for `A ⊑ B, x:A`, twice on the same instance)
+  completes without any of this engaging.
+
 ### Fixed — Browser reasoner "aborted with 'unwind'" losing its results
 
 - **The vendored `worker.js` now swallows Emscripten's `unwind` exit

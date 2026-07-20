@@ -16,7 +16,11 @@ full RDFS + OWL-RL closure and surfaces every inference listed. Switch to
       classification & consistency.
     - **Browser: Konclude WASM** — runs in your browser (no server), but only
       classifies the T-box (class subsumptions), so it shows fewer instance-level facts.
-    - Server backends need the API (`ONTOINK_MODE=all`/`api`); the browser one works on static hosts.
+    - **Browser: OWL-RL (JS)** — a built-in, dependency-free materialiser that runs
+      in every browser with no server and no special headers. It covers the RDFS +
+      OWL-RL rules used on this page and is also the automatic fallback whenever
+      another backend is unavailable.
+    - Server backends need the API (`ONTOINK_MODE=all`/`api`); the browser ones work on static hosts.
 
 ---
 
