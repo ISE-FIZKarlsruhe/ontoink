@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.7.2 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.7.3 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
@@ -1677,7 +1677,10 @@ var ontoink = (function () {
     var nodesToAdd = (side.nodes || []).map(function(n, i) {
       var d = {};
       for (var k in n.data) if (Object.prototype.hasOwnProperty.call(n.data, k)) d[k] = n.data[k];
-      d.parent = hullId;
+      // Preserve an interior node's OWN parent (sub-clustering) — a side-store
+      // may nest compound boxes inside a cluster (e.g. category boxes holding
+      // instances). Only nodes without their own parent attach to the hull.
+      if (!d.parent) d.parent = hullId;
       var row = Math.floor(i / cols), col = i % cols;
       return {
         group: "nodes",
@@ -3014,7 +3017,9 @@ var ontoink = (function () {
               return n ? (lab + "  ·  " + n) : lab;
             },
             "shape":"hexagon",
-            "background-color":"#e0f2fe",
+            // honour a per-node colour when set (distinct cluster hues); the
+            // light default keeps legacy build-time super-nodes looking the same.
+            "background-color": function(ele) { return ele.data("color") || "#e0f2fe"; },
             "border-width":3,
             "border-color":"#0891b2",
             "border-style":"double",
@@ -3042,6 +3047,22 @@ var ontoink = (function () {
           "compound-sizing-wrt-labels":"include"
         }},
         { selector: 'node[?isClusterHull]:selected', style: { "border-color":"#0e7490","border-width":3,"background-color":"#dbeafe" }},
+        // Nested compound box inside a cluster (e.g. a category holding its
+        // instances). Coloured, labelled container; label sits at the top so it
+        // doesn't overlap the members. Colour comes from data(color).
+        { selector: 'node[?isCategoryBox]', style: {
+          "shape":"round-rectangle",
+          "background-color": function(ele) { return ele.data("color") || "#94a3b8"; },
+          "background-opacity":0.10,
+          "border-width":2,"border-style":"dashed",
+          "border-color": function(ele) { return ele.data("color") || "#64748b"; },
+          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-4,
+          "font-weight":"700","font-size":"12px",
+          "color": function(ele) { return ele.data("color") || "#334155"; },
+          "text-background-color":"#ffffff","text-background-opacity":0.9,
+          "text-background-padding":"3px","text-background-shape":"round-rectangle",
+          "padding":"16px","compound-sizing-wrt-labels":"include"
+        }},
         // v0.7.4 — Blank-node styling. rdflib emits blank subjects as
         // "_:bN..." — they aren't real Individuals no matter what
         // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
@@ -3979,7 +4000,22 @@ var ontoink = (function () {
 
     // Pre-fill the panel with any build-time inferences, before the user
     // chooses to re-run with a different backend.
+    //
+    // v0.7.3 — Distinguish "reasoner ran and produced zero triples" from
+    // "no reasoner installed at build time". The consistency probe uses
+    // the same owlready2 that _run_reasoning does, so its `status` field
+    // tells us whether reasoning was actually available:
+    //   - status "unknown" + "owlready2 not installed" → no build-time
+    //     reasoner, and the runtime path (browser/server) is the only
+    //     way to get results. Fall through.
+    //   - any other status (consistent / inconsistent / …) → reasoning
+    //     ran successfully; an empty `inferred` list means the graph
+    //     genuinely has no new OWL-DL entailments (common for pure
+    //     SHACL shape files), so show a friendly panel instead of
+    //     silently punting to a runtime reasoner that isn't there.
     var pre = inst.data.inferred || [];
+    var cons = inst.data.consistency || {};
+    var buildReasonerRan = cons.status && cons.status !== "unknown";
     panel.style.display = "block";
     if (pre.length) {
       var rows = pre.map(function(t) {
@@ -3991,8 +4027,26 @@ var ontoink = (function () {
           '<div style="padding:8px 12px;color:#374151;font-size:13px;background:#f0fdf4;border-bottom:1px solid #d1d5db;"><strong>' + pre.length + '</strong> pre-computed inference' + (pre.length === 1 ? '' : 's') + ' from build time. <a href="#" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\');ontoink.togglePlaygroundReasoning(\'' + id + '\');event.preventDefault();return false;">Re-run with selected backend ↻</a></div>' +
           '<table class="ov-reasoning-table"><thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead><tbody>' + rows + '</tbody></table>' +
         '</div>';
+    } else if (buildReasonerRan) {
+      // Reasoner ran at build time; produced no new triples.
+      var consBadge = cons.status === "consistent"
+        ? '<span style="color:#166534;background:#dcfce7;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;">consistent</span>'
+        : cons.status === "inconsistent"
+          ? '<span style="color:#991b1b;background:#fee2e2;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;">inconsistent</span>'
+          : '<span style="color:#4b5563;background:#e5e7eb;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;">' + esc(cons.status || 'unknown') + '</span>';
+      panel.innerHTML =
+        '<div class="ov-panel-head">Reasoning <button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
+        '<div class="ov-reasoning-body">' +
+          '<div style="padding:12px 14px;color:#374151;font-size:13px;background:#f0fdf4;border-bottom:1px solid #d1d5db;">' +
+            '<strong>Build-time OWL reasoning: 0 new triples inferred.</strong> ' + consBadge +
+            (cons.message ? '<div style="color:#6b7280;font-size:12px;margin-top:4px;">' + esc(cons.message) + '</div>' : '') +
+            '<div style="color:#6b7280;font-size:12px;margin-top:8px;">This is normal for pure SHACL shape files, or ontologies that don\'t add any OWL-DL entailments beyond what\'s already asserted. ' +
+            '<a href="#" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\');event.preventDefault();return false;">Re-run with a different backend ↻</a></div>' +
+          '</div>' +
+        '</div>';
     } else {
-      // No pre-computed inferences — go straight to interactive flow
+      // No build-time reasoner (owlready2 not installed in the container
+      // that built this page) — try browser/server at runtime.
       panel.style.display = "none";  // togglePlaygroundReasoning will toggle it back on
       togglePlaygroundReasoning(id);
     }
@@ -4268,6 +4322,22 @@ var ontoink = (function () {
           "compound-sizing-wrt-labels":"include"
         }},
         { selector: 'node[?isClusterHull]:selected', style: { "border-color":"#0e7490","border-width":3,"background-color":"#dbeafe" }},
+        // Nested compound box inside a cluster (e.g. a category holding its
+        // instances). Coloured, labelled container; label sits at the top so it
+        // doesn't overlap the members. Colour comes from data(color).
+        { selector: 'node[?isCategoryBox]', style: {
+          "shape":"round-rectangle",
+          "background-color": function(ele) { return ele.data("color") || "#94a3b8"; },
+          "background-opacity":0.10,
+          "border-width":2,"border-style":"dashed",
+          "border-color": function(ele) { return ele.data("color") || "#64748b"; },
+          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-4,
+          "font-weight":"700","font-size":"12px",
+          "color": function(ele) { return ele.data("color") || "#334155"; },
+          "text-background-color":"#ffffff","text-background-opacity":0.9,
+          "text-background-padding":"3px","text-background-shape":"round-rectangle",
+          "padding":"16px","compound-sizing-wrt-labels":"include"
+        }},
         // v0.7.4 — Blank-node styling. rdflib emits blank subjects as
         // "_:bN..." — they aren't real Individuals no matter what
         // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
@@ -6057,9 +6127,20 @@ var ontoink = (function () {
       '</div>';
   }
 
-  // Programmatic embedding: render an ontoink diagram from a TTL string into any
-  // element, no MkDocs required. opts: {ttl|source, shape|shacl, layout, height,
-  // editor, reasoning, legend, namespaces, reasoner}.
+  function _oiB64(s) {
+    // UTF-8 → base64, matching what initGraph's _decodeUtf8Base64 expects.
+    return btoa(unescape(encodeURIComponent(s)));
+  }
+
+  // Programmatic embedding into any element, no MkDocs required.
+  // Two modes:
+  //   • {ttl|source, shape|shacl}  — parse Turtle client-side (playground path).
+  //   • {graph, sideStore}         — a PRE-BUILT Cytoscape graph, optionally
+  //     clustered: `graph` = {nodes, edges, clusters?}, `sideStore` = the
+  //     per-cluster interiors ({clusterId:{nodes,edges,boundary_edges,...}}).
+  //     This drives the same initGraph → loadSideStore → tap-to-expand super-node
+  //     pipeline the MkDocs fences use, so a host can ship a big clustered map.
+  // Common opts: layout, height, editor, reasoning, legend, namespaces, reasoner.
   function embed(elOrId, opts) {
     opts = opts || {};
     var el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
@@ -6074,10 +6155,22 @@ var ontoink = (function () {
     wireHandlers(el);
     _oiInstallObserver();
     try { populateReasonerSelect(el.querySelector(".ov-reasoner-select")); } catch (e) {}
-    var ttl = opts.ttl || opts.source || "";
-    var shape = opts.shape || opts.shacl || "";
-    try { playground(id, ttl, shape); }
-    catch (e) { console.error("[ontoink] embed render failed", e); }
+    if (opts.graph) {
+      // pre-built (possibly clustered) graph — feed initGraph via the same
+      // data-ontoink-graph / data-ontoink-side-store attributes fence.py emits.
+      try {
+        el.setAttribute("data-ontoink-graph", _oiB64(JSON.stringify(opts.graph)));
+        if (opts.sideStore) {
+          el.setAttribute("data-ontoink-side-store", _oiB64(JSON.stringify(opts.sideStore)));
+        }
+        initGraph(id);
+      } catch (e) { console.error("[ontoink] embed(graph) failed", e); }
+    } else {
+      var ttl = opts.ttl || opts.source || "";
+      var shape = opts.shape || opts.shacl || "";
+      try { playground(id, ttl, shape); }
+      catch (e) { console.error("[ontoink] embed render failed", e); }
+    }
     if (opts.layout) { try { changeLayout(id, opts.layout); } catch (e2) {} }
     return id;
   }

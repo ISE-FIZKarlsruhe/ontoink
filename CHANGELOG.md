@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.3] - 2026-07-20
+
+### Fixed — Reasoning panel
+
+- **"0 inferences from a successful build-time reasoner" no longer falls
+  through to the runtime reasoner** — when owlready2/HermiT is installed
+  in the build container, produces `consistency: {status: "consistent"}`,
+  and returns an empty inferred list (typical for pure SHACL shape files
+  that don't add any OWL-DL entailments), the Reasoning panel used to
+  silently punt to `togglePlaygroundReasoning`, which on a static host
+  (no `/reason` endpoint, no COOP/COEP) would error with "No reasoner
+  available. Reload the page once for the service worker to register,
+  or restart the container with ONTOINK_MODE=api/all." The panel now
+  distinguishes the two cases via `data.consistency.status`:
+    - `status !== "unknown"` (a reasoner ran at build time) → render a
+      friendly "Build-time OWL reasoning: 0 new triples inferred" panel
+      with a consistency badge (`consistent` / `inconsistent` / other)
+      and a "Re-run with a different backend ↻" link.
+    - `status === "unknown"` + `"owlready2 not installed"` (no reasoner
+      at build time) → keep the previous fall-through so a locally
+      running server or a `crossOriginIsolated` browser can still pick
+      up the workload.
+
 ## [0.7.2] - 2026-07-15
 
 ### Added — Embeddable, CSP-safe build
