@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.7.3] - 2026-07-20
+## [0.7.4] - 2026-07-21
 
 ### Added — Plugin auto-installs the browser reasoner bundle + COOP/COEP service worker
 
@@ -111,6 +111,8 @@
   relative prefix the plugin already injects, same mechanism the SHACL
   validator module uses) and the error message prints the exact
   absolute URL that was attempted instead of a guessed path.
+
+## [0.7.3] - 2026-07-20
 
 ### Fixed — Reasoning panel
 

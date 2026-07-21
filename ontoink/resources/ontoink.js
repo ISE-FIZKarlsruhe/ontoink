@@ -1,5 +1,5 @@
 /**
- * ontoink.js v0.7.3 — Interactive ontology visualization with formal notation,
+ * ontoink.js v0.7.4 — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
  */
 var ontoink = (function () {
