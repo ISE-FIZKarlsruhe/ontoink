@@ -201,8 +201,8 @@ Inferred: `alice a BookLover` and `Subscriber ⊑ BookLover` — but **not** `al
 ## 9. Reasoning + SHACL together
 
 A small ontology with an inverse property, a symmetric property and a subclass.
-After reasoning, click **"Validate with Inferences"** to run the SHACL shape over
-the *reasoned* graph (the `Person` shape requires an `rdfs:label`).
+The `Person` shape requires two things of every person: an `rdfs:label`, and at
+least one `ex:knows`.
 
 ```ontoink
 source: shapes/reasoning-demo/shape-data.ttl
@@ -212,6 +212,19 @@ height: 500px
 ```
 
 Inferred: `rex isPetOf alice` (inverse), `bob knows alice` (symmetric), `rex a Animal` (subclass).
+
+**Try it — reasoning changes the validation result:**
+
+1. Open **Edit & Validate** and press **Validate**. The graph *as stated* fails:
+   `ex:bob` has a label but no `ex:knows`, so SHACL reports
+   *"Every person must know at least one other person."*
+2. Now press **Reasoning**, then **Validate with Inferences**. Because
+   `ex:knows` is an `owl:SymmetricProperty`, `alice knows bob` entails
+   `bob knows alice` — the reasoned graph **conforms**.
+
+That difference is the whole point of validating over a reasoned graph: the
+data satisfies the constraint *implicitly*, and only reasoning makes the
+implicit fact visible to the validator.
 
 ---
 

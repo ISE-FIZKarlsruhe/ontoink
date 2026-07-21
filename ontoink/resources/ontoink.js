@@ -3094,7 +3094,7 @@ var ontoink = (function () {
         { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
         { selector: "edge[edgeType='owl-restriction'][source = target]", style: { "curve-style":"bezier","control-point-step-size":40 }},
-        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
       ],
       layout: { name:"dagre", rankDir:"BT", nodeSep:60, rankSep:80, edgeSep:20, animate:false, fit:true, padding:30 },
@@ -3461,14 +3461,79 @@ var ontoink = (function () {
       if(!inQ&&ch==="."&&(si===cl.length-1||/\s/.test(cl[si+1])||cl[si+1]===undefined)){if(cur.trim())stmts.push(cur.trim());cur="";continue;}
       cur+=ch;}
     if(cur.trim())stmts.push(cur.trim());
-    stmts.forEach(function(st){if(!st)return;var tk=tokenize(st);if(tk.length<3)return;var s=res(tk[0]),i=1;
-      while(i<tk.length-1){var p=res(tk[i]);i++;while(i<tk.length){var o=tk[i];i++;if(o===";")break;if(o===",")continue;tr.push({s:s,p:p,o:res(o)});if(i<tk.length&&tk[i]===","){i++;continue;}if(i<tk.length&&tk[i]===";"){i++;break;}}}});
+    // v0.7.4 — Recursive predicate-object-list parser with Turtle
+    // blank-node support. The previous flat loop had no notion of
+    // `[ ... ]`, so an anonymous restriction like
+    //   ex:D owl:equivalentClass [ a owl:Restriction ; owl:onProperty ex:p ]
+    // tokenized `[` as an ordinary term and emitted junk triples
+    // (`ex:D equivalentClass "["`, `"[" type owl:Restriction`, …). Those
+    // then fed the OWL-RL materializer, which is why the browser
+    // reasoner reported rows like `buddhaBowl type [`. Anonymous nodes
+    // now mint a real `_:bN` subject and their inner statements are
+    // emitted against it, matching what the Python/rdflib path produces.
+    var _bnCount = 0;
+    var _RDFNS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    function emitList(items) {
+      if (!items.length) return _RDFNS + "nil";
+      var head = null, prev = null;
+      for (var k = 0; k < items.length; k++) {
+        var cell = "_:b" + (_bnCount++);
+        if (k === 0) head = cell; else tr.push({ s: prev, p: _RDFNS + "rest", o: cell });
+        tr.push({ s: cell, p: _RDFNS + "first", o: items[k] });
+        prev = cell;
+      }
+      tr.push({ s: prev, p: _RDFNS + "rest", o: _RDFNS + "nil" });
+      return head;
+    }
+    function parsePOList(tk, pos, subj) {
+      // Parses `pred obj[, obj]* [; pred obj...]` starting at `pos`.
+      // Returns the index just past the terminating `]` (or the end).
+      while (pos < tk.length) {
+        if (tk[pos] === "]") return pos + 1;
+        if (tk[pos] === ";" || tk[pos] === ",") { pos++; continue; }
+        var p = res(tk[pos]); pos++;
+        while (pos < tk.length) {
+          if (tk[pos] === "]") return pos + 1;
+          if (tk[pos] === ";") { pos++; break; }
+          if (tk[pos] === ",") { pos++; continue; }
+          var o;
+          if (tk[pos] === "[") { o = "_:b" + (_bnCount++); pos = parsePOList(tk, pos + 1, o); }
+          else if (tk[pos] === "(") {
+            // Turtle collection → rdf:List cells, e.g.
+            //   owl:intersectionOf ( ex:Woman ex:Parent )
+            var items = []; pos++;
+            while (pos < tk.length && tk[pos] !== ")") {
+              if (tk[pos] === "[") { var ib = "_:b" + (_bnCount++); pos = parsePOList(tk, pos + 1, ib); items.push(ib); }
+              else { items.push(res(tk[pos])); pos++; }
+            }
+            pos++;  // consume ")"
+            o = emitList(items);
+          }
+          else { o = res(tk[pos]); pos++; }
+          tr.push({ s: subj, p: p, o: o });
+        }
+      }
+      return pos;
+    }
+    stmts.forEach(function(st){
+      if(!st)return;
+      var tk=tokenize(st);
+      if(tk.length<3)return;
+      var pos=0,subj;
+      if(tk[0]==="["){subj="_:b"+(_bnCount++);pos=parsePOList(tk,1,subj);}
+      else{subj=res(tk[0]);pos=1;}
+      parsePOList(tk,pos,subj);
+    });
     return{triples:tr,prefixes:pf};}
   function tokenize(t){var tk=[],i=0;while(i<t.length){while(i<t.length&&/\s/.test(t[i]))i++;if(i>=t.length)break;
     if(t[i]==="<"){var e=t.indexOf(">",i);if(e<0)e=t.length-1;tk.push(t.substring(i,e+1));i=e+1;}
     else if(t[i]==='"'){var j=i+1;while(j<t.length&&t[j]!=='"'){if(t[j]==="\\")j++;j++;}j++;while(j<t.length&&(t[j]==="@"||t[j]==="^")){if(t[j]==="@"){j++;while(j<t.length&&/[a-zA-Z-]/.test(t[j]))j++;}if(j<t.length&&t[j]==="^"&&t[j+1]==="^"){j+=2;if(t[j]==="<")j=t.indexOf(">",j)+1;else while(j<t.length&&/\S/.test(t[j])&&t[j]!==";"&&t[j]!==",")j++;}}tk.push(t.substring(i,j));i=j;}
     else if(t[i]===";"||t[i]===","){tk.push(t[i]);i++;}
-    else{var s=i;while(i<t.length&&!/[\s;,]/.test(t[i]))i++;tk.push(t.substring(s,i));}}return tk;}
+    // v0.7.4 — `[` / `]` are structural (anonymous blank nodes), not term
+    // characters; emit them as their own tokens and treat them as term
+    // delimiters so `[a owl:Restriction]` doesn't glue into one blob.
+    else if(t[i]==="["||t[i]==="]"||t[i]==="("||t[i]===")"){tk.push(t[i]);i++;}
+    else{var s=i;while(i<t.length&&!/[\s;,\[\]()]/.test(t[i]))i++;if(i===s)i++;tk.push(t.substring(s,i));}}return tk;}
 
   // ── Ontology source detection ──────────────────────────────────────────
 
@@ -3799,6 +3864,25 @@ var ontoink = (function () {
       });
       exportData._live = liveStyles;
     }
+    // v0.7.4 — Legend rows are derived from `data.edges`, but overlay edge
+    // types (notably the purple dotted "inferred" overlay) live only in
+    // cytoscape — setInferredOverlay cy.add()s them without appending to
+    // inst.data.edges. The on-screen legend compensates by sweeping
+    // cy.edges() (see buildLegendOverlay); the export path did not, so an
+    // exported figure showed unexplained purple dotted edges with no
+    // "Inferred (OWL)" key. Seed the throwaway copy with a stub per
+    // cy-only edge type so drawLegendBox emits the row.
+    (function() {
+      var seenET = {};
+      exportData.edges.forEach(function(e) { seenET[e.data.edgeType] = true; });
+      cy.edges().forEach(function(e) {
+        var et = e.data("edgeType");
+        if (et && !seenET[et]) {
+          seenET[et] = true;
+          exportData.edges.push({ data: { id: "_legend_" + et, source: "", target: "", edgeType: et } });
+        }
+      });
+    })();
 
     var legendEl=c.querySelector(".ov-legend-overlay");
     var nsEl=c.querySelector(".ov-ns-overlay");
@@ -3872,6 +3956,10 @@ var ontoink = (function () {
         usedShapes[t]=live.typeShapes[t]||n.data.shape||"rectangle";
       });
       inst.data.edges.forEach(function(e){usedEdge[e.data.edgeType]=true;});
+      // v0.7.4 — also pick up overlay-only edge types (e.g. "inferred"),
+      // which live in cytoscape but never in inst.data.edges. Mirrors the
+      // sweep buildLegendOverlay does for the on-screen legend.
+      inst.cy.edges().forEach(function(e){var et=e.data("edgeType");if(et)usedEdge[et]=true;});
       var nodeKeys=Object.keys(usedTypes),edgeKeys=Object.keys(usedEdge);
       var ns=inst.data.activeNamespaces||{};var nsKeys=Object.keys(ns).sort();
       var pad=12, row=18;
@@ -4026,6 +4114,12 @@ var ontoink = (function () {
         '<div class="ov-reasoning-body">' +
           '<div style="padding:8px 12px;color:#374151;font-size:13px;background:#f0fdf4;border-bottom:1px solid #d1d5db;"><strong>' + pre.length + '</strong> pre-computed inference' + (pre.length === 1 ? '' : 's') + ' from build time. <a href="#" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\');ontoink.togglePlaygroundReasoning(\'' + id + '\');event.preventDefault();return false;">Re-run with selected backend ↻</a></div>' +
           '<table class="ov-reasoning-table"><thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+          // v0.7.4 — keep the SHACL-over-inferences action reachable; this
+          // innerHTML assignment otherwise discards the button fence.py
+          // rendered into the panel.
+          ((inst.data && inst.data.shacl && inst.data.shacl.length)
+            ? '<div class="ov-reasoning-actions"><button class="ov-chip" data-oi-onclick="ontoink.validateWithReasoning(\'' + id + '\')" title="Run the SHACL shapes over the data graph PLUS the inferred triples">Validate with Inferences</button></div>'
+            : '') +
         '</div>';
     } else if (buildReasonerRan) {
       // Reasoner ran at build time; produced no new triples.
@@ -4286,7 +4380,7 @@ var ontoink = (function () {
         { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
         { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
-        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
         // v0.7.2 — namespace-cluster super-nodes. Same visual language as
         // the fence-side style block (~line 1788): chunky hexagon, double
@@ -5513,6 +5607,52 @@ var ontoink = (function () {
       all.push({ s: t.s, p: t.p, o: t.o });
     });
 
+    // ---- Structural index: restrictions, boolean classes, rdf:Lists ----
+    // Restrictions and class expressions live on blank nodes and never
+    // change during the fixpoint, so index them once up front.
+    var RDF_FIRST = RDF_TYPE.replace("type", "first"), RDF_REST = RDF_TYPE.replace("type", "rest"), RDF_NIL = RDF_TYPE.replace("type", "nil");
+    var SOME = OWL + "someValuesFrom", ALL = OWL + "allValuesFrom", HASV = OWL + "hasValue";
+    var ONPROP = OWL + "onProperty", INTER = OWL + "intersectionOf", UNION = OWL + "unionOf";
+    var CHAIN = OWL + "propertyChainAxiom";
+    var byS = {};
+    all.forEach(function(t) { (byS[t.s] = byS[t.s] || {}); (byS[t.s][t.p] = byS[t.s][t.p] || []).push(t.o); });
+    function listItems(head) {
+      var out = [], cur = head, guard = 0;
+      while (cur && cur !== RDF_NIL && guard++ < 300) {
+        var e = byS[cur]; if (!e) break;
+        if (e[RDF_FIRST]) out.push(e[RDF_FIRST][0]);
+        cur = e[RDF_REST] ? e[RDF_REST][0] : null;
+      }
+      return out;
+    }
+    var restr = {};    // blank node -> {p, kind: some|all|value, filler}
+    var boolCls = {};  // blank node -> {op: "and"|"or", items:[…]}
+    Object.keys(byS).forEach(function(bn) {
+      var e = byS[bn];
+      if (e[ONPROP]) {
+        var prop = e[ONPROP][0];
+        if (e[SOME])      restr[bn] = { p: prop, kind: "some",  filler: e[SOME][0] };
+        else if (e[ALL])  restr[bn] = { p: prop, kind: "all",   filler: e[ALL][0] };
+        else if (e[HASV]) restr[bn] = { p: prop, kind: "value", filler: e[HASV][0] };
+      }
+      if (e[INTER])      boolCls[bn] = { op: "and", items: listItems(e[INTER][0]) };
+      else if (e[UNION]) boolCls[bn] = { op: "or",  items: listItems(e[UNION][0]) };
+    });
+    var chains = {};   // property -> [q1, q2, …]
+    all.forEach(function(t) { if (t.p === CHAIN) chains[t.s] = listItems(t.o); });
+    // Named class ⇄ class-expression links. `equivalentClass` is a
+    // definition (both directions usable); `subClassOf` only licenses
+    // the necessary direction.
+    var defOf = {}, necOf = {};
+    all.forEach(function(t) {
+      if (t.p === EQ_C) {
+        if (restr[t.o] || boolCls[t.o]) defOf[t.s] = t.o;
+        if (restr[t.s] || boolCls[t.s]) defOf[t.o] = t.s;
+      } else if (t.p === SUB_C && (restr[t.o] || boolCls[t.o])) {
+        necOf[t.s] = t.o;
+      }
+    });
+
     var derived = [];
     var MAX_DERIVED = 5000, MAX_ROUNDS = 30;
     function add(s, p, o) {
@@ -5571,8 +5711,180 @@ var ontoink = (function () {
           if (byP[SAME]) byP[SAME].forEach(function(t2) { if (t2.s === t.o) add(t.s, SAME, t2.o); });
         }
       });
+
+      // ---- OWL 2 class expressions ------------------------------------
+      // Re-index the working set each round so newly derived types feed
+      // the restriction rules below.
+      var typesOf = {}, propOut = {};
+      all.forEach(function(t) {
+        if (t.p === RDF_TYPE) (typesOf[t.s] = typesOf[t.s] || []).push(t.o);
+        (propOut[t.p] = propOut[t.p] || []).push(t);
+      });
+      function hasType(x, c) { return (typesOf[x] || []).indexOf(c) >= 0; }
+
+      // Restrictions attached as a DEFINITION (owl:equivalentClass) are
+      // bidirectional; attached as a necessary condition (rdfs:subClassOf)
+      // only the forward direction holds.
+      Object.keys(defOf).forEach(function(cls) {
+        var r = restr[defOf[cls]];
+        if (r) {
+          if (r.kind === "some") {
+            // cls ≡ ∃p.D :  x p y ∧ y a D  ⟹  x a cls
+            (propOut[r.p] || []).forEach(function(t2) {
+              if (isIri(t2.o) && hasType(t2.o, r.filler)) add(t2.s, RDF_TYPE, cls);
+            });
+          } else if (r.kind === "all") {
+            // cls ≡ ∀p.D :  x a cls ∧ x p y  ⟹  y a D
+            (propOut[r.p] || []).forEach(function(t2) {
+              if (isIri(t2.o) && hasType(t2.s, cls)) add(t2.o, RDF_TYPE, r.filler);
+            });
+          } else if (r.kind === "value") {
+            // cls ≡ (p = v) :  x p v ⟹ x a cls ;  x a cls ⟹ x p v
+            (propOut[r.p] || []).forEach(function(t2) { if (t2.o === r.filler) add(t2.s, RDF_TYPE, cls); });
+            Object.keys(typesOf).forEach(function(x) { if (hasType(x, cls)) add(x, r.p, r.filler); });
+          }
+        }
+        var b = boolCls[defOf[cls]];
+        if (b && b.items.length) {
+          if (b.op === "and") {
+            // cls ≡ A ⊓ B :  cls ⊑ A, cls ⊑ B ;  x a A ∧ x a B ⟹ x a cls
+            b.items.forEach(function(it) { add(cls, SUB_C, it); });
+            Object.keys(typesOf).forEach(function(x) {
+              if (b.items.every(function(it) { return hasType(x, it); })) add(x, RDF_TYPE, cls);
+            });
+          } else {
+            // cls ≡ A ⊔ B :  A ⊑ cls, B ⊑ cls
+            b.items.forEach(function(it) { add(it, SUB_C, cls); });
+          }
+        }
+      });
+      // Necessary conditions: cls ⊑ ∀p.D still propagates to fillers,
+      // and cls ⊑ ∃p.D adds nothing on its own (no classification).
+      Object.keys(necOf).forEach(function(cls) {
+        var r = restr[necOf[cls]];
+        if (r && r.kind === "all") {
+          (propOut[r.p] || []).forEach(function(t2) {
+            if (isIri(t2.o) && hasType(t2.s, cls)) add(t2.o, RDF_TYPE, r.filler);
+          });
+        }
+      });
+      // Restriction subsumption: ∃/∀ are monotone in the filler, so
+      // D1 ⊑ D2 ⟹ (∃p.D1) ⊑ (∃p.D2). Lets `NovelReader ⊑ Reader` fall out
+      // of `Novel ⊑ Book` without any individuals.
+      var defClasses = Object.keys(defOf);
+      defClasses.forEach(function(c1) {
+        var r1 = restr[defOf[c1]]; if (!r1 || r1.kind === "value") return;
+        defClasses.forEach(function(c2) {
+          if (c1 === c2) return;
+          var r2 = restr[defOf[c2]];
+          if (!r2 || r2.kind !== r1.kind || r2.p !== r1.p) return;
+          if (r1.filler === r2.filler) return;
+          if ((subC[r1.filler] || []).indexOf(r2.filler) >= 0) add(c1, SUB_C, c2);
+        });
+      });
+      // Equivalence unfolding: C ≡ D ⟹ C ⊑ D, D ⊑ C, D ≡ C (and the
+      // property analogue). Skipped when either side is an anonymous
+      // class expression — those are handled by the restriction rules
+      // above and would only emit blank-node noise here.
+      all.slice().forEach(function(t) {
+        if (t.p === EQ_C && isIri(t.o) && t.s !== t.o) {
+          if (restr[t.o] || boolCls[t.o] || restr[t.s] || boolCls[t.s]) return;
+          add(t.s, SUB_C, t.o); add(t.o, SUB_C, t.s); add(t.o, EQ_C, t.s);
+        } else if (t.p === EQ_P && isIri(t.o) && t.s !== t.o) {
+          add(t.s, SUB_P, t.o); add(t.o, SUB_P, t.s); add(t.o, EQ_P, t.s);
+        }
+      });
+      // prp-fp / prp-ifp — functional and inverse-functional properties
+      // force identity between the values (resp. the subjects).
+      var funcP = {}, ifuncP = {};
+      all.forEach(function(t) {
+        if (t.p !== RDF_TYPE) return;
+        if (t.o === OWL + "FunctionalProperty") funcP[t.s] = true;
+        else if (t.o === OWL + "InverseFunctionalProperty") ifuncP[t.s] = true;
+      });
+      Object.keys(funcP).forEach(function(p) {
+        var ts = propOut[p] || [];
+        for (var a = 0; a < ts.length; a++) for (var b2 = a + 1; b2 < ts.length; b2++) {
+          if (ts[a].s === ts[b2].s && ts[a].o !== ts[b2].o && isIri(ts[a].o) && isIri(ts[b2].o)) {
+            add(ts[a].o, SAME, ts[b2].o); add(ts[b2].o, SAME, ts[a].o);
+          }
+        }
+      });
+      Object.keys(ifuncP).forEach(function(p) {
+        var ts = propOut[p] || [];
+        for (var a2 = 0; a2 < ts.length; a2++) for (var b3 = a2 + 1; b3 < ts.length; b3++) {
+          if (ts[a2].o === ts[b3].o && ts[a2].s !== ts[b3].s) {
+            add(ts[a2].s, SAME, ts[b3].s); add(ts[b3].s, SAME, ts[a2].s);
+          }
+        }
+      });
+      // eq-rep-s / eq-rep-o — substitute sameAs individuals into every
+      // other assertion, so `alice sameAs alicia` + `alice knows bob`
+      // yields `alicia knows bob`.
+      (byP[SAME] || []).forEach(function(e) {
+        if (!isIri(e.o) || e.s === e.o) return;
+        all.slice().forEach(function(t2) {
+          if (t2.p === SAME) return;
+          if (t2.s === e.s) add(e.o, t2.p, t2.o);
+          if (t2.o === e.s && isIri(t2.o)) add(t2.s, t2.p, e.o);
+        });
+      });
+      // A necessary restriction that is structurally identical to some
+      // class's definition licenses a subsumption: `Subscriber ⊑ ∃reads.Book`
+      // and `BookLover ≡ ∃reads.Book` give `Subscriber ⊑ BookLover`. The two
+      // `[...]` bodies are distinct blank nodes, so match on shape.
+      function rsig(r) { return r ? r.kind + "|" + r.p + "|" + r.filler : null; }
+      var defBySig = {};
+      Object.keys(defOf).forEach(function(d) { var sg = rsig(restr[defOf[d]]); if (sg) defBySig[sg] = d; });
+      Object.keys(necOf).forEach(function(c) {
+        var sg = rsig(restr[necOf[c]]);
+        if (sg && defBySig[sg] && defBySig[sg] !== c) add(c, SUB_C, defBySig[sg]);
+      });
+      // Property chains:  p ← q1 ∘ q2 ∘ …
+      Object.keys(chains).forEach(function(p) {
+        var steps = chains[p];
+        if (steps.length < 2) return;
+        var ends = (propOut[steps[0]] || []).map(function(t2) { return [t2.s, t2.o]; });
+        for (var si = 1; si < steps.length; si++) {
+          var next = [];
+          (propOut[steps[si]] || []).forEach(function(t2) {
+            ends.forEach(function(pair) { if (pair[1] === t2.s) next.push([pair[0], t2.o]); });
+          });
+          ends = next;
+          if (!ends.length) break;
+        }
+        ends.forEach(function(pair) { add(pair[0], p, pair[1]); });
+      });
     }
-    return derived;
+
+    // ---- Noise filter -------------------------------------------------
+    // Mirrors the build-time filter in ontoink.ttl_parser._run_reasoning so
+    // the browser table shows the same domain-level facts the Python
+    // backends do. Without this, blank-node scaffolding (`_:b0`),
+    // `owl:Restriction` / `owl:Thing` memberships and vocabulary-internal
+    // triples leak into the panel — the `buddhaBowl type Restriction`
+    // rows reported against 0.7.3.
+    var BUILTIN_NS = [OWL, RDFS, RDF_TYPE.substring(0, RDF_TYPE.lastIndexOf("#") + 1), "http://www.w3.org/2001/XMLSchema#"];
+    var SKIP_OBJECTS = {};
+    [RDFS + "Resource", RDFS + "Class", RDF_TYPE.replace("type", "Property"),
+     OWL + "Thing", OWL + "Class", OWL + "NamedIndividual", OWL + "Restriction",
+     OWL + "ObjectProperty", OWL + "DatatypeProperty", OWL + "AnnotationProperty",
+     OWL + "FunctionalProperty", OWL + "InverseFunctionalProperty",
+     OWL + "TransitiveProperty", OWL + "SymmetricProperty", OWL + "Ontology"
+    ].forEach(function(k) { SKIP_OBJECTS[k] = true; });
+    function isBuiltin(v) {
+      for (var i = 0; i < BUILTIN_NS.length; i++) if (v.indexOf(BUILTIN_NS[i]) === 0) return true;
+      return false;
+    }
+    return derived.filter(function(t) {
+      if (t.s.indexOf("_:") === 0) return false;            // blank-node scaffolding
+      if (t.p === DOM || t.p === RNG) return false;         // domain/range propagation is noise
+      if (isBuiltin(t.s)) return false;
+      if (SKIP_OBJECTS[t.o]) return false;
+      var oLit = t.o.charAt(0) === '"';
+      if (!oLit && (t.o.indexOf("_:") === 0 || isBuiltin(t.o))) return false;
+      return true;
+    });
   }
 
   // Run the built-in JS OWL-RL materializer over the diagram's Turtle.
@@ -5972,8 +6284,16 @@ var ontoink = (function () {
       '<div class="ov-stat"><div class="ov-stat-val" style="text-transform:uppercase;font-size:11px;">' + esc(backend) + '</div><div class="ov-stat-lbl">backend</div></div>' +
       '</div>';
 
+    // v0.7.4 — This panel replaces the container's innerHTML, which used
+    // to discard the "Validate with Inferences" button that fence.py
+    // renders statically inside `.ov-reasoning-panel` — so on any diagram
+    // with a `shape:` the documented "run SHACL over the reasoned graph"
+    // step was unreachable. Re-emit it here whenever the diagram actually
+    // has SHACL shapes and there are inferences to add.
+    var hasShapes = !!((inst.data && inst.data.shacl && inst.data.shacl.length) || inst.shapeTtl || (inst.data && inst.data.shapeTtl));
     var actionsHtml = '<div class="ov-reasoning-actions">' +
       '<label class="ov-overlay-toggle"><input type="checkbox" ' + (overlayOn ? "checked" : "") + ' data-oi-onchange="ontoink.setInferredOverlay(\'' + id + '\',this.checked)"> Show inferences on graph</label>' +
+      (count && hasShapes ? ' <button class="ov-chip" data-oi-onclick="ontoink.validateWithReasoning(\'' + id + '\')" title="Run the SHACL shapes over the data graph PLUS the inferred triples">Validate with Inferences</button>' : '') +
       (count ? ' <button class="ov-chip" data-oi-onclick="ontoink.downloadInferences(\'' + id + '\')">Download (N-Triples)</button>' +
                ' <button class="ov-chip" data-oi-onclick="ontoink.copyInferences(\'' + id + '\')">Copy JSON</button>' : '') +
       ' <button class="ov-chip" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\',true)" style="margin-left:auto;">↻ Re-run</button>' +
@@ -6758,6 +7078,24 @@ var ontoink = (function () {
       { id: "vowl",    label: "VOWL / WebVOWL (blue circles)" }
     ];
   }
+  // v0.7.4 — The inferred-overlay styling, factored out so it can be
+  // appended to every style preset. Kept byte-compatible with the rules
+  // baked into the initGraph / playground stylesheets.
+  function _inferredOverlayRules() {
+    return [
+      { selector: "edge[edgeType='inferred']", style: {
+        "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle",
+        "target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7",
+        "target-arrow-color":"#a855f7","width":1.5,"font-size":"12px",
+        "text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7",
+        "text-background-color":"#fff","text-background-opacity":0.9,
+        "text-background-padding":"2px",
+        "font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+      { selector: "node[?inferred]", style: {
+        "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }}
+    ];
+  }
+
   function applyStylePreset(id, presetName) {
     var inst = instances[id];
     if (!inst || !inst.cy) {
@@ -6792,6 +7130,13 @@ var ontoink = (function () {
     }
     var factory = _STYLE_PRESETS[presetName];
     var stylesheet = (typeof factory === "function") ? factory() : factory;
+    // v0.7.4 — `cy.style()` REPLACES the whole stylesheet, and no preset
+    // declares the inferred-overlay selectors, so switching to Chowlk /
+    // Graffoo / VOWL silently stripped the purple dotted styling from
+    // "Show inferences on graph" — inferred edges became indistinguishable
+    // from asserted ones. Append the overlay rules to every preset (and to
+    // any preset added later) rather than duplicating them three times.
+    stylesheet = (stylesheet || []).concat(_inferredOverlayRules());
     try {
       cy.style(stylesheet);
       console.info("[ontoink] applied style preset '" + presetName + "' (" + stylesheet.length + " selectors)");

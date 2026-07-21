@@ -1122,11 +1122,20 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
                 }
                 shacl_data.append(constraint)
 
-                # Annotate matching edges
+                # Annotate matching edges.
+                #
+                # v0.7.4 — an edge only carries this shape's constraint when
+                # its SUBJECT is in the shape's target scope. Matching on the
+                # property IRI alone painted the cardinality badge on every
+                # edge using that predicate, including subjects the shape
+                # never targets (see _shacl_target_nodes).
                 cardinality = _format_cardinality(min_count, max_count)
                 path_str = str(path) if path else None
+                target_nodes = _shacl_target_nodes(g, target) if target is not None else None
                 annotated = False
                 for edge in edges:
+                    if target_nodes is not None and edge["data"].get("source") not in target_nodes:
+                        continue
                     if edge["data"]["iri"] == path_str:
                         edge["data"]["edgeType"] = "shacl-constraint"
                         edge["data"]["cardinality"] = cardinality
@@ -1208,6 +1217,39 @@ def _ns_for_uri(uri_str: str, namespaces: Dict[str, str]) -> str:
             best = prefix
             best_len = len(ns_uri)
     return best
+
+
+def _shacl_target_nodes(g: Graph, target) -> Set[str]:
+    """Return the node IRIs that are SHACL instances of *target*.
+
+    Per the SHACL spec a node is a "SHACL instance" of class C when it has
+    ``rdf:type`` C **or** ``rdf:type`` D for some D with
+    ``rdfs:subClassOf*`` C — so target membership must descend the subclass
+    hierarchy, not just match direct types.
+
+    v0.7.4: previously the constraint-edge annotation below matched on the
+    property IRI alone, which drew the shape's cardinality badge on every
+    edge using that predicate regardless of whether its subject was in the
+    shape's target scope. In the reasoning-demo §9 figure that painted
+    ``ex:rex rdfs:label "Rex"`` as a ``[1..*]`` constraint edge even though
+    ``ex:rex a ex:Dog`` and ``ex:PersonShape sh:targetClass ex:Person`` —
+    the diagram asserted a constraint that does not apply to that node.
+    """
+    if target is None:
+        return set()
+    classes = {target}
+    frontier = [target]
+    while frontier:
+        cls = frontier.pop()
+        for sub in g.subjects(RDFS.subClassOf, cls):
+            if sub not in classes:
+                classes.add(sub)
+                frontier.append(sub)
+    out: Set[str] = set()
+    for cls in classes:
+        for inst in g.subjects(RDF.type, cls):
+            out.add(str(inst))
+    return out
 
 
 def _used_namespaces(nodes: Dict, edges: List, namespaces: Dict[str, str]) -> Dict[str, str]:

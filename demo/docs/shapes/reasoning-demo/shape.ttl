@@ -3,6 +3,16 @@
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 @prefix ex:   <http://example.org/> .
 
+# Two constraints on every ex:Person:
+#
+#   1. rdfs:label  — already satisfied by the stated data.
+#   2. ex:knows    — satisfied by ex:alice directly, but by ex:bob ONLY
+#                    after reasoning: ex:knows is an owl:SymmetricProperty,
+#                    so `alice knows bob` entails `bob knows alice`.
+#
+# That makes this a before/after demo of reasoning's effect on validation:
+# plain "Validate" reports a violation on ex:bob, while
+# "Validate with Inferences" conforms.
 ex:PersonShape a sh:NodeShape ;
     sh:targetClass ex:Person ;
     sh:property [
@@ -10,4 +20,9 @@ ex:PersonShape a sh:NodeShape ;
         sh:minCount 1 ;
         sh:datatype xsd:string ;
         sh:message "Every person must have a label."
+    ] ;
+    sh:property [
+        sh:path ex:knows ;
+        sh:minCount 1 ;
+        sh:message "Every person must know at least one other person."
     ] .

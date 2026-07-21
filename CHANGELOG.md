@@ -41,6 +41,88 @@
   `/assets/*` and leave the actual pages uncovered — a footgun the
   previous `demo/docs/assets/coi-serviceworker.js` placement had.
 
+### Fixed — Figure fidelity: SHACL scope, export legend, inferred-overlay styling
+
+- **SHACL constraint edges ignored `sh:targetClass`.** The annotation loop
+  in `ttl_parser.py` matched edges on the constraint's property IRI alone,
+  so a shape's cardinality badge was painted on *every* edge using that
+  predicate — including subjects the shape never targets. In the
+  Reasoning & Inference §9 figure that drew `ex:rex rdfs:label "Rex"` as a
+  cyan `[1..*]` constraint edge carrying the message *"Every person must
+  have a label"*, even though `ex:rex a ex:Dog` and `ex:PersonShape` has
+  `sh:targetClass ex:Person`. pySHACL reports zero focus nodes for `rex`;
+  the diagram asserted a constraint that does not apply to it. Annotation
+  is now gated on the edge's subject being a SHACL instance of the target
+  class, descending `rdfs:subClassOf` per the SHACL spec (so a shape
+  targeting `ex:Animal` still annotates `ex:rex`, a `ex:Dog`). Shapes with
+  no `sh:targetClass` (or using target forms ontoink does not yet read —
+  `sh:targetNode`, `sh:targetSubjectsOf`, `sh:targetObjectsOf`) annotate
+  as before rather than silently dropping to zero.
+- **PNG and SVG exports dropped the "Inferred (OWL)" legend row.** Both
+  export paths derive legend rows from `inst.data.edges`, but the
+  "Show inferences on graph" overlay `cy.add()`s its edges without
+  appending them to `inst.data` — so an exported figure showed purple
+  dotted edges with nothing in the key explaining them. (The on-screen
+  legend already compensated by sweeping `cy.edges()`; the exports did
+  not.) Both now pick up overlay-only edge types, so the exported legend
+  matches what is on screen.
+- **Inferred edge labels were 9 px**, roughly 3.8 pt once a figure is
+  placed in a paper. Raised to 12 px. Note the 9 px floor is shared with
+  `rdf:type` and `rdfs:subClassOf` edge labels, which are unchanged —
+  only the inferred overlay, which exists to be read, was raised.
+- **Style presets stripped the inferred overlay.** `cy.style()` replaces
+  the entire stylesheet and none of the Chowlk / Graffoo / VOWL presets
+  declared the inferred selectors, so switching preset silently turned
+  inferred edges into ordinary-looking ones. The overlay rules are now
+  factored into `_inferredOverlayRules()` and appended to every preset,
+  including any added later.
+
+### Fixed — Browser reasoning now matches the build-time backends exactly
+
+- **`parseTtlMinimal` mangled Turtle blank nodes and collections.** It had
+  no notion of `[ … ]` or `( … )`, so an anonymous restriction like
+  `owl:equivalentClass [ a owl:Restriction ; owl:onProperty ex:p ]`
+  tokenised `[` as an ordinary term and emitted junk triples. Those fed the
+  reasoner, producing the nonsense rows reported against 0.7.3 —
+  `buddhaBowl type [`, `buddhaBowl type type`,
+  `buddhaBowl type Restriction`. The parser is now a proper recursive
+  predicate-object-list reader: `[ … ]` mints a real `_:bN` subject and
+  `( … )` expands to an `rdf:first`/`rdf:rest` list, matching what
+  rdflib produces on the Python side.
+- **The browser reasoner had no noise filter.** Build-time results pass
+  through `_run_reasoning`'s filter (drop blank-node scaffolding,
+  `owl:Thing`/`owl:Restriction` memberships, vocabulary-internal triples,
+  `rdfs:domain`/`rdfs:range` propagation); the browser path returned
+  everything raw. The same filter now applies client-side.
+- **The JS materialiser gained the OWL 2 rule set**, so it no longer
+  under-reports against the documented tables: `owl:someValuesFrom`,
+  `owl:allValuesFrom`, `owl:hasValue`, `owl:intersectionOf`,
+  `owl:unionOf`, `owl:propertyChainAxiom`, restriction subsumption
+  (∃/∀ monotone in the filler), structural matching of a necessary
+  restriction against a class definition, `owl:equivalentClass` /
+  `owl:equivalentProperty` unfolding, `owl:FunctionalProperty` /
+  `owl:InverseFunctionalProperty`, and `owl:sameAs` substitution.
+  **All 12 examples on the Reasoning & Inference page now return exactly
+  the same triples as the `owlrl` build-time backend**, including §8's
+  negative case (`alice a BookLover` and `Subscriber ⊑ BookLover`, but
+  *not* `alice a Subscriber`).
+
+### Fixed — "Validate with Inferences" was unreachable
+
+- The reasoning panel assigns `panel.innerHTML`, which discarded the
+  **Validate with Inferences** button that `fence.py` renders statically
+  inside `.ov-reasoning-panel`. On any diagram with a `shape:` the
+  documented "run SHACL over the reasoned graph" step therefore had no
+  control. Both panel renderers now re-emit the button whenever the
+  diagram has SHACL shapes and there are inferences to add.
+- **§9 of the Reasoning & Inference page never demonstrated its own
+  point.** Its shape required only `rdfs:label`, which every person
+  already had, so validation conformed identically before and after
+  reasoning. The shape now also requires `ex:knows`: `ex:bob` has no
+  stated `ex:knows`, so plain **Validate** reports a violation, while
+  **Validate with Inferences** conforms — because `ex:knows` is an
+  `owl:SymmetricProperty` and `alice knows bob` entails `bob knows alice`.
+
 ### Added — Built-in "Browser: OWL-RL (JS)" reasoner + automatic fallback
 
 - **New dependency-free OWL-RL materialiser** (`_owlRlMaterialize`) that
