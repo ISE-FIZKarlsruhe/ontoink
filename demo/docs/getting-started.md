@@ -156,11 +156,54 @@ git push
 
 The **Deploy site** workflow runs under the repository's **Actions** tab. When it finishes, your site is live at the URL shown in the workflow summary.
 
-!!! note "OWL reasoning in CI"
-    The workflow above covers visualization, SHACL validation, and OWL-RL inference (all pure Python). To run the full **HermiT** reasoner at build time, the runner also needs Java — add an [`actions/setup-java`](https://github.com/actions/setup-java) step and install `ontoink[reasoning]` instead of `ontoink`.
+### 5. Reasoning — nothing to configure
+
+**The workflow above already gives you working OWL reasoning.** No extra
+dependencies, no Java, no server, no headers. Just rebuild and the
+**Reasoning** button works.
+
+Two layers do the work, both installed automatically by the plugin:
+
+| Layer | When it runs | What you get |
+|:------|:-------------|:-------------|
+| **Build-time OWL-RL** | during `mkdocs build` | Inferences are computed once and baked into the page. The Reasoning panel shows them instantly, with no client-side work. Uses `owlrl`, which arrives with ontoink's own `pyshacl` dependency. |
+| **Browser reasoners** | when a reader clicks **Reasoning** | **OWL-RL (JS)** — a built-in materialiser that runs in every browser. **Konclude WASM** — an OWL-DL reasoner; the plugin ships its bundle and a COOP/COEP service worker so it works on GitHub Pages, and falls back to the JS engine automatically if the WASM worker can't start. |
+
+!!! tip "Optional: consistency checking with HermiT"
+    One feature does need extra setup — the **consistency badge**
+    (*"Ontology is consistent"* / *"N inconsistent classes"*), which requires
+    the HermiT DL reasoner via `owlready2`. Add Java and the `reasoning`
+    extra to your build job:
+
+    ```yaml
+      - uses: actions/setup-java@v4      # HermiT is a Java library
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install MkDocs + ontoink
+        run: pip install mkdocs-material "ontoink[reasoning]"
+    ```
+
+    HermiT is a *classifier*: it is strongest at class subsumption and
+    consistency, and typically reports **fewer** instance-level facts than
+    OWL-RL. ontoink tries it first and automatically falls back to OWL-RL,
+    so adding it never costs you inferences.
+
+!!! question "How do I know the reasoner is working?"
+    Reasoning correctly reports **0 inferences** for data that has nothing to
+    infer — instance data with no `rdfs:subClassOf`, `rdfs:domain`, or
+    property characteristics entails nothing, in any reasoner. To confirm
+    your setup end to end, drop a file with real OWL axioms into a fence,
+    e.g. `ex:Dog rdfs:subClassOf ex:Animal .` plus `ex:rex a ex:Dog .`, and
+    check that `ex:rex a ex:Animal` appears in the panel. The
+    [Reasoning & Inference](examples/reasoning-demo.md) examples are built
+    for exactly this.
 
 !!! tip "Self-hosting instead"
-    The same `mkdocs build` output in `site/` is a plain static site you can serve from any host (Nginx, S3, Netlify, …). ontoink loads its browser libraries from CDN, so no extra build tooling is required.
+    The same `mkdocs build` output in `site/` is a plain static site you can
+    serve from any host (Nginx, S3, Netlify, …). ontoink self-hosts all of
+    its browser libraries from `site/vendor/`, so the site works offline and
+    under a strict `script-src 'self'` policy — no CDN, no extra build tooling.
 
 ---
 
@@ -254,17 +297,41 @@ The MkDocs plugin parses your TTL files with [rdflib](https://rdflib.readthedocs
 
 ## OWL Reasoning
 
-ontoink can run OWL DL reasoning at build time using the [HermiT](http://www.hermit-reasoner.com/) reasoner (via [owlready2](https://owlready2.readthedocs.io/)).
+Reasoning works out of the box with `pip install ontoink` — there is nothing
+to install or configure.
 
-### Installation
+### Backends
 
-HermiT reasoning requires Java and owlready2:
+ontoink reasons in two places, and picks the best backend available:
+
+**At build time**, during `mkdocs build`, inferences are computed once and
+baked into the page so readers see them instantly. The chain is
+HermiT → Konclude → [owlrl](https://owl-rl.readthedocs.io/), falling through
+to the next whenever one is unavailable or returns nothing. `owlrl` ships
+with ontoink automatically (it comes in with `pyshacl`), so this layer always
+works.
+
+**In the browser**, when a reader clicks **Reasoning**, the dropdown offers
+**OWL-RL (JS)** — a built-in materialiser that runs everywhere with no server
+— and **Konclude WASM**, an OWL-DL reasoner whose bundle and COOP/COEP
+service worker the plugin installs for you. If the WASM worker can't start,
+ontoink falls back to the JS engine automatically. Server backends
+(`ONTOINK_MODE=api`/`all`) appear when a `/reason` endpoint is reachable.
+
+### Optional: HermiT for consistency checking
+
+One feature needs extra setup — the consistency badge
+(*"Ontology is consistent"* / *"N inconsistent classes"*), which comes from
+the [HermiT](http://www.hermit-reasoner.com/) DL reasoner via
+[owlready2](https://owlready2.readthedocs.io/). It requires Java:
 
 ```bash
-pip install ontoink[reasoning]
+pip install "ontoink[reasoning]"
 ```
 
-Or: `pip install owlready2` separately. If owlready2 is not available, ontoink falls back to [owlrl](https://owl-rl.readthedocs.io/) (OWL-RL profile, included via pyshacl).
+HermiT is a classifier — strongest at subsumption and consistency, and
+typically reporting fewer instance-level facts than OWL-RL. ontoink tries it
+first and falls back automatically, so adding it never costs you inferences.
 
 ### What Gets Inferred
 

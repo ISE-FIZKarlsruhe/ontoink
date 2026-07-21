@@ -34,6 +34,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      # OWL reasoning works out of the box with the plain install below:
+      # build-time OWL-RL inferences are baked into each page, and the
+      # in-browser reasoners (OWL-RL JS + Konclude WASM, with the COOP/COEP
+      # service worker) are installed automatically by the ontoink plugin.
+      #
+      # OPTIONAL — uncomment the two lines below and swap `ontoink` for
+      # `"ontoink[reasoning]"` to also get the consistency badge
+      # ("Ontology is consistent") from the HermiT DL reasoner, which needs
+      # Java. ontoink falls back to OWL-RL automatically, so this never
+      # costs you inferences.
+      #
+      # - uses: actions/setup-java@v4
+      #   with: { distribution: temurin, java-version: "17" }
+
       - name: Install MkDocs + ontoink
         run: pip install mkdocs-material ontoink
 
