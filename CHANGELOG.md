@@ -1,5 +1,101 @@
 # Changelog
 
+## [0.7.5] - 2026-08-06
+
+### Added — Size & Typography in Edit Layout
+
+- **The Edit Layout panel can now change how big the shapes are and which
+  font they use.** A master **Scale** slider (40–300 %) moves shape size,
+  node label size and edge label size together; below it are explicit px
+  boxes for each, a **font family** picker (Inter, Helvetica/Arial, Verdana,
+  Georgia, Times, Mono), a **weight** picker and an **italic** toggle. Every
+  node-type row also gained per-type **size** and **font** boxes that
+  override the global values, alongside that type's colour and shape.
+- Size is expressed as **padding around the label**, not a fixed width/height:
+  every stylesheet in the codebase sizes nodes with `width/height: "label"`, so
+  padding is the dimension ontoink actually owns — and labels never clip at any
+  scale. Label wrap width scales with it.
+- Typography values live in **element data** (`oiPad`, `oiFontSize`,
+  `oiFontFamily`, …) and are read through function mappers installed by the new
+  `_typoPatch()`, which rewrites a Cytoscape stylesheet so any rule declaring
+  font/padding honours a per-element override. It wraps the fence stylesheet,
+  the playground stylesheet, the live-editor stylesheet **and every style
+  preset**, so the settings survive layout changes, LOD sweeps, element
+  re-creation and a switch to Chowlk/Graffoo/VOWL — and they are baked into
+  PNG/SVG exports.
+- New API: `ontoink.setTypography(id, key, value, scope)`,
+  `ontoink.applyTypography(id)`, `ontoink.resetTypography(id)`,
+  `ontoink.getInstance(id)`.
+
+### Fixed — the fonts never actually applied
+
+- Every stylesheet asked for `"'Inter','Segoe UI',system-ui,sans-serif"` in CSS
+  syntax, but Cytoscape validates `font-family` against
+  `/^([\w- .]+(?:\s*,\s*[\w- .]+)*)$/` — a **quoted** stack fails the regex and
+  is silently dropped back to the Cytoscape default (Helvetica Neue). All 25
+  declarations are now unquoted, so ontoink diagrams finally render in the font
+  they always claimed. Numeric `font-weight` must likewise reach Cytoscape as a
+  number, not a string.
+
+### Added — Multi-selection and a right-click context menu
+
+- **Ctrl/Cmd+click and Shift+click extend the selection**, Ctrl/Shift+drag
+  rubber-bands, and dragging any selected node moves the whole selection
+  (Cytoscape's own modifier handling — what was missing was everything around
+  it). The single-node popup no longer fires during a multi-select gesture, and
+  the selection now renders with a cyan halo; pinned nodes get a double border.
+- **Right-click opens a context menu** with inline-SVG icons: align
+  left/centre/right/top/middle/bottom; distribute horizontally/vertically with
+  equal gaps; arrange as grid or circle; snap to a 20 px grid; **tidy as
+  taxonomy** (rows derived from `rdfs:subClassOf` depth); bigger/smaller/match
+  size; pin & unpin; colour the selection.
+- **Ontology-specific verbs** beyond the drawing ones: select same type, same
+  namespace, grow to neighbours, sub-class tree, super-classes, instances of the
+  selected classes, SHACL shapes constraining them, connected component; isolate
+  / hide / show hidden; path between exactly two selected nodes; copy IRIs,
+  labels, the selection as TTL or as a Markdown table; download the selection as
+  `.ttl`; export the selection as PNG.
+- **Edge menu** (edges were unreachable by right-click): select both endpoints,
+  select every use of this predicate, hide all edges of this type, copy the
+  predicate IRI, copy the triple.
+- **Cluster menu** on super-nodes and cluster hulls: expand/collapse and select
+  members — previously only reachable by a left tap that also fought ctrl+click.
+- **Undo/redo** for every position, size, pin and visibility verb (`Ctrl+Z` /
+  `Ctrl+Shift+Z`, 25 steps), because these verbs are one click and the position
+  cache autosaves 500 ms later.
+- **Keyboard**: `Ctrl+A`, `Escape` (close menu, then clear selection), `Delete`
+  hides the selection, arrow keys nudge it (`Shift` = 10×), `Shift+F10` / the
+  Context-Menu key opens the menu with roving-tabindex arrow navigation and
+  `role="menu"` semantics. Shortcuts are scoped to the graph under the pointer
+  or keyboard focus, never stolen from the TTL editor.
+- Manual arrangements are persisted: programmatic moves don't fire `dragfree`,
+  so every geometry verb now saves to the position cache explicitly.
+- Wired into all three render paths — fence, playground **and the live DSL
+  editor**, which had no selection layer at all.
+
+### Fixed
+
+- `exportSVG` used `full:false` (viewport only), so a diagram spread out with
+  the new align/distribute verbs was silently cropped. It now fits first when
+  anything sits outside the viewport, then restores the user's zoom/pan.
+- "Copy selection as TTL" emitted a triple only when **both** endpoints were
+  selected, dropping `rdfs:subClassOf` whenever the parent wasn't picked. It now
+  emits every triple asserted by a selected subject, skips overlay-only edges
+  (inferred / SHACL) and quotes literal objects.
+- Selection and pinned-node styling is re-appended to every style preset
+  (like the inferred-overlay rules), instead of vanishing on a preset switch.
+- Geometry verbs run inside `cy.batch()` — one render tick per verb instead of
+  one per node.
+- **The Konclude WASM reasoner bundle now actually ships in the wheel.**
+  `[tool.setuptools.package-data]` globbed `resources/reasoner/*`, but the
+  vendored files live in `resources/assets/reasoner/*` — the glob matched
+  nothing, so `bundle.mjs`, `konclude.mjs`, `konclude.wasm` and `worker.js` were
+  absent from every built distribution and `plugin.py`'s `on_files` hook found an
+  empty directory. Every `pip install ontoink` site therefore kept 404-ing on
+  `/assets/reasoner/bundle.mjs` — the exact failure 0.7.4 set out to fix, which
+  only ever worked from a source checkout. Verified by installing the built
+  wheel into a clean virtualenv.
+
 ## [0.7.4] - 2026-07-21
 
 ### Added — Plugin auto-installs the browser reasoner bundle + COOP/COEP service worker

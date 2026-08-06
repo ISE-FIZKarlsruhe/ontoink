@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ontoink"
-version = "0.7.4"
+version = "0.7.5"
 description = "Interactive ontology visualization, SHACL validation, and live TTL editing plugin for MkDocs"
 readme = "README.md"
 license = "MIT"
@@ -88,7 +88,13 @@ ontoink = [
     "resources/*.js",
     "resources/*.css",
     "resources/vendor/*",
-    "resources/reasoner/*",
+    # 0.7.5 — the vendored Konclude WASM bundle lives in
+    # resources/assets/reasoner/, not resources/reasoner/. The old glob matched
+    # nothing, so `bundle.mjs`, `konclude.mjs`, `konclude.wasm` and `worker.js`
+    # never made it into the wheel and plugin.py's on_files hook found an empty
+    # directory — every `pip install ontoink` site kept 404-ing on
+    # /assets/reasoner/bundle.mjs, the exact failure 0.7.4 set out to fix.
+    "resources/assets/reasoner/*",
 ]
 
 [tool.pytest.ini_options]

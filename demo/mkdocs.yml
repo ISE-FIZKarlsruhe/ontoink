@@ -53,6 +53,8 @@ nav:
   - SHACL Editor: shacl-editor.md
   - Getting Started: getting-started.md
   - Embedding: embedding.md
+  - Docker & Self-hosting: docker.md
+  - Architecture: design.md
   - Examples:
     - FOAF Person: examples/foaf-person.md
     - Schema.org Article: examples/schema-article.md

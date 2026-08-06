@@ -84,6 +84,8 @@ nav:
     - BFO Role Realization: examples/role-realization.md
     - IAO Textual Entity: examples/textual-entity.md
     - OWL Reasoning: examples/reasoning-demo.md
+  - Docker & Self-hosting: docker.md
+  - Architecture: design.md
   - Changelog: changelog.md
   - Contributing: contributing.md
   - Cite: cite.md

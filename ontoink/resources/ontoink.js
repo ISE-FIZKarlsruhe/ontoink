@@ -2999,8 +2999,11 @@ var ontoink = (function () {
     var cy = cytoscape({
       container: canvas,
       elements: { nodes: data.nodes, edges: data.edges },
-      style: [
-        { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
+      // _typoPatch: every font/padding value below stays the default, but
+      // becomes overridable per element via oi* data keys (Edit Layout →
+      // Size & Typography). See the typography section above.
+      style: _typoPatch([
+        { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"Inter, Segoe UI, system-ui, sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
         { selector: 'node[type="Class"]', style: { "font-weight":"600","border-width":2,"border-color":"#666","shape":"rectangle" }},
         { selector: 'node[type="Individual"]', style: { "shape":"ellipse" }},
         { selector: 'node[type="Literal"]', style: { "shape":"ellipse","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#6a9" }},
@@ -3086,17 +3089,17 @@ var ontoink = (function () {
           "text-background-color":"#ede9fe","text-background-opacity":0.95,"text-background-padding":"3px"
         }},
         { selector: "node:selected", style: { "border-width":3,"border-color":"#0891b2" }},
-        { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","source-arrow-shape":"circle","source-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","source-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","source-arrow-shape":"circle","source-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","source-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
         { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
         { selector: "edge[edgeType='owl-restriction'][source = target]", style: { "curve-style":"bezier","control-point-step-size":40 }},
-        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
-      ],
+      ]),
       layout: { name:"dagre", rankDir:"BT", nodeSep:60, rankSep:80, edgeSep:20, animate:false, fit:true, padding:30 },
       // v0.7.4 — Viewport optimizations for large ontologies. On pan/zoom
       // over hundreds of edges Cytoscape's canvas renderer thrashes; these
@@ -3214,6 +3217,10 @@ var ontoink = (function () {
       // already handled them).
       if (evt.target.data("isSuperNode")) return;
       if (evt.target.data("isClusterHull")) return;
+      // v0.7.5 — a ctrl/cmd/shift click is a SELECTION gesture (and so is any
+      // click while several nodes are selected): popping the detail card over
+      // the graph there would fight the user mid-arrangement.
+      if (_isMultiSelectGesture(evt, cy)) { removePopup(container); return; }
       removePopup(container);
       var d=evt.target.data(), pos=evt.renderedPosition;
       var popup=document.createElement("div"); popup.className="ov-popup"; popup.innerHTML=buildPopup(d,cy);
@@ -3236,6 +3243,8 @@ var ontoink = (function () {
       wirePopup(popup, d);
     });
     cy.on("tap", function(e) { if(e.target===cy) removePopup(container); });
+    // v0.7.5 — ctrl/shift multi-select, selection halo, right-click menu.
+    wireSelectionUX(containerId, cy, container, canvas);
 
     buildLegendOverlay(container, data);
     buildNsOverlay(container, data);
@@ -3705,6 +3714,1183 @@ var ontoink = (function () {
     var o=c.querySelector(".ov-validation-output");if(o&&inst.data.validation)renderValidation(o,inst.data.validation);
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // v0.7.5 — Typography & shape sizing
+  //
+  // "Edit Layout" can now change how BIG the shapes are and which FONT they
+  // use. Two properties of the existing code shaped the design:
+  //
+  //  1. Node width/height are `"label"` in every stylesheet (base, playground,
+  //     live editor and all four presets) — the box is derived from the
+  //     rendered label. So *size* is expressed as PADDING around the label
+  //     rather than a fixed width/height: labels never clip, and the graph
+  //     stays readable at any scale.
+  //  2. Styles must survive element re-creation. The LOD sweep removes
+  //     elements to `inst.attic` as JSON and `cy.add()`s them back;
+  //     resetEditor rebuilds from `inst.data`. Element-level style bypasses
+  //     would be lost on both paths, so every typography value lives in
+  //     ELEMENT DATA (`oiPad`, `oiFontSize`, `oiFontFamily`, …) and the
+  //     stylesheets read it through function mappers installed by
+  //     `_typoPatch()`.
+  //
+  // `_typoPatch(styleArr)` rewrites a Cytoscape stylesheet so that every rule
+  // declaring font-size / padding / font-family / font-weight / font-style /
+  // text-max-width honours a per-element override, falling back to whatever
+  // the rule already had. It wraps the fence stylesheet, the playground
+  // stylesheet, the live-editor stylesheet and every style preset — so
+  // "bigger labels" works in Chowlk / Graffoo / VOWL too.
+  // ══════════════════════════════════════════════════════════════════════
+
+  // NOTE — no quotes in these stacks. Cytoscape validates `font-family`
+  // against /^([\w- .]+(?:\s*,\s*[\w- .]+)*)$/, so a CSS-style quoted stack
+  // ("'Inter','Segoe UI',…") fails the regex and is silently dropped back to
+  // the Cytoscape default (Helvetica Neue). That is why ontoink's diagrams
+  // never actually rendered in Inter before v0.7.5 — the stylesheets asked
+  // for it in CSS syntax. Multi-word family names are fine unquoted.
+  var OI_FONT_STACKS = [
+    { label: "Inter (default)",   value: "Inter, Segoe UI, system-ui, sans-serif" },
+    { label: "Helvetica / Arial", value: "Helvetica, Arial, sans-serif" },
+    { label: "Verdana",           value: "Verdana, Geneva, sans-serif" },
+    { label: "Georgia (serif)",   value: "Georgia, Times New Roman, serif" },
+    { label: "Times (serif)",     value: "Times New Roman, Liberation Serif, serif" },
+    { label: "Mono",              value: "JetBrains Mono, Fira Code, ui-monospace, monospace" }
+  ];
+  // Cytoscape's font-weight accepts a number or one of the CSS keywords, but
+  // NOT a numeric *string* — "700" is rejected, 700 is honoured.
+  var OI_FONT_WEIGHTS = [
+    { label: "Normal", value: "400" }, { label: "Medium", value: "500" },
+    { label: "Semibold", value: "600" }, { label: "Bold", value: "700" }
+  ];
+  // Stylesheet defaults the master "Scale" slider multiplies.
+  var TYPO_BASE = { pad: 14, nodeFont: 12, edgeFont: 10, textMaxWidth: 160 };
+
+  // property → element-data key. Node and edge font sizes are deliberately
+  // separate keys so one control can't move the other.
+  function _typoPatchRule(rule) {
+    if (!rule || !rule.selector || !rule.style) return rule;
+    var sel = String(rule.selector);
+    var isEdge = sel.indexOf("edge") === 0;
+    var st = rule.style, out = {}, k;
+    for (k in st) if (Object.prototype.hasOwnProperty.call(st, k)) out[k] = st[k];
+    function overridable(prop, dataKey, unit) {
+      if (!Object.prototype.hasOwnProperty.call(st, prop)) return;
+      var base = st[prop];
+      if (typeof base === "function") return;   // already a mapper — leave it
+      out[prop] = function (ele) {
+        var v = ele.data(dataKey);
+        if (v === undefined || v === null || v === "") return base;
+        return unit ? (v + unit) : v;
+      };
+    }
+    overridable("font-size", isEdge ? "oiEdgeFontSize" : "oiFontSize", "px");
+    overridable("font-family", "oiFontFamily", "");
+    overridable("font-weight", "oiFontWeight", "");
+    overridable("font-style", "oiFontStyle", "");
+    if (!isEdge) {
+      overridable("padding", "oiPad", "px");
+      overridable("text-max-width", "oiTextMaxWidth", "px");
+    }
+    // The base `node` rule declares neither font-weight nor font-style, so
+    // there is nothing for `overridable` to wrap — install the mappers with
+    // Cytoscape's own defaults so "Bold" and "Italic" have something to
+    // hook into. Only on the base rule: more specific rules (e.g. the
+    // 600-weight Class rule) keep their own value as the fallback.
+    if (sel === "node") {
+      if (!Object.prototype.hasOwnProperty.call(st, "font-weight"))
+        out["font-weight"] = function (ele) { var v = ele.data("oiFontWeight"); return (v === undefined || v === null || v === "") ? "normal" : v; };
+      if (!Object.prototype.hasOwnProperty.call(st, "font-style"))
+        out["font-style"] = function (ele) { var v = ele.data("oiFontStyle"); return (v === undefined || v === null || v === "") ? "normal" : v; };
+    }
+    return { selector: rule.selector, style: out };
+  }
+
+  function _typoPatch(styleArr) {
+    if (!styleArr || typeof styleArr.map !== "function") return styleArr;
+    try { return styleArr.map(_typoPatchRule); }
+    catch (e) { console.warn("[ontoink] _typoPatch failed; using raw stylesheet", e); return styleArr; }
+  }
+
+  // Per-instance typography state.
+  //   scale     master multiplier over TYPO_BASE
+  //   pad/nodeFont/edgeFont/family/weight/italic   global values (null = default)
+  //   perType   { "Class": {pad, font}, … }   overrides the global
+  //   perNode   { nodeId: {pad, font} }       overrides perType (context menu)
+  function _typo(inst) {
+    if (!inst._typo) {
+      inst._typo = { scale: 1, pad: null, nodeFont: null, edgeFont: null,
+                     family: "", weight: "", italic: false, perType: {}, perNode: {} };
+    }
+    return inst._typo;
+  }
+
+  function _setEleData(ele, key, val) {
+    if (val === null || val === undefined || val === "") {
+      if (ele.data(key) !== undefined) ele.removeData(key);
+    } else if (ele.data(key) !== val) {
+      ele.data(key, val);
+    }
+  }
+  function _setJsonData(json, key, val) {
+    if (!json || !json.data) return;
+    if (val === null || val === undefined || val === "") delete json.data[key];
+    else json.data[key] = val;
+  }
+
+  // Push the typography state onto every element (live cy + inst.data mirror,
+  // so exports, LOD sweeps and resetEditor all keep it).
+  function applyTypography(id) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    var st = _typo(inst), cy = inst.cy;
+    var dataById = {};
+    (inst.data && inst.data.nodes || []).forEach(function (n) { if (n.data) dataById[n.data.id] = n; });
+    var edgeById = {};
+    (inst.data && inst.data.edges || []).forEach(function (e) { if (e.data) edgeById[e.data.id] = e; });
+
+    cy.nodes().forEach(function (n) {
+      var t = n.data("type") || "", pt = st.perType[t] || {}, pn = st.perNode[n.id()] || {};
+      var pad  = pn.pad  != null ? pn.pad  : (pt.pad  != null ? pt.pad  : st.pad);
+      var font = pn.font != null ? pn.font : (pt.font != null ? pt.font : st.nodeFont);
+      // Label wrap width tracks the shape size so wide shapes get wide text.
+      var tmw = pad != null ? Math.round(TYPO_BASE.textMaxWidth * (pad / TYPO_BASE.pad)) : null;
+      _setEleData(n, "oiPad", pad);
+      _setEleData(n, "oiFontSize", font);
+      _setEleData(n, "oiTextMaxWidth", tmw);
+      _setEleData(n, "oiFontFamily", st.family);
+      _setEleData(n, "oiFontWeight", st.weight);
+      _setEleData(n, "oiFontStyle", st.italic ? "italic" : "");
+      var j = dataById[n.id()];
+      if (j) {
+        _setJsonData(j, "oiPad", pad); _setJsonData(j, "oiFontSize", font);
+        _setJsonData(j, "oiTextMaxWidth", tmw); _setJsonData(j, "oiFontFamily", st.family);
+        _setJsonData(j, "oiFontWeight", st.weight);
+        _setJsonData(j, "oiFontStyle", st.italic ? "italic" : "");
+      }
+    });
+    cy.edges().forEach(function (e) {
+      _setEleData(e, "oiEdgeFontSize", st.edgeFont);
+      _setEleData(e, "oiFontFamily", st.family);
+      var j = edgeById[e.id()];
+      if (j) { _setJsonData(j, "oiEdgeFontSize", st.edgeFont); _setJsonData(j, "oiFontFamily", st.family); }
+    });
+    try { cy.style().update(); } catch (e2) {}
+  }
+
+  // Public setter — also used by the context menu ("Bigger"/"Smaller").
+  //   key: scale | pad | nodeFont | edgeFont | family | weight | italic
+  //   scope (optional): a node type name, or "node:<id>" for a single node
+  function setTypography(id, key, value, scope) {
+    var inst = instances[id]; if (!inst) return;
+    var st = _typo(inst);
+    var num = (value === "" || value === null) ? null : parseFloat(value);
+    if (scope && String(scope).indexOf("node:") === 0) {
+      var nid = String(scope).slice(5);
+      if (!st.perNode[nid]) st.perNode[nid] = {};
+      st.perNode[nid][key === "pad" ? "pad" : "font"] = (num != null && !isNaN(num)) ? num : null;
+    } else if (scope) {
+      if (!st.perType[scope]) st.perType[scope] = {};
+      st.perType[scope][key === "pad" ? "pad" : "font"] = (num != null && !isNaN(num)) ? num : null;
+    } else if (key === "scale") {
+      st.scale = (num && !isNaN(num)) ? num : 1;
+      st.pad = Math.round(TYPO_BASE.pad * st.scale);
+      st.nodeFont = Math.round(TYPO_BASE.nodeFont * st.scale);
+      st.edgeFont = Math.round(TYPO_BASE.edgeFont * st.scale);
+    } else if (key === "italic") {
+      st.italic = !!value;
+    } else if (key === "family") {
+      // Strip CSS quoting so a pasted "'Georgia', serif" still validates.
+      st.family = value ? String(value).replace(/['"]/g, "") : "";
+    } else if (key === "weight") {
+      // Numeric weights must reach Cytoscape as numbers, not strings.
+      st.weight = (value === "" || value === null || value === undefined) ? ""
+                : (/^\d+$/.test(String(value)) ? parseInt(value, 10) : value);
+    } else if (key === "pad" || key === "nodeFont" || key === "edgeFont") {
+      st[key] = (num != null && !isNaN(num)) ? num : null;
+    }
+    applyTypography(id);
+  }
+
+  function resetTypography(id) {
+    var inst = instances[id]; if (!inst) return;
+    inst._typo = null;
+    applyTypography(id);              // clears every oi* data key
+    var c = document.getElementById(id);
+    var panel = c && c.querySelector(".ov-color-panel");
+    if (panel) { toggleColors(id); toggleColors(id); }   // rebuild with defaults
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // v0.7.5 — Multi-selection + right-click context menu
+  //
+  // Cytoscape already treats ctrl/cmd/shift as its additive-selection
+  // modifier (vendor/cytoscape.min.js: `e.shiftKey||e.metaKey||e.ctrlKey`)
+  // and drags every :selected node together, so the runtime work here is:
+  //   * stop the single-node popup from firing during a multi-select gesture
+  //   * make the selection visible (thicker cyan border + halo)
+  //   * add the right-click menu with the align/distribute/arrange verbs and
+  //     the ontology-specific selection verbs
+  //   * suppress the browser's own context menu over the canvas
+  //
+  // The menu markup uses `data-oi-onclick="ontoink.ctxAction('<id>','verb')"`
+  // so it stays inside the eval-free CSP shim (see _oiRun).
+  // ══════════════════════════════════════════════════════════════════════
+
+  // 16px inline icons, currentColor, Google-Slides-ish geometry.
+  var _ICO = {
+    alignLeft:   '<path d="M2 1v14"/><rect x="4" y="3" width="10" height="3.5" rx="1"/><rect x="4" y="9.5" width="6.5" height="3.5" rx="1"/>',
+    alignCenterH:'<path d="M8 1v14"/><rect x="2.5" y="3" width="11" height="3.5" rx="1"/><rect x="4.5" y="9.5" width="7" height="3.5" rx="1"/>',
+    alignRight:  '<path d="M14 1v14"/><rect x="2" y="3" width="10" height="3.5" rx="1"/><rect x="5.5" y="9.5" width="6.5" height="3.5" rx="1"/>',
+    alignTop:    '<path d="M1 2h14"/><rect x="3" y="4" width="3.5" height="10" rx="1"/><rect x="9.5" y="4" width="3.5" height="6.5" rx="1"/>',
+    alignMiddleV:'<path d="M1 8h14"/><rect x="3" y="2.5" width="3.5" height="11" rx="1"/><rect x="9.5" y="4.5" width="3.5" height="7" rx="1"/>',
+    alignBottom: '<path d="M1 14h14"/><rect x="3" y="2" width="3.5" height="10" rx="1"/><rect x="9.5" y="5.5" width="3.5" height="6.5" rx="1"/>',
+    distH:       '<path d="M1.5 1.5v13M14.5 1.5v13"/><rect x="6" y="4.5" width="4" height="7" rx="1"/>',
+    distV:       '<path d="M1.5 1.5h13M1.5 14.5h13"/><rect x="4.5" y="6" width="7" height="4" rx="1"/>',
+    sameSize:    '<rect x="1.5" y="4" width="6" height="6" rx="1"/><rect x="8.5" y="4" width="6" height="6" rx="1"/>',
+    bigger:      '<rect x="2" y="2" width="12" height="12" rx="2"/><path d="M8 5.5v5M5.5 8h5"/>',
+    smaller:     '<rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5.5 8h5"/>',
+    grid:        '<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>',
+    circleArr:   '<circle cx="8" cy="8" r="6"/><circle cx="8" cy="2" r="1.4"/><circle cx="13.2" cy="11" r="1.4"/><circle cx="2.8" cy="11" r="1.4"/>',
+    lock:        '<rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
+    unlock:      '<rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.6"/>',
+    eyeOff:      '<path d="M2 8s2.4-4 6-4c1 0 1.9.3 2.7.8M14 8s-2.4 4-6 4c-1 0-1.9-.3-2.7-.8"/><path d="M2 2l12 12"/>',
+    eye:         '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
+    target:      '<circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/><path d="M8 0v3M8 13v3M0 8h3M13 8h3"/>',
+    expand:      '<circle cx="8" cy="8" r="2.2"/><circle cx="2.5" cy="3" r="1.6"/><circle cx="13.5" cy="3" r="1.6"/><circle cx="3" cy="13.5" r="1.6"/><path d="M6.4 6.6L3.7 4.2M9.6 6.6l2.7-2.4M6.5 9.5l-2.7 2.7"/>',
+    group:       '<rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke-dasharray="3 2"/><rect x="4" y="4" width="3.5" height="3.5" rx="0.8"/><rect x="8.5" y="8.5" width="3.5" height="3.5" rx="0.8"/>',
+    copy:        '<rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/>',
+    download:    '<path d="M8 2v8M4.5 7L8 10.5 11.5 7"/><path d="M2.5 12.5h11"/>',
+    palette:     '<path d="M8 1.5a6.5 6.5 0 1 0 0 13c.9 0 1.4-.6 1.4-1.3 0-.8-.7-1.2-.7-1.9 0-.6.5-1.1 1.2-1.1h1.2A3.4 3.4 0 0 0 14.5 6.8C14.4 3.8 11.5 1.5 8 1.5z"/><circle cx="5" cy="6" r="1"/><circle cx="8" cy="4.5" r="1"/><circle cx="11" cy="6" r="1"/>',
+    path:        '<circle cx="3" cy="12.5" r="2"/><circle cx="13" cy="3.5" r="2"/><path d="M4.6 11.1C6 9 7 8 9 7c1.4-.7 2.2-1.4 2.8-2"/>',
+    selectAll:   '<rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke-dasharray="3 2"/><path d="M5 8.2l2.2 2.2L11.2 6"/>',
+    invert:      '<circle cx="8" cy="8" r="6.2"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor" stroke="none"/>',
+    type:        '<path d="M2.5 4V2.5h11V4M8 2.5v11M5.5 13.5h5"/>',
+    ns:          '<path d="M2 8h12M8 2v12"/><circle cx="8" cy="8" r="6.2"/>',
+    layers:      '<path d="M8 1.8L14.5 5 8 8.2 1.5 5z"/><path d="M2 8.4l6 3 6-3M2 11.4l6 3 6-3"/>',
+    layersUp:    '<path d="M8 7.2L14.5 10.4 8 13.6 1.5 10.4z"/><path d="M5.4 5.2L8 2.4l2.6 2.8"/><path d="M8 2.6v4.4"/>',
+    instanceOf:  '<rect x="2.5" y="1.8" width="11" height="4.6" rx="1"/><ellipse cx="8" cy="12" rx="3.4" ry="2.4"/><path d="M8 6.4v3.2"/>',
+    shield:      '<path d="M8 1.6l5.2 2v4.1c0 3.1-2.1 5.4-5.2 6.7-3.1-1.3-5.2-3.6-5.2-6.7V3.6z"/><path d="M5.8 7.8l1.7 1.7 3-3.2"/>',
+    component:   '<circle cx="4" cy="4.5" r="2.4"/><circle cx="12" cy="11.5" r="2.4"/><path d="M5.9 6.1l4.2 3.8"/>',
+    link:        '<path d="M6.6 9.4a2.6 2.6 0 0 1 0-3.7l2-2a2.6 2.6 0 0 1 3.7 3.7l-.9.9"/><path d="M9.4 6.6a2.6 2.6 0 0 1 0 3.7l-2 2a2.6 2.6 0 0 1-3.7-3.7l.9-.9"/>',
+    image:       '<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.5"/><circle cx="5.6" cy="6.4" r="1.1"/><path d="M2.4 11.6l3.4-3.2 2.6 2.4 2.2-1.9 3 2.7"/>',
+    undo:        '<path d="M3.5 7.5h6.8a3.6 3.6 0 0 1 0 7.2H6"/><path d="M6.2 4.2L3 7.4l3.2 3.2"/>',
+    redo:        '<path d="M12.5 7.5H5.7a3.6 3.6 0 0 0 0 7.2H10"/><path d="M9.8 4.2L13 7.4l-3.2 3.2"/>',
+    fit:         '<path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5"/>',
+    close:       '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/>'
+  };
+  function _icon(name) {
+    var d = _ICO[name] || "";
+    return '<svg class="ov-ctx-ico" viewBox="0 0 16 16" width="16" height="16" fill="none" ' +
+           'stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+  }
+
+  // Selected nodes, minus the compound wrappers (cluster hulls / category
+  // boxes) — moving a hull moves its children, which would double-apply
+  // every alignment.
+  function _selNodes(cy) {
+    return cy.nodes(":selected").filter(function (n) {
+      return !n.data("isClusterHull") && !n.data("isCategoryBox");
+    });
+  }
+  function _ctxToast(id, msg) {
+    var c = document.getElementById(id); if (!c) return;
+    var old = c.querySelector(".ov-ctx-toast"); if (old) old.remove();
+    var t = document.createElement("div");
+    t.className = "ov-ctx-toast"; t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, 2200);
+  }
+
+  // ── geometry verbs ────────────────────────────────────────────────────
+  // Programmatic moves never fire `dragfree`, so the position cache
+  // (_wirePositionCache) would not see a hand-aligned arrangement and the
+  // next visit would throw it away. Persist explicitly after every verb.
+  function _persistPositions(id) {
+    var inst = instances[id];
+    if (!inst || !inst._posCacheKey || !inst.cy) return;
+    try { _positionsSave(inst._posCacheKey, inst.cy); } catch (e) {}
+  }
+
+  function alignSelection(id, mode) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = _selNodes(inst.cy); if (ns.length < 2) { _ctxToast(id, "Select 2+ nodes to align (Ctrl+click)"); return; }
+    var bb = ns.boundingBox();
+    // cy.batch: one render tick for the whole verb instead of one per node.
+    ns.cy().batch(function () {
+    ns.forEach(function (n) {
+      var p = n.position(), w = n.width(), h = n.height();
+      if (mode === "left")   n.position({ x: bb.x1 + w / 2, y: p.y });
+      if (mode === "right")  n.position({ x: bb.x2 - w / 2, y: p.y });
+      if (mode === "centerH")n.position({ x: (bb.x1 + bb.x2) / 2, y: p.y });
+      if (mode === "top")    n.position({ x: p.x, y: bb.y1 + h / 2 });
+      if (mode === "bottom") n.position({ x: p.x, y: bb.y2 - h / 2 });
+      if (mode === "middleV")n.position({ x: p.x, y: (bb.y1 + bb.y2) / 2 });
+    });
+    });
+    _persistPositions(id);
+    _ctxToast(id, ns.length + " nodes aligned");
+  }
+
+  // Equal GAPS between shape edges (what Google Slides does), not equal
+  // centres — with mixed node widths the latter looks lopsided.
+  function distributeSelection(id, axis) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = _selNodes(inst.cy); if (ns.length < 3) { _ctxToast(id, "Select 3+ nodes to distribute"); return; }
+    var arr = ns.toArray().sort(function (a, b) {
+      return axis === "h" ? a.position("x") - b.position("x") : a.position("y") - b.position("y");
+    });
+    var sizeOf = function (n) { return axis === "h" ? n.width() : n.height(); };
+    var posOf  = function (n) { return axis === "h" ? n.position("x") : n.position("y"); };
+    var first = arr[0], last = arr[arr.length - 1];
+    var start = posOf(first) - sizeOf(first) / 2, end = posOf(last) + sizeOf(last) / 2;
+    var total = 0; arr.forEach(function (n) { total += sizeOf(n); });
+    var gap = (end - start - total) / (arr.length - 1);
+    var cur = start;
+    inst.cy.batch(function () {
+    arr.forEach(function (n) {
+      var s = sizeOf(n), c = cur + s / 2;
+      if (axis === "h") n.position({ x: c, y: n.position("y") });
+      else              n.position({ x: n.position("x"), y: c });
+      cur += s + gap;
+    });
+    });
+    _persistPositions(id);
+    _ctxToast(id, arr.length + " nodes distributed " + (axis === "h" ? "horizontally" : "vertically"));
+  }
+
+  // Arrange the selection inside its own bounding box without touching the
+  // rest of the graph — the "tidy this corner" verb dagre can't give you.
+  function arrangeSelection(id, mode) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = _selNodes(inst.cy); if (ns.length < 2) { _ctxToast(id, "Select 2+ nodes first"); return; }
+    var arr = ns.toArray(), bb = ns.boundingBox();
+    var cx = (bb.x1 + bb.x2) / 2, cy0 = (bb.y1 + bb.y2) / 2;
+    var maxW = 0, maxH = 0;
+    arr.forEach(function (n) { maxW = Math.max(maxW, n.width()); maxH = Math.max(maxH, n.height()); });
+    inst.cy.batch(function () {
+    if (mode === "circle") {
+      var r = Math.max(maxW, maxH) * arr.length / (2 * Math.PI) + Math.max(maxW, maxH);
+      arr.forEach(function (n, i) {
+        var a = (2 * Math.PI * i) / arr.length - Math.PI / 2;
+        n.position({ x: cx + r * Math.cos(a), y: cy0 + r * Math.sin(a) });
+      });
+    } else if (mode === "row") {
+      var xw = 0; arr.forEach(function (n) { xw += n.width() + 30; });
+      var x0 = cx - xw / 2;
+      arr.forEach(function (n) { n.position({ x: x0 + n.width() / 2, y: cy0 }); x0 += n.width() + 30; });
+    } else if (mode === "column") {
+      var yh = 0; arr.forEach(function (n) { yh += n.height() + 24; });
+      var y0 = cy0 - yh / 2;
+      arr.forEach(function (n) { n.position({ x: cx, y: y0 + n.height() / 2 }); y0 += n.height() + 24; });
+    } else {  // grid
+      var cols = Math.ceil(Math.sqrt(arr.length));
+      var stepX = maxW + 40, stepY = maxH + 30;
+      var rows = Math.ceil(arr.length / cols);
+      var ox = cx - (cols - 1) * stepX / 2, oy = cy0 - (rows - 1) * stepY / 2;
+      arr.forEach(function (n, i) {
+        n.position({ x: ox + (i % cols) * stepX, y: oy + Math.floor(i / cols) * stepY });
+      });
+    }
+    });
+    _persistPositions(id);
+    _ctxToast(id, arr.length + " nodes arranged (" + mode + ")");
+  }
+
+  // Snap every selected node to a 20px model grid — keeps hand-arranged
+  // diagrams tidy in exports.
+  function snapSelection(id, step) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = _selNodes(inst.cy); if (!ns.length) return;
+    step = step || 20;
+    inst.cy.batch(function () {
+      ns.forEach(function (n) {
+        var p = n.position();
+        n.position({ x: Math.round(p.x / step) * step, y: Math.round(p.y / step) * step });
+      });
+    });
+    _persistPositions(id);
+    _ctxToast(id, ns.length + " nodes snapped to grid");
+  }
+
+  // Size verbs. Node width/height derive from the label, so "match size"
+  // equalises the padding — the only size dimension we own.
+  function sizeSelection(id, mode) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = _selNodes(inst.cy); if (!ns.length) { _ctxToast(id, "Nothing selected"); return; }
+    var st = _typo(inst);
+    var cur = function (n) {
+      var pn = st.perNode[n.id()] || {}, pt = st.perType[n.data("type") || ""] || {};
+      return pn.pad != null ? pn.pad : (pt.pad != null ? pt.pad : (st.pad != null ? st.pad : TYPO_BASE.pad));
+    };
+    var target = null;
+    if (mode === "match") { target = 0; ns.forEach(function (n) { target = Math.max(target, cur(n)); }); }
+    ns.forEach(function (n) {
+      var v = (mode === "match") ? target
+            : (mode === "bigger") ? Math.min(80, cur(n) + 3)
+            : (mode === "smaller") ? Math.max(2, cur(n) - 3)
+            : null;                                  // "reset"
+      if (!st.perNode[n.id()]) st.perNode[n.id()] = {};
+      st.perNode[n.id()].pad = v;
+    });
+    applyTypography(id);
+    _ctxToast(id, ns.length + " nodes resized");
+  }
+
+  function lockSelection(id, locked) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = _selNodes(inst.cy); if (!ns.length) return;
+    ns.forEach(function (n) {
+      if (locked) { n.lock(); n.data("oiLocked", true); }
+      else { n.unlock(); n.removeData("oiLocked"); }
+    });
+    _ctxToast(id, ns.length + (locked ? " nodes pinned (layouts skip them)" : " nodes unpinned"));
+  }
+
+  // ── selection verbs ───────────────────────────────────────────────────
+  function selectBy(id, mode) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy, ns = _selNodes(cy);
+    if (mode === "all") { cy.nodes().select(); _ctxToast(id, cy.nodes().length + " nodes selected"); return; }
+    if (mode === "none") { cy.elements().unselect(); return; }
+    if (mode === "invert") {
+      var sel = cy.nodes(":selected");
+      cy.nodes().select(); sel.unselect();
+      _ctxToast(id, cy.nodes(":selected").length + " nodes selected"); return;
+    }
+    if (!ns.length) { _ctxToast(id, "Select a node first"); return; }
+    if (mode === "sameType") {
+      var types = {}; ns.forEach(function (n) { types[n.data("type")] = true; });
+      cy.nodes().forEach(function (n) { if (types[n.data("type")]) n.select(); });
+    } else if (mode === "sameNamespace") {
+      var nss = {}; ns.forEach(function (n) { nss[n.data("source") || n.data("namespace")] = true; });
+      cy.nodes().forEach(function (n) { if (nss[n.data("source") || n.data("namespace")]) n.select(); });
+    } else if (mode === "neighbours") {
+      ns.neighborhood("node").select();
+    } else if (mode === "component") {
+      ns.component().select();
+    } else if (mode === "descendants") {
+      // Everything reachable DOWN rdfs:subClassOf edges (the sub-tree).
+      var seen = {}, frontier = ns.toArray();
+      while (frontier.length) {
+        var n = frontier.pop(); if (seen[n.id()]) continue; seen[n.id()] = true; n.select();
+        n.incomers("edge[edgeType='subclass']").sources().forEach(function (s) { frontier.push(s); });
+      }
+    } else if (mode === "ancestors") {
+      // …and UP to the root. Together the two verbs scope a reasoning or
+      // SHACL run to one branch of the taxonomy.
+      var seenA = {}, up = ns.toArray();
+      while (up.length) {
+        var a = up.pop(); if (seenA[a.id()]) continue; seenA[a.id()] = true; a.select();
+        a.outgoers("edge[edgeType='subclass']").targets().forEach(function (t) { up.push(t); });
+      }
+    } else if (mode === "instances") {
+      // The ABox for the selected TBox: every individual typed by a
+      // selected class. No other control in ontoink crosses that boundary.
+      var before = cy.nodes(":selected").length;
+      ns.forEach(function (n) { n.incomers("edge[edgeType='rdf-type']").sources().select(); });
+      if (cy.nodes(":selected").length === before) { _ctxToast(id, "No instances of the selected classes are on the graph"); return; }
+    } else if (mode === "shapes") {
+      // "What validates this class?" in one gesture.
+      var b2 = cy.nodes(":selected").length;
+      ns.forEach(function (n) { n.connectedEdges("edge[edgeType='shacl-constraint']").connectedNodes().select(); });
+      cy.nodes(":selected").forEach(function (n) { if (n.data("type") !== "SHACL Shape" && !ns.contains(n)) n.unselect(); });
+      if (cy.nodes(":selected").length === b2) { _ctxToast(id, "No SHACL shapes target the selection"); return; }
+    }
+    _ctxToast(id, cy.nodes(":selected").length + " nodes selected");
+  }
+
+  // ── visibility verbs ──────────────────────────────────────────────────
+  // display:none keeps the elements in the graph model (so LOD, facets and
+  // the attic keep working) but removes them from rendering AND from layout
+  // runs — unlike the attic, which the next setLodLevel would restore.
+  function hideSelection(id, invert) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy, ns = cy.nodes(":selected");
+    if (!ns.length) { _ctxToast(id, "Nothing selected"); return; }
+    var victims = invert ? cy.nodes().difference(ns.union(ns.neighborhood("node"))) : ns;
+    victims.style("display", "none");
+    victims.connectedEdges().style("display", "none");
+    inst._ctxHidden = (inst._ctxHidden || 0) + victims.length;
+    if (invert) { cy.fit(ns.union(ns.neighborhood()), 40); }
+    _ctxToast(id, invert ? "Isolated " + ns.length + " nodes" : victims.length + " nodes hidden");
+  }
+  function showHidden(id) {
+    var inst = instances[id]; if (!inst) return;
+    inst.cy.elements().removeStyle("display");
+    inst._ctxHidden = 0;
+    inst.cy.fit(null, 30);
+    _ctxToast(id, "All hidden elements restored");
+  }
+
+  // ── ontology verbs ────────────────────────────────────────────────────
+  // Serialise the selection as Turtle. Scope is "every triple ASSERTED BY a
+  // selected subject" — an object outside the selection is still emitted (as
+  // a dangling IRI reference). Emitting only both-endpoints-selected triples
+  // would silently drop `rdfs:subClassOf` whenever the parent isn't picked,
+  // which turns "copy this branch" into a fragment missing its own hierarchy.
+  function _selectionTtl(inst) {
+    var cy = inst.cy, ns = cy.nodes(":selected");
+    var ids = {}; ns.forEach(function (n) { ids[n.id()] = true; });
+    var pf = (inst.data && inst.data.namespaces) || {};
+    var lines = [], used = {};
+    var term = function (iri) {
+      if (!iri) return null;
+      for (var p in pf) if (pf[p] && iri.indexOf(pf[p]) === 0) { used[p] = true; return p + ":" + iri.slice(pf[p].length); }
+      return "<" + iri + ">";
+    };
+    cy.edges().forEach(function (e) {
+      if (!ids[e.data("source")]) return;
+      // Overlay edges are not asserted triples — never write them out as if
+      // the user had authored them.
+      var et = e.data("edgeType");
+      if (et === "inferred" || et === "shacl-constraint") return;
+      var tgt = cy.getElementById(e.data("target"));
+      var s = term(cy.getElementById(e.data("source")).data("iri"));
+      var o = tgt.data("type") === "Literal" && !tgt.data("iri")
+            ? '"' + String(tgt.data("label") || "").replace(/"/g, '\\"') + '"'
+            : term(tgt.data("iri"));
+      var p = et === "rdf-type" ? "rdf:type"
+            : et === "subclass" ? "rdfs:subClassOf"
+            : term(e.data("iri"));
+      if (s && o && p) lines.push(s + " " + p + " " + o + " .");
+    });
+    ns.forEach(function (n) {
+      var s = term(n.data("iri"));
+      if (s && n.data("label")) lines.push(s + ' rdfs:label "' + String(n.data("label")).replace(/"/g, '\\"') + '" .');
+    });
+    used.rdf = used.rdf || /rdf:/.test(lines.join("")); used.rdfs = true;
+    var header = [];
+    Object.keys(used).forEach(function (p) {
+      var uri = pf[p] || (p === "rdf" ? "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+                        : p === "rdfs" ? "http://www.w3.org/2000/01/rdf-schema#" : null);
+      if (uri) header.push("@prefix " + p + ": <" + uri + "> .");
+    });
+    return header.sort().join("\n") + "\n\n" + lines.join("\n") + "\n";
+  }
+
+  function copySelection(id, what) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = inst.cy.nodes(":selected");
+    if (!ns.length) { _ctxToast(id, "Nothing selected"); return; }
+    var text = what === "iri" ? ns.map(function (n) { return n.data("iri") || n.id(); }).join("\n")
+             : what === "label" ? ns.map(function (n) { return n.data("label") || ""; }).join("\n")
+             : what === "md" ? ("| Label | Type | IRI |\n|---|---|---|\n" + ns.map(function (n) {
+                   return "| " + (n.data("label") || "") + " | " + (n.data("type") || "") + " | `" + (n.data("iri") || "") + "` |";
+                 }).join("\n"))
+             : _selectionTtl(inst);
+    navigator.clipboard.writeText(text).then(function () {
+      var kind = { ttl: "TTL", iri: "IRIs", label: "labels", md: "a Markdown table" }[what] || what;
+      _ctxToast(id, "Copied " + kind + " (" + ns.length + " nodes)");
+    }).catch(function () { _ctxToast(id, "Clipboard blocked by the browser"); });
+  }
+
+  function downloadSelectionTtl(id) {
+    var inst = instances[id]; if (!inst) return;
+    if (!inst.cy.nodes(":selected").length) { _ctxToast(id, "Nothing selected"); return; }
+    var b = new Blob([_selectionTtl(inst)], { type: "text/turtle" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(b); a.download = id + "-selection.ttl";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 500);
+    _ctxToast(id, "Selection downloaded as TTL");
+  }
+
+  function pathBetweenSelection(id) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = _selNodes(inst.cy);
+    if (ns.length !== 2) { _ctxToast(id, "Select exactly 2 nodes to trace a path"); return; }
+    var c = document.getElementById(id);
+    togglePathFinder(id);
+    var panel = c.querySelector(".ov-pathfinder-panel");
+    if (!panel || panel.style.display === "none") togglePathFinder(id);
+    var sels = c.querySelectorAll(".ov-pathfinder-panel select");
+    if (sels.length >= 2) {
+      sels[0].value = ns[0].id(); sels[1].value = ns[1].id();
+      try { findPath(id); } catch (e) {}
+    }
+  }
+
+  function colorSelection(id, color) {
+    var inst = instances[id]; if (!inst) return;
+    var ns = inst.cy.nodes(":selected");
+    if (!ns.length) return;
+    var byId = {};
+    (inst.data && inst.data.nodes || []).forEach(function (n) { if (n.data) byId[n.data.id] = n; });
+    ns.forEach(function (n) { n.data("color", color); if (byId[n.id()]) byId[n.id()].data.color = color; });
+    _ctxToast(id, ns.length + " nodes recoloured");
+  }
+
+  // ── undo / redo for the destructive verbs ─────────────────────────────
+  // Every verb below is one click and the position cache autosaves 500 ms
+  // later, so an accidental "arrange in a circle" over a hand-built diagram
+  // used to be unrecoverable. Snapshot before each mutating verb.
+  var CTX_UNDO_DEPTH = 25;
+  function _ctxSnapshot(inst) {
+    var cy = inst.cy, nodes = [], edges = [];
+    cy.nodes().forEach(function (n) {
+      var pos = n.position();
+      nodes.push({ id: n.id(), x: pos.x, y: pos.y, locked: n.locked(),
+                   hidden: n.style("display") === "none", sel: n.selected() });
+    });
+    cy.edges().forEach(function (e) {
+      edges.push({ id: e.id(), hidden: e.style("display") === "none" });
+    });
+    return { nodes: nodes, edges: edges, typo: JSON.parse(JSON.stringify(_typo(inst))) };
+  }
+  function _ctxRestore(id, snap) {
+    var inst = instances[id]; if (!inst || !snap) return;
+    var cy = inst.cy;
+    cy.batch(function () {
+      snap.nodes.forEach(function (s) {
+        var n = cy.getElementById(s.id); if (!n || !n.length) return;
+        n.unlock();                              // a locked node ignores position()
+        n.position({ x: s.x, y: s.y });
+        if (s.locked) { n.lock(); n.data("oiLocked", true); } else n.removeData("oiLocked");
+        if (s.hidden) n.style("display", "none"); else n.removeStyle("display");
+        if (s.sel) n.select(); else n.unselect();
+      });
+      snap.edges.forEach(function (s) {
+        var e = cy.getElementById(s.id); if (!e || !e.length) return;
+        if (s.hidden) e.style("display", "none"); else e.removeStyle("display");
+      });
+    });
+    inst._typo = snap.typo;
+    applyTypography(id);
+    _persistPositions(id);
+  }
+  function _ctxPushUndo(id) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    if (!inst._undo) inst._undo = [];
+    inst._redo = [];
+    inst._undo.push(_ctxSnapshot(inst));
+    if (inst._undo.length > CTX_UNDO_DEPTH) inst._undo.shift();
+  }
+  function undoCtx(id) {
+    var inst = instances[id];
+    if (!inst || !inst._undo || !inst._undo.length) { _ctxToast(id, "Nothing to undo"); return; }
+    if (!inst._redo) inst._redo = [];
+    inst._redo.push(_ctxSnapshot(inst));
+    _ctxRestore(id, inst._undo.pop());
+    _ctxToast(id, "Undone  ·  " + inst._undo.length + " step" + (inst._undo.length === 1 ? "" : "s") + " left");
+  }
+  function redoCtx(id) {
+    var inst = instances[id];
+    if (!inst || !inst._redo || !inst._redo.length) { _ctxToast(id, "Nothing to redo"); return; }
+    if (!inst._undo) inst._undo = [];
+    inst._undo.push(_ctxSnapshot(inst));
+    _ctxRestore(id, inst._redo.pop());
+    _ctxToast(id, "Redone");
+  }
+
+  // ── the menu itself ───────────────────────────────────────────────────
+  function _ctxItem(id, verb, label, icon, hint, disabled) {
+    return '<button class="ov-ctx-item' + (disabled ? ' ov-ctx-disabled' : '') + '" role="menuitem" tabindex="-1"' +
+           (disabled ? ' disabled' : ' data-oi-onclick="ontoink.ctxAction(\'' + id + '\',\'' + verb + '\')"') +
+           (hint ? ' title="' + esc(hint) + '"' : '') + '>' +
+           _icon(icon) + '<span>' + esc(label) + '</span></button>';
+  }
+  function _ctxRow(id, items) {
+    return '<div class="ov-ctx-row" role="group">' + items.map(function (it) {
+      return '<button class="ov-ctx-icon-btn" role="menuitem" tabindex="-1" title="' + esc(it[2]) + '" ' +
+             'aria-label="' + esc(it[2]) + '" ' +
+             'data-oi-onclick="ontoink.ctxAction(\'' + id + '\',\'' + it[0] + '\')">' + _icon(it[1]) + '</button>';
+    }).join("") + '</div>';
+  }
+  function _ctxSection(title) { return '<div class="ov-ctx-title">' + esc(title) + '</div>'; }
+  function _ctxSep() { return '<div class="ov-ctx-sep" role="separator"></div>'; }
+  // A live colour well: the CSP shim understands `this.value`, so the picker
+  // drives `ontoink.colorSelection` directly without an inline handler.
+  function _ctxColorRow(id, current) {
+    return '<div class="ov-ctx-item ov-ctx-colorrow">' + _icon("palette") +
+           '<span>Colour selection</span>' +
+           '<input type="color" class="ov-ctx-color" value="' + esc(current || "#0891b2") + '" ' +
+           'title="Repaint every selected node" aria-label="Colour selection" ' +
+           'data-oi-oninput="ontoink.colorSelection(\'' + id + '\',this.value)"></div>';
+  }
+
+  function closeContextMenu(id) {
+    var c = typeof id === "string" ? document.getElementById(id) : id;
+    if (!c) return;
+    var m = c.querySelector(".ov-ctxmenu"); if (m) m.remove();
+  }
+
+  // mode: "node" | "edge" | "canvas" | "cluster"
+  function openContextMenu(id, clientX, clientY, mode, ctxEle) {
+    var inst = instances[id]; if (!inst) return;
+    var c = document.getElementById(id); if (!c) return;
+    closeContextMenu(c); removePopup(c);
+    // Legacy boolean signature (true === canvas) still works.
+    if (mode === true) mode = "canvas"; else if (mode === false || !mode) mode = "node";
+    var cy = inst.cy, sel = _selNodes(cy), n = sel.length;
+    var hidden = cy.elements().filter(function (e) { return e.style("display") === "none"; }).length;
+    var h = "";
+
+    if (mode === "node") {
+      h += '<div class="ov-ctx-head">' + n + ' node' + (n === 1 ? "" : "s") + ' selected' +
+           '<span class="ov-ctx-hint">Ctrl+click to add</span></div>';
+      h += _ctxSection("Align");
+      h += _ctxRow(id, [
+        ["align-left", "alignLeft", "Align left"],
+        ["align-centerH", "alignCenterH", "Align centre (vertical axis)"],
+        ["align-right", "alignRight", "Align right"],
+        ["align-top", "alignTop", "Align top"],
+        ["align-middleV", "alignMiddleV", "Align middle (horizontal axis)"],
+        ["align-bottom", "alignBottom", "Align bottom"]
+      ]);
+      h += _ctxSection("Distribute & arrange");
+      h += _ctxRow(id, [
+        ["dist-h", "distH", "Distribute horizontally (equal gaps)"],
+        ["dist-v", "distV", "Distribute vertically (equal gaps)"],
+        ["arrange-grid", "grid", "Arrange selection in a grid"],
+        ["arrange-circle", "circleArr", "Arrange selection in a circle"],
+        ["snap", "fit", "Snap to a 20px grid"],
+        ["tidy-taxonomy", "layers", "Tidy as taxonomy — one row per rdfs:subClassOf depth"]
+      ]);
+      h += _ctxSection("Size, pin & style");
+      h += _ctxRow(id, [
+        ["size-bigger", "bigger", "Bigger"],
+        ["size-smaller", "smaller", "Smaller"],
+        ["size-match", "sameSize", "Match size (largest in the selection)"],
+        ["size-reset", "close", "Reset size"],
+        ["lock", "lock", "Pin position — layouts skip pinned nodes"],
+        ["unlock", "unlock", "Unpin"]
+      ]);
+      h += _ctxColorRow(id, sel.length ? sel[0].data("color") : "");
+      h += _ctxItem(id, "edit-layout", "Edit Layout (size, font, colour)…", "palette");
+      h += _ctxSep();
+      h += _ctxSection("Select");
+      h += _ctxItem(id, "select-sameType", "All of the same type", "type", "Every node with this rdf:type");
+      h += _ctxItem(id, "select-sameNamespace", "Same namespace", "ns", "The whole ontology this node came from");
+      h += _ctxItem(id, "select-neighbours", "Grow to neighbours", "expand", "Add every directly connected node — click again for another hop");
+      h += _ctxItem(id, "select-descendants", "Sub-class tree", "layers", "Follow rdfs:subClassOf downwards");
+      h += _ctxItem(id, "select-ancestors", "Super-classes", "layersUp", "Follow rdfs:subClassOf upwards to the root");
+      h += _ctxItem(id, "select-instances", "Instances of these classes", "instanceOf", "Every individual whose rdf:type is in the selection");
+      h += _ctxItem(id, "select-shapes", "SHACL shapes constraining these", "shield", "The shapes that validate the selected classes");
+      h += _ctxItem(id, "select-component", "Connected component", "component", "The whole island this node belongs to");
+      h += _ctxSep();
+      h += _ctxSection("Focus & visibility");
+      h += _ctxItem(id, "isolate", "Isolate (hide everything else)", "target", "Keep the selection and its neighbours, hide the rest");
+      h += _ctxItem(id, "hide", "Hide selection", "eyeOff", "Also bound to the Delete key");
+      h += _ctxItem(id, "show-hidden", hidden ? "Show hidden elements (" + hidden + ")" : "Show hidden elements", "eye", "", !hidden);
+      h += _ctxItem(id, "path", "Path between the 2 selected", "path",
+                    "Shortest path — needs exactly two selected nodes", n !== 2);
+      h += _ctxSep();
+      h += _ctxSection("Copy & export");
+      h += _ctxItem(id, "copy-iri", "Copy IRIs", "copy");
+      h += _ctxItem(id, "copy-label", "Copy labels", "copy");
+      h += _ctxItem(id, "copy-ttl", "Copy selection as TTL", "copy", "Every triple asserted by a selected subject");
+      h += _ctxItem(id, "copy-md", "Copy as Markdown table", "copy", "label | type | IRI — for docs and issues");
+      h += _ctxItem(id, "download-ttl", "Download selection (.ttl)", "download");
+      h += _ctxItem(id, "export-png", "Export selection as PNG", "image", "Hides the rest of the graph for the shot");
+      h += _ctxSep();
+      h += _ctxItem(id, "undo", "Undo", "undo", "Ctrl+Z", !(inst._undo && inst._undo.length));
+      h += _ctxItem(id, "redo", "Redo", "redo", "Ctrl+Shift+Z", !(inst._redo && inst._redo.length));
+    } else if (mode === "edge") {
+      var d = ctxEle ? ctxEle.data() : {};
+      var etLabel = { "object-property": "Object property", "data-property": "Data property",
+                      "rdf-type": "rdf:type", "subclass": "rdfs:subClassOf",
+                      "shacl-constraint": "SHACL constraint", "owl-restriction": "OWL restriction",
+                      "inferred": "Inferred" }[d.edgeType] || (d.edgeType || "Edge");
+      h += '<div class="ov-ctx-head">' + esc(d.label || etLabel) + '<span class="ov-ctx-hint">' + esc(etLabel) + '</span></div>';
+      h += _ctxItem(id, "edge-select-ends", "Select both endpoints", "selectAll", "Then align, copy or trace a path between them");
+      h += _ctxItem(id, "edge-select-same", "Select all with this predicate", "link", "Every node using this property — its de-facto domain and range");
+      h += _ctxItem(id, "edge-hide-type", "Hide all edges of this type", "eyeOff", "Declutter without changing the LOD level");
+      h += _ctxItem(id, "show-hidden", hidden ? "Show hidden elements (" + hidden + ")" : "Show hidden elements", "eye", "", !hidden);
+      h += _ctxSep();
+      h += _ctxItem(id, "edge-copy-iri", "Copy predicate IRI", "copy");
+      h += _ctxItem(id, "edge-copy-triple", "Copy triple as TTL", "copy");
+      h += _ctxItem(id, "edit-layout", "Edit Layout (edge colour & style)…", "palette");
+    } else if (mode === "cluster") {
+      var cd = ctxEle ? ctxEle.data() : {};
+      h += '<div class="ov-ctx-head">' + esc(cd.label || "Cluster") +
+           '<span class="ov-ctx-hint">' + (cd.memberCount ? cd.memberCount + " members" : "group") + '</span></div>';
+      h += _ctxItem(id, "cluster-toggle", cd.isClusterHull ? "Collapse cluster" : "Expand cluster",
+                    cd.isClusterHull ? "group" : "expand");
+      h += _ctxItem(id, "cluster-select", "Select cluster members", "selectAll",
+                    "Expands first if needed, then selects everything inside");
+      h += _ctxSep();
+      h += _ctxItem(id, "fit", "Fit to view", "fit");
+      h += _ctxItem(id, "edit-layout", "Edit Layout…", "palette");
+    } else {
+      h += '<div class="ov-ctx-head">Canvas<span class="ov-ctx-hint">right-click a node or edge for more</span></div>';
+      h += _ctxItem(id, "select-all", "Select all nodes", "selectAll", "Ctrl+A");
+      h += _ctxItem(id, "select-invert", "Invert selection", "invert");
+      h += _ctxItem(id, "select-none", "Clear selection", "close", "Escape");
+      h += _ctxSep();
+      h += _ctxItem(id, "show-hidden", hidden ? "Show hidden elements (" + hidden + ")" : "Show hidden elements", "eye", "", !hidden);
+      h += _ctxItem(id, "fit", "Fit to view", "fit");
+      h += _ctxItem(id, "relayout", "Re-run layout (keeps pinned nodes)", "grid",
+                    "Pinned nodes hold their position; everything else is re-laid out");
+      h += _ctxItem(id, "edit-layout", "Edit Layout (size, font, colour)…", "palette");
+      h += _ctxSep();
+      h += _ctxItem(id, "undo", "Undo", "undo", "Ctrl+Z", !(inst._undo && inst._undo.length));
+      h += _ctxItem(id, "redo", "Redo", "redo", "Ctrl+Shift+Z", !(inst._redo && inst._redo.length));
+    }
+
+    var menu = document.createElement("div");
+    menu.className = "ov-ctxmenu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Graph actions");
+    menu.innerHTML = h;
+    c.appendChild(menu);
+    // Keep the menu inside the container, flipping when it would overflow.
+    var cr = c.getBoundingClientRect();
+    var x = clientX - cr.left, y = clientY - cr.top;
+    menu.style.left = x + "px"; menu.style.top = y + "px";
+    requestAnimationFrame(function () {
+      var mr = menu.getBoundingClientRect();
+      if (mr.right > cr.right - 6) menu.style.left = Math.max(4, x - mr.width) + "px";
+      if (mr.bottom > cr.bottom - 6) menu.style.top = Math.max(4, cr.height - mr.height - 6) + "px";
+    });
+    try { wireHandlers(menu); } catch (e) {}
+    _ctxWireKeyboard(menu, c);
+    return menu;
+  }
+
+  // Roving-tabindex keyboard navigation so the menu is operable without a
+  // mouse (arrows / Home / End / Enter / Escape).
+  function _ctxWireKeyboard(menu, container) {
+    var items = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]:not([disabled])'));
+    if (!items.length) return;
+    var i = -1;
+    var focusAt = function (k) {
+      i = (k + items.length) % items.length;
+      items.forEach(function (el, j) { el.tabIndex = j === i ? 0 : -1; });
+      items[i].focus();
+    };
+    menu.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { e.preventDefault(); focusAt(i + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); focusAt(i - 1); }
+      else if (e.key === "Home") { e.preventDefault(); focusAt(0); }
+      else if (e.key === "End") { e.preventDefault(); focusAt(items.length - 1); }
+      else if (e.key === "Escape") { e.preventDefault(); closeContextMenu(container); }
+    });
+    // Only a keyboard-opened menu steals focus; a mouse user keeps theirs.
+    menu.__oiFocusFirst = function () { focusAt(0); };
+  }
+
+  // Verbs that change the diagram and therefore need an undo snapshot.
+  var _CTX_MUTATING = /^(align-|dist-|arrange-|snap$|tidy-taxonomy$|size-|lock$|unlock$|hide$|isolate$|show-hidden$|edge-hide-type$)/;
+
+  // Single dispatcher so the whole menu fits the CSP shim's
+  // `ontoink.fn('a','b')` grammar.
+  function ctxAction(id, verb) {
+    closeContextMenu(id);
+    var inst = instances[id]; if (!inst) return;
+    if (_CTX_MUTATING.test(verb)) _ctxPushUndo(id);
+    if (verb.indexOf("align-") === 0) return alignSelection(id, verb.slice(6));
+    if (verb === "dist-h") return distributeSelection(id, "h");
+    if (verb === "dist-v") return distributeSelection(id, "v");
+    if (verb.indexOf("arrange-") === 0) return arrangeSelection(id, verb.slice(8));
+    if (verb === "snap") return snapSelection(id, 20);
+    if (verb === "tidy-taxonomy") return tidyAsTaxonomy(id);
+    if (verb === "size-match") return sizeSelection(id, "match");
+    if (verb === "size-bigger") return sizeSelection(id, "bigger");
+    if (verb === "size-smaller") return sizeSelection(id, "smaller");
+    if (verb === "size-reset") return sizeSelection(id, "reset");
+    if (verb === "lock") return lockSelection(id, true);
+    if (verb === "unlock") return lockSelection(id, false);
+    if (verb === "undo") return undoCtx(id);
+    if (verb === "redo") return redoCtx(id);
+    if (verb === "edit-layout") { var c = document.getElementById(id); if (c && !c.querySelector(".ov-color-panel")) toggleColors(id); return; }
+    if (verb.indexOf("select-") === 0) return selectBy(id, verb.slice(7));
+    if (verb === "isolate") return hideSelection(id, true);
+    if (verb === "hide") return hideSelection(id, false);
+    if (verb === "show-hidden") return showHidden(id);
+    if (verb === "path") return pathBetweenSelection(id);
+    if (verb === "copy-iri") return copySelection(id, "iri");
+    if (verb === "copy-label") return copySelection(id, "label");
+    if (verb === "copy-ttl") return copySelection(id, "ttl");
+    if (verb === "copy-md") return copySelection(id, "md");
+    if (verb === "download-ttl") return downloadSelectionTtl(id);
+    if (verb === "export-png") return exportSelectionPNG(id);
+    if (verb === "fit") return fit(id);
+    if (verb === "relayout") { var sl = document.getElementById(id).querySelector(".ov-layout-select"); return changeLayout(id, sl ? sl.value : "dagre"); }
+    if (verb.indexOf("edge-") === 0) return edgeAction(id, verb.slice(5));
+    if (verb.indexOf("cluster-") === 0) return clusterAction(id, verb.slice(8));
+  }
+
+  // ── edge verbs ────────────────────────────────────────────────────────
+  // Edges carry the densest semantics in an ontology diagram (subclass,
+  // rdf:type, object/data property, SHACL, restriction) and were unreachable
+  // by right-click until now.
+  function edgeAction(id, verb) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy, e = inst._ctxEdge;
+    if (!e || !e.length) { _ctxToast(id, "No edge under the cursor"); return; }
+    if (verb === "select-ends") {
+      cy.elements().unselect(); e.source().select(); e.target().select();
+      _ctxToast(id, "Both endpoints selected"); return;
+    }
+    if (verb === "select-same") {
+      var iri = e.data("iri"), et = e.data("edgeType");
+      cy.elements().unselect();
+      var hits = cy.edges().filter(function (x) {
+        return iri ? x.data("iri") === iri : x.data("edgeType") === et;
+      });
+      hits.connectedNodes().select();
+      _ctxToast(id, hits.length + " uses of " + (e.data("label") || et) + " selected"); return;
+    }
+    if (verb === "hide-type") {
+      var t = e.data("edgeType");
+      var vic = cy.edges().filter(function (x) { return x.data("edgeType") === t; });
+      vic.style("display", "none");
+      _ctxToast(id, vic.length + " " + t + " edges hidden"); return;
+    }
+    if (verb === "copy-iri") {
+      navigator.clipboard.writeText(e.data("iri") || e.data("label") || "").then(function () {
+        _ctxToast(id, "Predicate IRI copied");
+      }).catch(function () { _ctxToast(id, "Clipboard blocked by the browser"); });
+      return;
+    }
+    if (verb === "copy-triple") {
+      var pf = (inst.data && inst.data.namespaces) || {};
+      var term = function (iri) {
+        if (!iri) return null;
+        for (var p in pf) if (pf[p] && iri.indexOf(pf[p]) === 0) return p + ":" + iri.slice(pf[p].length);
+        return "<" + iri + ">";
+      };
+      var pred = e.data("edgeType") === "rdf-type" ? "rdf:type"
+               : e.data("edgeType") === "subclass" ? "rdfs:subClassOf" : term(e.data("iri"));
+      var line = [term(e.source().data("iri")), pred, term(e.target().data("iri")), "."].join(" ");
+      navigator.clipboard.writeText(line).then(function () { _ctxToast(id, "Triple copied"); })
+        .catch(function () { _ctxToast(id, "Clipboard blocked by the browser"); });
+    }
+  }
+
+  // ── cluster verbs (right-click a super-node or a cluster hull) ─────────
+  function clusterAction(id, verb) {
+    var inst = instances[id]; if (!inst) return;
+    var el = inst._ctxCluster;
+    if (!el || !el.length) return;
+    var d = el.data();
+    var cid = d.clusterId || el.id();
+    if (verb === "toggle") {
+      if (d.isClusterHull) collapseSuperNode(id, cid);
+      else if (inst.expandedSuperNodes && inst.expandedSuperNodes.has(el.id())) collapseSuperNode(id, el.id());
+      else expandSuperNode(id, el.id());
+      return;
+    }
+    if (verb === "select") {
+      var cy = inst.cy;
+      if (!d.isClusterHull) { try { expandSuperNode(id, el.id()); } catch (e2) {} }
+      var hull = d.isClusterHull ? el : cy.nodes("[?isClusterHull]").filter(function (hl) { return hl.data("clusterId") === cid; });
+      cy.elements().unselect();
+      if (hull && hull.length) hull.children().select();
+      _ctxToast(id, cy.nodes(":selected").length + " cluster members selected");
+    }
+  }
+
+  // ── semantic tidy ─────────────────────────────────────────────────────
+  // Vertical position already means subclass depth under dagre's rankDir:BT,
+  // and every manual drag throws that away. This puts the selection back onto
+  // rows derived from rdfs:subClassOf depth — alignment that means something.
+  function tidyAsTaxonomy(id) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy, ns = _selNodes(cy);
+    if (ns.length < 2) { _ctxToast(id, "Select 2+ nodes first"); return; }
+    var depth = {}, arr = ns.toArray();
+    // Depth = longest chain of outgoing subclass edges up to a root.
+    var depthOf = function (n, seen) {
+      if (depth[n.id()] !== undefined) return depth[n.id()];
+      seen = seen || {};
+      if (seen[n.id()]) return 0;                     // cycle guard
+      seen[n.id()] = true;
+      var d = 0;
+      n.outgoers("edge[edgeType='subclass']").targets().forEach(function (p) {
+        d = Math.max(d, depthOf(p, seen) + 1);
+      });
+      depth[n.id()] = d;
+      return d;
+    };
+    var rows = {}, maxH = 0;
+    arr.forEach(function (n) {
+      var d = depthOf(n);
+      (rows[d] = rows[d] || []).push(n);
+      maxH = Math.max(maxH, n.height());
+    });
+    var levels = Object.keys(rows).map(Number).sort(function (a, b) { return a - b; });
+    if (levels.length < 2) { _ctxToast(id, "All selected nodes sit at the same subclass depth"); return; }
+    var bb = ns.boundingBox(), rowGap = maxH + 60, cx = (bb.x1 + bb.x2) / 2;
+    cy.batch(function () {
+      levels.forEach(function (lvl, li) {
+        var row = rows[lvl].sort(function (a, b) { return a.position("x") - b.position("x"); });
+        var total = 0; row.forEach(function (n) { total += n.width() + 40; });
+        var x = cx - total / 2;
+        // deepest (most specific) at the bottom — matches dagre rankDir:BT
+        var y = bb.y1 + (levels.length - 1 - li) * rowGap;
+        row.forEach(function (n) { n.position({ x: x + n.width() / 2, y: y }); x += n.width() + 40; });
+      });
+    });
+    _persistPositions(id);
+    _ctxToast(id, levels.length + " subclass levels tidied into rows");
+  }
+
+  // ── export just the selection ─────────────────────────────────────────
+  function exportSelectionPNG(id) {
+    var inst = instances[id]; if (!inst) return;
+    var cy = inst.cy, sel = cy.nodes(":selected");
+    if (!sel.length) { _ctxToast(id, "Nothing selected"); return; }
+    var keep = sel.union(sel.connectedEdges().filter(function (e) {
+      return sel.contains(e.source()) && sel.contains(e.target());
+    }));
+    var rest = cy.elements().difference(keep);
+    var wasHidden = rest.filter(function (e) { return e.style("display") === "none"; });
+    rest.style("display", "none");
+    try {
+      var url = cy.png({ scale: 3, bg: "#ffffff", full: true });
+      var a = document.createElement("a");
+      a.href = url; a.download = id + "-selection.png";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      _ctxToast(id, "Selection exported as PNG");
+    } catch (e) { _ctxToast(id, "PNG export failed"); }
+    rest.removeStyle("display");
+    wasHidden.style("display", "none");   // whatever was hidden before stays hidden
+  }
+
+  // Wire selection UX + context menu onto one cytoscape instance. Called
+  // from every render path (fence, playground, live DSL editor).
+  function wireSelectionUX(containerId, cy, container, canvas) {
+    if (!cy || cy.__oiSelWired) return;
+    cy.__oiSelWired = true;
+
+    // Right-click anywhere in the canvas is ours, not the browser's.
+    if (canvas) canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+    var openAt = function (evt, mode, ele) {
+      var oe = evt.originalEvent || {};
+      var inst = instances[containerId];
+      if (inst) { inst._ctxEdge = mode === "edge" ? ele : null; inst._ctxCluster = mode === "cluster" ? ele : null; }
+      openContextMenu(containerId, oe.clientX || 0, oe.clientY || 0, mode, ele);
+    };
+
+    // Clusters get their own menu: expanding/collapsing was only reachable
+    // by left-tapping the bubble, which also detonated a ctrl+click meant as
+    // a selection.
+    cy.on("cxttap", "node[?isSuperNode], node[?isClusterHull]", function (evt) {
+      openAt(evt, "cluster", evt.target);
+      evt.stopPropagation();
+    });
+    cy.on("cxttap", "node", function (evt) {
+      var n = evt.target;
+      if (n.data("isSuperNode") || n.data("isClusterHull") || n.data("isCategoryBox")) return;
+      // Right-clicking outside the current selection starts a new one —
+      // the rule every desktop app uses.
+      if (!n.selected()) { cy.elements().unselect(); n.select(); }
+      openAt(evt, "node", n);
+    });
+    cy.on("cxttap", "edge", function (evt) { openAt(evt, "edge", evt.target); });
+    cy.on("cxttap", function (evt) {
+      if (evt.target !== cy) return;
+      openAt(evt, "canvas", null);
+    });
+
+    // Dismiss: outside click, Escape, and any viewport change (the menu is
+    // anchored in container pixels, so panning would strand it).
+    cy.on("tap", function () { closeContextMenu(container); });
+    cy.on("viewport", function () { closeContextMenu(container); });
+    // Document-level listeners outlive the cytoscape core they were wired
+    // for (the playground destroys + rebuilds `cy` in the same container on
+    // every "Visualize"), so every one of them checks that this core is
+    // still the live instance before touching it.
+    var isStale = function () {
+      return !container.isConnected || !instances[containerId] || instances[containerId].cy !== cy;
+    };
+    var isMine = function () {
+      // "The graph the user is working in": pointer over it, keyboard focus
+      // inside it, or its own menu open.
+      return container.querySelector(".ov-ctxmenu") ||
+             container.matches(":hover") ||
+             container.contains(document.activeElement);
+    };
+    var inTextField = function (t) {
+      var tag = t && t.tagName;
+      return tag === "TEXTAREA" || tag === "INPUT" || (t && t.isContentEditable);
+    };
+    document.addEventListener("mousedown", function (e) {
+      if (isStale()) return;
+      var m = container.querySelector(".ov-ctxmenu");
+      if (m && !m.contains(e.target)) closeContextMenu(container);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (isStale() || !isMine()) return;
+      var inMenu = container.querySelector(".ov-ctxmenu");
+      if (e.key === "Escape") {
+        if (inMenu) { closeContextMenu(container); return; }
+        cy.elements().unselect(); return;
+      }
+      if (inTextField(e.target)) return;
+      // Ctrl+A / Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) — scoped to this graph.
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "a" || e.key === "A") { e.preventDefault(); selectBy(containerId, "all"); return; }
+        if (e.key === "z" || e.key === "Z") { e.preventDefault(); if (e.shiftKey) redoCtx(containerId); else undoCtx(containerId); return; }
+        if (e.key === "y" || e.key === "Y") { e.preventDefault(); redoCtx(containerId); return; }
+        return;
+      }
+      // Delete hides the selection (ontoink never deletes triples from a
+      // diagram — the TTL is the source of truth).
+      if ((e.key === "Delete" || e.key === "Backspace") && cy.nodes(":selected").length) {
+        e.preventDefault(); ctxAction(containerId, "hide"); return;
+      }
+      // Shift+F10 / the ContextMenu key open the menu from the keyboard,
+      // centred on the selection, and move focus into it.
+      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+        e.preventDefault();
+        var sel = _selNodes(cy);
+        var r = container.getBoundingClientRect();
+        var pt = sel.length ? sel[0].renderedPosition() : { x: r.width / 2, y: r.height / 2 };
+        var cvR = (canvas || container).getBoundingClientRect();
+        var menu = openContextMenu(containerId, cvR.left + pt.x, cvR.top + pt.y, sel.length ? "node" : "canvas", null);
+        if (menu && menu.__oiFocusFirst) menu.__oiFocusFirst();
+        return;
+      }
+      // Arrow keys nudge the selection (Shift = 10x) — the keyboard half of
+      // the align/arrange verbs.
+      if (e.key.indexOf("Arrow") === 0 && cy.nodes(":selected").length) {
+        var step = e.shiftKey ? 20 : 2;
+        var dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        var dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        if (!dx && !dy) return;
+        e.preventDefault();
+        if (!container.__oiNudging) { _ctxPushUndo(containerId); container.__oiNudging = true; }
+        clearTimeout(container.__oiNudgeT);
+        // One undo entry per burst of nudges, not per keypress.
+        container.__oiNudgeT = setTimeout(function () {
+          container.__oiNudging = false; _persistPositions(containerId);
+        }, 700);
+        cy.batch(function () {
+          _selNodes(cy).forEach(function (n) {
+            var p = n.position(); n.position({ x: p.x + dx, y: p.y + dy });
+          });
+        });
+      }
+    });
+
+    // Selection halo + a visible pin badge. The default :selected rule is a
+    // 3px border — too quiet when a dozen nodes are picked. The same rules
+    // are re-appended by applyStylePreset (_selectionOverlayRules) so they
+    // survive a preset switch.
+    try {
+      var st = cy.style();
+      _selectionOverlayRules().forEach(function (r) { st = st.selector(r.selector).style(r.style); });
+      st.update();
+    } catch (e) {}
+
+    // Re-apply typography to elements that arrive later (LOD restores,
+    // cluster expansion, inferred overlay).
+    var pending = false;
+    cy.on("add", function () {
+      if (pending) return; pending = true;
+      requestAnimationFrame(function () { pending = false; try { applyTypography(containerId); } catch (e) {} });
+    });
+  }
+
+  // True while a multi-select gesture is in flight — the node popup would
+  // otherwise pop for every ctrl+click.
+  function _isMultiSelectGesture(evt, cy) {
+    var oe = evt && evt.originalEvent;
+    if (oe && (oe.ctrlKey || oe.metaKey || oe.shiftKey)) return true;
+    return cy.nodes(":selected").length > 1;
+  }
+
   // ── Color Customization ────────────────────────────────────────────────
 
   var NODE_SHAPES = ["rectangle","ellipse","round-rectangle","diamond","hexagon","octagon","triangle","barrel","rhomboid","star","tag","vee"];
@@ -3731,16 +4917,53 @@ var ontoink = (function () {
     var panel=document.createElement("div");panel.className="ov-color-panel";
     var h='<div class="ov-color-panel-head"><strong>Edit Layout</strong><button class="ov-popup-close" data-oi-onclick="this.closest(\'.ov-color-panel\').remove()">&times;</button></div>';
 
-    // Node Types section: color + shape
+    // Node Types section: color + shape + per-type size & label size.
+    // The two number boxes are per-type OVERRIDES: leave them empty and the
+    // global Size & Typography values below apply.
+    var typo=_typo(inst);
     h+='<div class="ov-color-section"><div class="ov-color-section-title">Node Types</div>';
+    // Column header. The colour swatch needs no caption (and its 28px column
+    // is too narrow for one), so that cell is left empty as a spacer.
+    h+='<div class="ov-color-row ov-typo-legend"><span class="ov-typo-lg-c"></span><span class="ov-typo-lg-s">shape</span><span class="ov-typo-lg-n">size</span><span class="ov-typo-lg-n">font</span></div>';
     Object.keys(types).forEach(function(t){
       var curShape=typeShapes[t]||"rectangle";
+      var pt=typo.perType[t]||{};
       h+='<div class="ov-color-row"><input type="color" value="'+types[t]+'" data-kind="type" data-key="'+esc(t)+'" class="ov-color-input">';
       h+='<select class="ov-shape-select" data-kind="node-shape" data-key="'+esc(t)+'">';
       NODE_SHAPES.forEach(function(s){h+='<option value="'+s+'"'+(s===curShape?' selected':'')+'>'+s+'</option>';});
       h+='</select>';
+      h+='<input type="number" class="ov-typo-num" min="2" max="80" step="1" placeholder="auto" title="Shape size for '+esc(t)+' — padding in px around the label. Empty = follow the global size." data-typo="pad" data-key="'+esc(t)+'" value="'+(pt.pad!=null?pt.pad:'')+'">';
+      h+='<input type="number" class="ov-typo-num" min="4" max="48" step="1" placeholder="auto" title="Label font size for '+esc(t)+' in px. Empty = follow the global font size." data-typo="font" data-key="'+esc(t)+'" value="'+(pt.font!=null?pt.font:'')+'">';
       h+='<span>'+esc(t)+'</span></div>';
     });
+    h+='</div>';
+
+    // Size & Typography — global controls. "Scale" is the master: it writes
+    // the three px boxes below from the stylesheet defaults, and any per-type
+    // override (above) still wins over it.
+    var gPad=typo.pad!=null?typo.pad:TYPO_BASE.pad;
+    var gNodeFont=typo.nodeFont!=null?typo.nodeFont:TYPO_BASE.nodeFont;
+    var gEdgeFont=typo.edgeFont!=null?typo.edgeFont:TYPO_BASE.edgeFont;
+    h+='<div class="ov-color-section"><div class="ov-color-section-title">Size &amp; Typography</div>';
+    h+='<div class="ov-color-row"><label class="ov-typo-lbl" title="Scale shapes and labels together">Scale</label>'
+      +'<input type="range" class="ov-typo-range" data-typo="scale" min="40" max="300" step="5" value="'+Math.round(typo.scale*100)+'">'
+      +'<span class="ov-typo-val" data-for="scale">'+Math.round(typo.scale*100)+'%</span></div>';
+    h+='<div class="ov-color-row"><label class="ov-typo-lbl" title="Padding around every label — the shapes grow with it">Shape size</label>'
+      +'<input type="number" class="ov-typo-num ov-typo-wide" data-typo="pad" min="2" max="80" step="1" value="'+gPad+'"><span class="ov-typo-unit">px</span></div>';
+    h+='<div class="ov-color-row"><label class="ov-typo-lbl">Label size</label>'
+      +'<input type="number" class="ov-typo-num ov-typo-wide" data-typo="nodeFont" min="4" max="48" step="1" value="'+gNodeFont+'"><span class="ov-typo-unit">px</span></div>';
+    h+='<div class="ov-color-row"><label class="ov-typo-lbl" title="Font size of the property labels on edges">Edge labels</label>'
+      +'<input type="number" class="ov-typo-num ov-typo-wide" data-typo="edgeFont" min="4" max="36" step="1" value="'+gEdgeFont+'"><span class="ov-typo-unit">px</span></div>';
+    h+='<div class="ov-color-row"><label class="ov-typo-lbl">Font</label><select class="ov-shape-select ov-typo-font" data-typo="family">';
+    h+='<option value=""'+(typo.family?'':' selected')+'>Stylesheet default</option>';
+    OI_FONT_STACKS.forEach(function(f){h+='<option value="'+esc(f.value)+'"'+(typo.family===f.value?' selected':'')+'>'+esc(f.label)+'</option>';});
+    h+='</select></div>';
+    h+='<div class="ov-color-row"><label class="ov-typo-lbl">Weight</label><select class="ov-shape-select" data-typo="weight">';
+    h+='<option value=""'+(typo.weight?'':' selected')+'>Default</option>';
+    OI_FONT_WEIGHTS.forEach(function(w){h+='<option value="'+w.value+'"'+(typo.weight===w.value?' selected':'')+'>'+esc(w.label)+'</option>';});
+    h+='</select>';
+    h+='<label class="ov-typo-check" title="Italic labels"><input type="checkbox" data-typo="italic"'+(typo.italic?' checked':'')+'> <i>Italic</i></label></div>';
+    h+='<div class="ov-color-row"><button class="ov-chip ov-typo-reset" title="Back to the stylesheet defaults for size and font">Reset size &amp; font</button></div>';
     h+='</div>';
 
     // Edge Types section: color + line style + arrow shape
@@ -3805,6 +5028,40 @@ var ontoink = (function () {
       if(kind==="edge-arrow") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("target-arrow-shape",val);});
       refreshLegend();
     });});
+
+    // Size & Typography controls ------------------------------------------
+    // Per-type boxes carry data-key; global ones don't. Both funnel through
+    // setTypography → applyTypography, which dual-writes cy + inst.data.
+    panel.querySelectorAll(".ov-typo-num").forEach(function(inp){
+      inp.addEventListener("input",function(){
+        var key=inp.dataset.typo, scope=inp.dataset.key||null;
+        var val=inp.value===""?null:inp.value;
+        if(scope) setTypography(id, key==="pad"?"pad":"font", val, scope);
+        else setTypography(id, key, val);
+      });
+    });
+    panel.querySelectorAll(".ov-typo-range").forEach(function(rg){
+      rg.addEventListener("input",function(){
+        var pct=parseFloat(rg.value)||100;
+        setTypography(id,"scale",pct/100);
+        var out=panel.querySelector('.ov-typo-val[data-for="scale"]');
+        if(out)out.textContent=Math.round(pct)+"%";
+        // Keep the px boxes in sync with what the master slider just wrote.
+        var st=_typo(inst);
+        var padBox=panel.querySelector('.ov-typo-num[data-typo="pad"]:not([data-key])');
+        var nfBox=panel.querySelector('.ov-typo-num[data-typo="nodeFont"]');
+        var efBox=panel.querySelector('.ov-typo-num[data-typo="edgeFont"]');
+        if(padBox)padBox.value=st.pad; if(nfBox)nfBox.value=st.nodeFont; if(efBox)efBox.value=st.edgeFont;
+      });
+    });
+    panel.querySelectorAll('select[data-typo]').forEach(function(sel){
+      sel.addEventListener("change",function(){ setTypography(id, sel.dataset.typo, sel.value); });
+    });
+    panel.querySelectorAll('input[type="checkbox"][data-typo]').forEach(function(cb){
+      cb.addEventListener("change",function(){ setTypography(id, cb.dataset.typo, cb.checked); });
+    });
+    var resetBtn=panel.querySelector(".ov-typo-reset");
+    if(resetBtn)resetBtn.addEventListener("click",function(){ resetTypography(id); });
 
     // Prefix toggle checkboxes
     panel.querySelectorAll(".ov-prefix-toggle").forEach(function(cb){cb.addEventListener("change",function(){
@@ -3941,7 +5198,19 @@ var ontoink = (function () {
     try{
       // full:false = the current viewport (WYSIWYG), matching the browser so the
       // legend/prefixes boxes line up with their on-screen positions.
+      //
+      // v0.7.5 — WYSIWYG also means "whatever is off-screen is CUT". Since the
+      // align/distribute/arrange verbs actively encourage spreading a diagram
+      // out, silently truncating it here would ruin exactly the figures those
+      // verbs exist to produce. So: if anything sits outside the viewport, fit
+      // first, export, then restore the user's zoom/pan.
+      var _vp = { zoom: cy.zoom(), pan: { x: cy.pan().x, y: cy.pan().y } }, _refit = false;
+      var _bb = cy.elements().renderedBoundingBox();
+      if (_bb.x1 < -1 || _bb.y1 < -1 || _bb.x2 > cy.width() + 1 || _bb.y2 > cy.height() + 1) {
+        cy.fit(null, 30); _refit = true;
+      }
       var svgStr=cy.svg({scale:1,full:false,bg:"#fff"});
+      if (_refit) { cy.zoom(_vp.zoom); cy.pan(_vp.pan); }
       var parser=new DOMParser();
       var doc=parser.parseFromString(svgStr,"image/svg+xml");
       var svgEl=doc.querySelector("svg");
@@ -4368,19 +5637,21 @@ var ontoink = (function () {
     var cy = cytoscape({
       container: canvas,
       elements: { nodes: nodeList, edges: edges },
-      style: [
-        { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
+      // _typoPatch — see the fence-side init; keeps Edit Layout's size/font
+      // controls working in the playground and the embed API too.
+      style: _typoPatch([
+        { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"Inter, Segoe UI, system-ui, sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
         { selector: 'node[type="Class"]', style: { "font-weight":"600","border-width":2,"border-color":"#666","shape":"rectangle" }},
         { selector: 'node[type="Individual"]', style: { "shape":"ellipse" }},
         { selector: 'node[type="Literal"]', style: { "shape":"ellipse","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#6a9" }},
-        { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
-        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"'Inter','Segoe UI',system-ui,sans-serif" }},
+        { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
         { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
-        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
         // v0.7.2 — namespace-cluster super-nodes. Same visual language as
         // the fence-side style block (~line 1788): chunky hexagon, double
@@ -4454,7 +5725,7 @@ var ontoink = (function () {
           "color":"#5b21b6","font-weight":"700","font-size":"12px",
           "text-background-color":"#ede9fe","text-background-opacity":0.95,"text-background-padding":"3px"
         }},
-      ],
+      ]),
       layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, edgeSep: 20, animate: false, fit: true, padding: 30 },
       // v0.7.4 — Viewport optimizations for large ontologies. On pan/zoom
       // over hundreds of edges Cytoscape's canvas renderer thrashes; these
@@ -4565,6 +5836,9 @@ var ontoink = (function () {
       // Don't double-fire for super-nodes or hulls.
       if (evt.target.data("isSuperNode")) return;
       if (evt.target.data("isClusterHull")) return;
+      // v0.7.5 — see the fence-side handler: ctrl/cmd/shift click is a
+      // selection gesture, not a "show me this node" gesture.
+      if (_isMultiSelectGesture(evt, cy)) { removePopup(container); return; }
       removePopup(container);
       var d = evt.target.data(), pos = evt.renderedPosition;
       var popup = document.createElement("div"); popup.className = "ov-popup"; popup.innerHTML = buildPopup(d, cy);
@@ -4587,6 +5861,8 @@ var ontoink = (function () {
       wirePlaygroundPopup(popup, d);
     });
     cy.on("tap", function(e) { if (e.target === cy) removePopup(container); });
+    // v0.7.5 — same selection UX as the fence path.
+    wireSelectionUX(containerId, cy, container, canvas);
 
     buildLegendOverlay(container, data);
     buildNsOverlay(container, data);
@@ -6763,7 +8039,38 @@ var ontoink = (function () {
     listStylePresets: listStylePresets,
     // Embeddable build — CSP-safe handler wiring + programmatic mount.
     embed: embed,
-    wireHandlers: wireHandlers
+    wireHandlers: wireHandlers,
+    // v0.7.5 — Size & typography (Edit Layout) and the selection/context
+    // menu. `ctxAction` is the single verb dispatcher the menu markup calls
+    // through the CSP shim; the rest are exposed so pages can script them.
+    setTypography: setTypography,
+    applyTypography: applyTypography,
+    resetTypography: resetTypography,
+    ctxAction: ctxAction,
+    openContextMenu: openContextMenu,
+    closeContextMenu: closeContextMenu,
+    undoCtx: undoCtx,
+    redoCtx: redoCtx,
+    tidyAsTaxonomy: tidyAsTaxonomy,
+    exportSelectionPNG: exportSelectionPNG,
+    edgeAction: edgeAction,
+    clusterAction: clusterAction,
+    alignSelection: alignSelection,
+    distributeSelection: distributeSelection,
+    arrangeSelection: arrangeSelection,
+    snapSelection: snapSelection,
+    sizeSelection: sizeSelection,
+    lockSelection: lockSelection,
+    selectBy: selectBy,
+    hideSelection: hideSelection,
+    showHidden: showHidden,
+    copySelection: copySelection,
+    downloadSelectionTtl: downloadSelectionTtl,
+    colorSelection: colorSelection,
+    wireSelectionUX: wireSelectionUX,
+    // Escape hatch for embedders and browser tests: the live cytoscape core
+    // plus the parsed graph for one container.
+    getInstance: function (id) { return instances[id]; }
   };
 
   // ==========================================================================
@@ -6806,7 +8113,7 @@ var ontoink = (function () {
         shape: "rectangle",
         "background-color": "#ffffff",
         "border-color": "#000000", "border-width": 1, "border-style": "solid",
-        color: "#000000", "font-family": "'Helvetica','Arial',sans-serif",
+        color: "#000000", "font-family": "Helvetica, Arial, sans-serif",
         "font-size": "12px", label: "data(label)",
         "text-valign": "center", "text-halign": "center",
         width: "label", height: "label", padding: "10px",
@@ -6823,7 +8130,7 @@ var ontoink = (function () {
         "line-color": "#000000", "target-arrow-color": "#000000",
         "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
         width: 1, label: "data(label)",
-        "font-family": "'Helvetica','Arial',sans-serif", "font-size": "10px", color: "#000000",
+        "font-family": "Helvetica, Arial, sans-serif", "font-size": "10px", color: "#000000",
         "text-background-color": "#ffffff", "text-background-opacity": 1, "text-background-padding": "2px"
       }},
       { selector: 'edge[edgeType="subclass"]', style: { "target-arrow-fill": "hollow" }},
@@ -6851,7 +8158,7 @@ var ontoink = (function () {
       { selector: "node", style: {
         label: "data(label)",
         "text-valign": "center", "text-halign": "center",
-        "font-family": "'Helvetica','Arial',sans-serif", "font-size": "11px",
+        "font-family": "Helvetica, Arial, sans-serif", "font-size": "11px",
         color: "#000000",
         width: "label", height: "label", padding: "8px",
         "text-wrap": "wrap", "text-max-width": "180px"
@@ -6909,7 +8216,7 @@ var ontoink = (function () {
         // Straight lines match Graffoo diagrams; bezier curves don't
         "curve-style": "straight",
         label: "data(label)",
-        "font-size": "10px", "font-family": "'Helvetica','Arial',sans-serif",
+        "font-size": "10px", "font-family": "Helvetica, Arial, sans-serif",
         "font-style": "italic",
         "target-arrow-shape": "triangle",
         "target-arrow-fill": "filled",
@@ -6981,7 +8288,7 @@ var ontoink = (function () {
       { selector: "node", style: {
         label: "data(label)",
         "text-valign": "center", "text-halign": "center",
-        "font-family": "'Helvetica','Arial',sans-serif", "font-size": "11px",
+        "font-family": "Helvetica, Arial, sans-serif", "font-size": "11px",
         "font-weight": "500",
         color: "#000000",
         "text-wrap": "wrap", "text-max-width": "120px"
@@ -7018,7 +8325,7 @@ var ontoink = (function () {
       { selector: "edge", style: {
         "curve-style": "straight",   // VOWL uses straight lines with midpoint labels
         label: "data(label)",
-        "font-size": "10px", "font-family": "'Helvetica','Arial',sans-serif",
+        "font-size": "10px", "font-family": "Helvetica, Arial, sans-serif",
         "font-weight": "500",
         "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
         // VOWL "chip" label: colored rectangle background on the edge midpoint
@@ -7090,9 +8397,24 @@ var ontoink = (function () {
         "text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7",
         "text-background-color":"#fff","text-background-opacity":0.9,
         "text-background-padding":"2px",
-        "font-family":"'Inter','Segoe UI',system-ui,sans-serif","opacity":0.75 }},
+        "font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":0.75 }},
       { selector: "node[?inferred]", style: {
         "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }}
+    ];
+  }
+
+  // v0.7.5 — Selection halo + pinned-node badge. `cy.style()` REPLACES the
+  // whole stylesheet, so — exactly like the inferred-overlay rules above —
+  // these have to be re-appended to every preset or switching to Chowlk
+  // silently makes multi-selection invisible and pins unreadable.
+  function _selectionOverlayRules() {
+    return [
+      { selector: "node:selected", style: {
+        "border-width": 4, "border-color": "#0891b2",
+        "overlay-color": "#0891b2", "overlay-opacity": 0.18, "overlay-padding": 6 }},
+      { selector: "edge:selected", style: {
+        "overlay-color": "#0891b2", "overlay-opacity": 0.18, "overlay-padding": 4 }},
+      { selector: "node[?oiLocked]", style: { "border-style": "double", "border-width": 4 }}
     ];
   }
 
@@ -7136,7 +8458,10 @@ var ontoink = (function () {
     // "Show inferences on graph" — inferred edges became indistinguishable
     // from asserted ones. Append the overlay rules to every preset (and to
     // any preset added later) rather than duplicating them three times.
-    stylesheet = (stylesheet || []).concat(_inferredOverlayRules());
+    stylesheet = (stylesheet || []).concat(_inferredOverlayRules()).concat(_selectionOverlayRules());
+    // v0.7.5 — presets hard-code their own font/padding values; patch them
+    // so a user's Size & Typography settings survive a preset switch.
+    stylesheet = _typoPatch(stylesheet);
     try {
       cy.style(stylesheet);
       console.info("[ontoink] applied style preset '" + presetName + "' (" + stylesheet.length + " selectors)");
@@ -7165,7 +8490,7 @@ var ontoink = (function () {
           "label":"data(label)","background-color":"data(color)",
           "text-valign":"center","text-halign":"center",
           "width":"label","height":"label","padding":"12px",
-          "font-size":"12px","font-family":"'Inter','Segoe UI',system-ui,sans-serif",
+          "font-size":"12px","font-family":"Inter, Segoe UI, system-ui, sans-serif",
           "text-wrap":"wrap","text-max-width":"160px",
           "border-width":1,"border-color":"#94a3b8","color":"#111827"
         }},
@@ -7179,7 +8504,7 @@ var ontoink = (function () {
           "line-color":"#64748b","target-arrow-color":"#64748b",
           "width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,
           "color":"#334155","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px",
-          "font-family":"'Inter','Segoe UI',system-ui,sans-serif"
+          "font-family":"Inter, Segoe UI, system-ui, sans-serif"
         }},
         { selector: "edge[edgeType='subclass']", style: { "line-color":"#374151","target-arrow-color":"#374151","target-arrow-fill":"hollow","target-arrow-shape":"triangle","width":2 }},
         { selector: "edge[edgeType='rdf-type']", style: { "line-color":"#9ca3af","target-arrow-color":"#9ca3af","line-style":"dashed" }},
@@ -7215,7 +8540,7 @@ var ontoink = (function () {
       var cy = cytoscape({
         container: canvas,
         elements: { nodes: [], edges: [] },
-        style: _leStyle(),
+        style: _typoPatch(_leStyle()),
         layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 },
         wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
         hideEdgesOnViewport: true, hideLabelsOnViewport: true, textureOnViewport: true, pixelRatio: 1
@@ -7297,6 +8622,9 @@ var ontoink = (function () {
         _wireLivePopup(popup, d);
       });
       cy.on("tap", function(e) { if (e.target === cy) { try { removePopup(graphContainer); } catch (e2) {} } });
+      // v0.7.5 — the live DSL editor is the third render path; without this
+      // the whole selection/context-menu/typography layer was invisible here.
+      try { wireSelectionUX("le-graph", cy, graphContainer, canvas); } catch (e3) {}
 
       function refresh() {
         try { _refresh(containerId); } catch (e) {

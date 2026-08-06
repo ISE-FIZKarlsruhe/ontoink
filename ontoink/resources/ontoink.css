@@ -245,6 +245,95 @@
 }
 .ov-shape-select:focus { outline: 1px solid var(--ov-accent); }
 
+/* ── Size & Typography controls (Edit Layout) ──────────────────── */
+
+.ov-color-panel { min-width: 300px; }
+.ov-typo-num {
+  width: 46px; font-size: 11px; font-family: var(--ov-font); color: #374151;
+  border: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; background: #fff;
+}
+.ov-typo-num.ov-typo-wide { width: 60px; }
+.ov-typo-num:focus { outline: 1px solid var(--ov-accent); }
+.ov-typo-num::placeholder { color: #cbd5e1; }
+.ov-typo-lbl { min-width: 74px; font-size: 11px; color: #6b7280; }
+.ov-typo-unit { font-size: 10px; color: #9ca3af; }
+.ov-typo-val { font-size: 11px; color: #374151; min-width: 34px; text-align: right; }
+.ov-typo-range { flex: 1; accent-color: var(--ov-accent); min-width: 90px; }
+.ov-typo-font { max-width: 150px; }
+.ov-typo-check { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; cursor: pointer; }
+.ov-typo-legend { font-size: 9px; color: #b6bcc7; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 0; }
+/* Widths mirror the controls in the rows below (swatch 28 · shape select 100 ·
+   two number boxes 46) so the captions sit over their own column. */
+.ov-typo-legend span { flex: 0 0 auto; overflow: hidden; white-space: nowrap; }
+.ov-typo-legend .ov-typo-lg-c { width: 28px; }
+.ov-typo-legend .ov-typo-lg-s { width: 100px; }
+.ov-typo-legend .ov-typo-lg-n { width: 46px; }
+.ov-typo-reset { width: 100%; text-align: center; }
+
+/* ── Right-click context menu (multi-selection) ────────────────── */
+
+.ov-ctxmenu {
+  position: absolute; z-index: 1200; min-width: 236px; max-width: 280px;
+  background: #fff; border: 1px solid var(--ov-border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08);
+  padding: 6px; font-size: 12.5px; color: #1f2937; font-family: var(--ov-font);
+  animation: ov-popup-in .12s ease-out; user-select: none;
+  max-height: 78%; overflow-y: auto;
+}
+.ov-ctx-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 4px 8px 6px; font-weight: 600; color: #0e7490; border-bottom: 1px solid #f1f5f9;
+}
+.ov-ctx-hint { font-size: 10px; font-weight: 400; color: #9ca3af; }
+.ov-ctx-title {
+  padding: 7px 8px 3px; font-size: 9.5px; font-weight: 700; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .6px;
+}
+.ov-ctx-sep { height: 1px; background: #f1f5f9; margin: 5px 4px; }
+.ov-ctx-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 0 4px 2px; }
+.ov-ctx-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  height: 30px; border: 1px solid transparent; border-radius: 6px;
+  background: none; color: #475569; cursor: pointer; padding: 0;
+  transition: background .1s, color .1s, border-color .1s;
+}
+.ov-ctx-icon-btn:hover { background: #ecfeff; color: var(--ov-accent); border-color: #a5f3fc; }
+.ov-ctx-icon-btn:active { background: #cffafe; }
+.ov-ctx-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 6px 8px; border: none; border-radius: 6px; background: none;
+  color: #334155; font-size: 12.5px; font-family: var(--ov-font);
+  text-align: left; cursor: pointer; line-height: 1.3;
+}
+.ov-ctx-item:hover { background: #f1f5f9; color: #0f172a; }
+.ov-ctx-item .ov-ctx-ico { color: #64748b; flex: 0 0 16px; }
+.ov-ctx-item:hover .ov-ctx-ico { color: var(--ov-accent); }
+.ov-ctx-ico { display: block; }
+/* Disabled verbs stay visible (so the menu shape is stable) but explain
+   themselves through their title rather than disappearing. */
+.ov-ctx-item.ov-ctx-disabled { color: #cbd5e1; cursor: default; }
+.ov-ctx-item.ov-ctx-disabled:hover { background: none; color: #cbd5e1; }
+.ov-ctx-item.ov-ctx-disabled .ov-ctx-ico { color: #dde3ea; }
+.ov-ctx-item:focus-visible,
+.ov-ctx-icon-btn:focus-visible { outline: 2px solid var(--ov-accent); outline-offset: -2px; }
+.ov-ctx-colorrow { cursor: default; }
+.ov-ctx-colorrow:hover { background: none; }
+.ov-ctx-color {
+  margin-left: auto; width: 26px; height: 20px; padding: 0; cursor: pointer;
+  border: 1px solid #d1d5db; border-radius: 4px; background: none;
+}
+.ov-ctx-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.ov-ctx-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+.ov-ctx-toast {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 1300; background: rgba(15,23,42,.92); color: #f8fafc;
+  padding: 6px 14px; border-radius: 999px; font-size: 12px; font-family: var(--ov-font);
+  pointer-events: none; animation: ov-popup-in .15s ease-out; white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ov-ctxmenu, .ov-ctx-toast { animation: none; }
+}
+
 /* ── Editor Panel ──────────────────────────────────────────────── */
 
 .ov-editor-panel { border-top: 2px solid var(--ov-accent); background: #f9fafb; }
