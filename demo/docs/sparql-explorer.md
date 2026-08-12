@@ -887,7 +887,7 @@ https://ise-fizkarlsruhe.github.io/ontoink/sparql-explorer/?endpoint=https://nfd
 
 ## How it handles large endpoints
 
-For knowledge graphs with millions of triples (DBpedia, Wikidata), ontoink uses **adaptive discovery**:
+For knowledge graphs with millions of triples (DBpedia, Wikidata), OntoInk uses **adaptive discovery**:
 
 1. **Fast probe** — checks endpoint responds (1 triple, 10s timeout)
 2. **Class discovery with counts** — tries `GROUP BY` with 15s timeout

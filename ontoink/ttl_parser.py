@@ -1,5 +1,6 @@
 """Parse TTL files and produce Cytoscape.js-compatible JSON with formal notation metadata."""
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -127,9 +128,24 @@ def resolve_predicate_label(pred, g: Graph) -> str:
     return local_name(str(pred))
 
 
+def _literal_id(*parts) -> str:
+    """Stable element id for a literal node.
+
+    Python's ``hash()`` of a str is salted per process (PYTHONHASHSEED), so the
+    previous ``abs(hash(...)) % 999999`` scheme produced a *different* id for the
+    same literal on every build. That breaks anything comparing element ids
+    across parses — the git diff overlay, position caches keyed by id, and
+    reproducible builds generally — and the modulo invited collisions on large
+    graphs. blake2b of the joined parts is stable across processes and machines,
+    and 8 bytes make collisions negligible at ontology scale.
+    """
+    payload = "\x1f".join(str(p) for p in parts).encode("utf-8")
+    return "lit_" + hashlib.blake2b(payload, digest_size=8).hexdigest()
+
+
 def _node_id(node) -> str:
     if isinstance(node, Literal):
-        return f"lit_{abs(hash(str(node))) % 999999}"
+        return _literal_id(str(node))
     if isinstance(node, BNode):
         return f"bn_{str(node)}"
     return str(node)
@@ -393,7 +409,7 @@ def _extract_boolean_class_members(g: Graph) -> Tuple[List[dict], Set[BNode]]:
 
 
 # ---------------------------------------------------------------------------
-# Predicate policy — v0.7.0 semantic-tile support
+# Predicate policy — semantic-tile support
 # ---------------------------------------------------------------------------
 
 # Built-in CURIE map covering the common prefixes referenced by fence-level
@@ -862,7 +878,7 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
                 })
 
         elif isinstance(o, Literal):
-            lit_id = f"lit_{abs(hash((s_id, str(p), str(o)))) % 999999}"
+            lit_id = _literal_id(s_id, str(p), str(o))
             if lit_id not in nodes:
                 nodes[lit_id] = {
                     "data": {
@@ -1036,7 +1052,7 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
                 }
         elif filler_label is not None:
             # owl:hasValue with a literal target — represent as a Literal node.
-            lit_id = f"lit_{abs(hash((src_id, r['predicate_iri'], filler_label))) % 999999}"
+            lit_id = _literal_id(src_id, r["predicate_iri"], filler_label)
             if lit_id not in nodes:
                 nodes[lit_id] = {
                     "data": {
@@ -1122,13 +1138,11 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
                 }
                 shacl_data.append(constraint)
 
-                # Annotate matching edges.
-                #
-                # v0.7.4 — an edge only carries this shape's constraint when
-                # its SUBJECT is in the shape's target scope. Matching on the
-                # property IRI alone painted the cardinality badge on every
-                # edge using that predicate, including subjects the shape
-                # never targets (see _shacl_target_nodes).
+                # Annotate matching edges. An edge only carries this shape's
+                # constraint when its SUBJECT is in the shape's target scope
+                # (see _shacl_target_nodes) — matching on the property IRI
+                # alone would paint the cardinality badge on every edge using
+                # that predicate, including subjects the shape never targets.
                 cardinality = _format_cardinality(min_count, max_count)
                 path_str = str(path) if path else None
                 target_nodes = _shacl_target_nodes(g, target) if target is not None else None
@@ -1183,6 +1197,20 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
     consistency = _check_consistency(g)
     smells = _detect_smells(g, nodes, edges, classes, shacl_data, namespaces, shape_graph)
 
+    # Stamp deprecation onto the elements themselves so the stylesheet can dim
+    # obsolete terms. Done as one pass over the finished node map rather than
+    # at each of the several node-creation sites, which would have to stay in
+    # sync forever.
+    deprecated = _deprecated_terms(g)
+    if deprecated:
+        replacements = _extract_replacements(g)
+        for node in nodes.values():
+            iri = node["data"].get("iri")
+            if iri and iri in deprecated:
+                node["data"]["deprecated"] = True
+                if iri in replacements:
+                    node["data"]["replacedBy"] = replacements[iri]
+
     result = {
         "nodes": list(nodes.values()),
         "edges": edges,
@@ -1198,6 +1226,7 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
         "consistency": consistency,
         "smells": smells,
         "node_badges": node_badges,
+        "ontologyMetadata": _extract_ontology_metadata(g),
     }
 
     # Defensive fold pass: any folded literal that slipped through
@@ -1226,14 +1255,6 @@ def _shacl_target_nodes(g: Graph, target) -> Set[str]:
     ``rdf:type`` C **or** ``rdf:type`` D for some D with
     ``rdfs:subClassOf*`` C — so target membership must descend the subclass
     hierarchy, not just match direct types.
-
-    v0.7.4: previously the constraint-edge annotation below matched on the
-    property IRI alone, which drew the shape's cardinality badge on every
-    edge using that predicate regardless of whether its subject was in the
-    shape's target scope. In the reasoning-demo §9 figure that painted
-    ``ex:rex rdfs:label "Rex"`` as a ``[1..*]`` constraint edge even though
-    ``ex:rex a ex:Dog`` and ``ex:PersonShape sh:targetClass ex:Person`` —
-    the diagram asserted a constraint that does not apply to that node.
     """
     if target is None:
         return set()
@@ -1273,7 +1294,9 @@ def _used_namespaces(nodes: Dict, edges: List, namespaces: Dict[str, str]) -> Di
     return active
 
 
-def _run_reasoning(g: Graph, namespaces: Dict[str, str]) -> List[dict]:
+def _run_reasoning(
+    g: Graph, namespaces: Dict[str, str], reasoner: Optional[str] = None
+) -> List[dict]:
     """Run OWL reasoning and return newly inferred triples.
 
     Tries owlready2 (which bundles HermiT for full OWL DL reasoning) first,
@@ -1281,16 +1304,25 @@ def _run_reasoning(g: Graph, namespaces: Dict[str, str]) -> List[dict]:
 
     Each triple is returned as {s, p, o, sLabel, pLabel, oLabel} with
     human-readable labels resolved via the namespace prefixes.
+
+    Parameters
+    ----------
+    reasoner : str | None
+        Explicit backend for this call, overriding ``ONTOINK_REASONER``. Pass
+        this instead of mutating the environment: ``os.environ`` is process
+        -global, so a concurrent server request selecting a different backend
+        would otherwise race with this one (uvicorn serves requests
+        concurrently). ``None`` keeps the env-var behaviour for build-time use.
     """
     import os
     original_triples = set((str(s), str(p), str(o)) for s, p, o in g)
 
-    # Reasoner selection via env var:
+    # Reasoner selection — explicit argument first, then env var:
     #   auto (default) | owlready2 | konclude | konclude-wasm | owlrl | none
     #
     #   konclude       → native Konclude C++ binary (https://github.com/konclude/Konclude)
     #   konclude-wasm  → rdf-reasoner-konclude (WASM port for browser/Node.js)
-    selected = (os.environ.get("ONTOINK_REASONER") or "auto").lower().strip()
+    selected = (reasoner or os.environ.get("ONTOINK_REASONER") or "auto").lower().strip()
     if selected == "none":
         return []
 
@@ -1697,6 +1729,133 @@ Anti-pattern catalog based on:
 - Rector et al. (2004) "OWL Pizzas: common patterns for OWL ontologies"
 - Gangemi et al. (2006) "Ontology Design Patterns"
 """
+
+# Predicates that name a deprecated term's successor. IAO_0100001 ("term
+# replaced by") is the OBO convention and therefore what BFO/IAO/RO-derived
+# ontologies use; dcterms:isReplacedBy is the Dublin Core equivalent.
+_REPLACED_BY_PREDS = (
+    URIRef("http://purl.obolibrary.org/obo/IAO_0100001"),
+    URIRef("http://purl.org/dc/terms/isReplacedBy"),
+)
+
+_DEPRECATED_PRED = URIRef("http://purl.obolibrary.org/obo/IAO_0000231")  # obsolescence reason
+
+
+def _extract_replacements(g: Graph) -> Dict[str, str]:
+    """Map deprecated term IRI → the IRI its ontology says replaces it."""
+    out: Dict[str, str] = {}
+    for pred in _REPLACED_BY_PREDS:
+        for s, _, o in g.triples((None, pred, None)):
+            if isinstance(s, URIRef) and str(o):
+                out.setdefault(str(s), str(o))
+    return out
+
+
+def _deprecated_terms(g: Graph) -> Set[str]:
+    """IRIs flagged ``owl:deprecated true``."""
+    return {
+        str(s) for s, _, o in g.triples((None, OWL.deprecated, None))
+        if str(o).lower() in ("true", "1")
+    }
+
+
+# Header metadata for the citation panel. Order matters: the first predicate
+# that yields a value wins, so the more specific vocabulary comes first.
+_METADATA_FIELDS = {
+    "title": ("http://purl.org/dc/terms/title", "http://purl.org/dc/elements/1.1/title",
+              "http://www.w3.org/2000/01/rdf-schema#label"),
+    "description": ("http://purl.org/dc/terms/description",
+                    "http://purl.org/dc/elements/1.1/description",
+                    "http://www.w3.org/2000/01/rdf-schema#comment"),
+    "license": ("http://purl.org/dc/terms/license", "http://schema.org/license",
+                "http://creativecommons.org/ns#license"),
+    "publisher": ("http://purl.org/dc/terms/publisher",
+                  "http://purl.org/dc/elements/1.1/publisher"),
+    "issued": ("http://purl.org/dc/terms/issued", "http://purl.org/dc/terms/created",
+               "http://purl.org/dc/terms/date"),
+    "modified": ("http://purl.org/dc/terms/modified",),
+    "citation": ("http://purl.org/dc/terms/bibliographicCitation",
+                 "http://purl.org/spar/cito/isDocumentedBy"),
+}
+
+_MULTI_FIELDS = {
+    "creators": ("http://purl.org/dc/terms/creator",
+                 "http://purl.org/dc/elements/1.1/creator",
+                 "http://xmlns.com/foaf/0.1/maker"),
+    "contributors": ("http://purl.org/dc/terms/contributor",
+                     "http://purl.org/dc/elements/1.1/contributor"),
+}
+
+
+def _extract_ontology_metadata(g: Graph) -> dict:
+    """Read the owl:Ontology header into the fields a citation needs.
+
+    Returns ``{}`` when the graph declares no ontology — most TTL fragments in
+    documentation don't, and an empty dict is what tells the UI to hide the
+    panel rather than render an empty one.
+    """
+    subject = next(g.subjects(RDF.type, OWL.Ontology), None)
+    if subject is None:
+        return {}
+
+    meta = {"iri": str(subject)}
+
+    for field, preds in _METADATA_FIELDS.items():
+        for pred in preds:
+            value = g.value(subject, URIRef(pred))
+            if value is not None:
+                meta[field] = str(value)
+                break
+
+    for field, preds in _MULTI_FIELDS.items():
+        values = []
+        for pred in preds:
+            for obj in g.objects(subject, URIRef(pred)):
+                text = str(obj)
+                # A creator can be a bare literal name or a node with a name.
+                if isinstance(obj, URIRef):
+                    label = g.value(obj, RDFS.label) or g.value(
+                        obj, URIRef("http://xmlns.com/foaf/0.1/name")
+                    )
+                    if label:
+                        text = str(label)
+                if text and text not in values:
+                    values.append(text)
+        if values:
+            meta[field] = values
+
+    version_iri = g.value(subject, OWL.versionIRI)
+    if version_iri:
+        meta["versionIri"] = str(version_iri)
+    version_info = g.value(subject, OWL.versionInfo)
+    if version_info:
+        meta["version"] = str(version_info)
+
+    imports = sorted(str(o) for o in g.objects(subject, OWL.imports))
+    if imports:
+        meta["imports"] = imports
+
+    prior = sorted(str(o) for o in g.objects(subject, OWL.priorVersion))
+    if prior:
+        meta["priorVersion"] = prior
+
+    return meta
+
+
+def _shape_scaffold(g: Graph, class_iri: str) -> str:
+    """Generate a copy-pasteable ``sh:NodeShape`` for one class.
+
+    Best-effort: the smells panel is useful with or without a scaffold, so any
+    failure here (or an old install without ontoink.recommend) yields an empty
+    string and the UI simply omits the copy button.
+    """
+    try:
+        from .recommend import shape_for_class
+
+        return shape_for_class(g, class_iri)
+    except Exception:
+        return ""
+
 
 SMELL_CATALOG = {
     "lazy-class": {
@@ -2514,11 +2673,20 @@ def _detect_smells(
     uncovered = [c for c in classes if c in instantiated and c not in covered_classes
                  and not c.startswith("http://www.w3.org/")]
     if uncovered:
+        # Each finding carries a ready-to-paste sh:NodeShape scaffold derived
+        # from the class's own axioms and instance data — a real starting
+        # point, not just a name and a pointer to another tool.
+        entities = []
+        for c in uncovered[:10]:
+            entities.append({"iri": c, "label": label(c), "shape": _shape_scaffold(g, c)})
         findings.append({
             **SMELL_CATALOG["no-shacl-coverage"],
             "id": "no-shacl-coverage",
-            "entities": [{"iri": c, "label": label(c)} for c in uncovered[:10]],
-            "suggestion": "Create SHACL NodeShapes to validate instances. Use the SHACL Editor.",
+            "entities": entities,
+            "suggestion": (
+                "Copy the generated NodeShape skeleton for each class into your "
+                "shapes file, then tighten it by hand."
+            ),
         })
 
     # 9. Label Language Gap
@@ -2648,18 +2816,34 @@ def _detect_smells(
 
     # 16. Deprecated Entity Used
     deprecated = set(str(s2) for s2, _, o2 in g.triples((None, OWL.deprecated, None)) if str(o2).lower() in ("true", "1"))
+    replacements = _extract_replacements(g)
     used_deprecated = []
     for s2, p2, o2 in g:
         if str(s2) in deprecated or (isinstance(o2, URIRef) and str(o2) in deprecated):
             target = str(s2) if str(s2) in deprecated else str(o2)
             if target not in [e["iri"] for e in used_deprecated]:
-                used_deprecated.append({"iri": target, "label": label(target)})
+                entry = {"iri": target, "label": label(target)}
+                # Name the declared successor rather than telling the reader
+                # to go find it. Ontologies state it via IAO:0100001 ("term
+                # replaced by") or dcterms:isReplacedBy; both are read here.
+                if target in replacements:
+                    entry["replacedBy"] = replacements[target]
+                    entry["replacedByLabel"] = label(replacements[target])
+                used_deprecated.append(entry)
     if used_deprecated:
+        named = [e for e in used_deprecated if e.get("replacedBy")]
+        suggestion = "Replace with the non-deprecated equivalent."
+        if named:
+            example = named[0]
+            suggestion = (
+                f"Replace with the declared successor — e.g. {example['label']} → "
+                f"{example['replacedByLabel']}."
+            )
         findings.append({
             **SMELL_CATALOG["deprecated-entity"],
             "id": "deprecated-entity",
             "entities": used_deprecated[:10],
-            "suggestion": "Replace with the non-deprecated equivalent.",
+            "suggestion": suggestion,
         })
 
     # 17. Redundant SubClassOf (A < B < C and A < C declared)

@@ -9,7 +9,11 @@ pip install -e ".[dev]"
 pytest -v
 ```
 
-41 tests should pass. Coverage spans the TTL parser, label resolution, OntoSniff anti-patterns, SHACL extraction, and reasoning fallbacks.
+All tests should pass (a handful skip when an optional backend is absent). Coverage spans the TTL parser, label resolution, OntoSniff anti-patterns, SHACL extraction and reasoning fallbacks, plus shape recommendation and drift (`test_recommend.py`), competency questions (`test_cq.py`), the build report and badges (`test_report.py`), and the v0.7.7 correctness fixes (`test_hygiene.py`).
+
+Rather than pinning a count that goes stale on every release, check the summary line — a *failure* is the signal, not a number.
+
+One trap worth knowing when adding tests here: several code paths read `ONTOINK_REASONER` from the environment. Always set it with pytest's `monkeypatch.setenv`, never `os.environ[...] = ...` — a bare assignment leaks into every test that runs afterwards and silently disables their reasoning, which shows up as an unrelated test failing much later in the run.
 
 ## 2. JavaScript syntax check
 
@@ -49,9 +53,7 @@ A working sample SHACL ontology pair is in [`demo/docs/examples/`](demo/docs/exa
 
 ## 4a. Big-ontology mode (v0.7.0)
 
-The v0.7.0 Semantic-Tile bundle is opt-in — a fence with no YAML config
-still renders the exact same graph 0.6.1 rendered — so first confirm the
-default path is untouched:
+The v0.7.0 Semantic-Tile bundle is opt-in — a fence with no YAML config still renders the exact same graph 0.6.1 rendered — so first confirm the default path is untouched:
 
 ```bash
 # Regression: no policy, no clustering, no LOD toolbar changes
@@ -60,8 +62,7 @@ python -c "from ontoink.ttl_parser import parse_ttl_to_cytoscape; \
     print('nodes=', len(r['nodes']), 'edges=', len(r['edges']))"
 ```
 
-The output must match the 0.6.1 snapshot. Then exercise the new
-layers.
+The output must match the 0.6.1 snapshot. Then exercise the new layers.
 
 ### Prerequisites
 
@@ -72,8 +73,7 @@ pip install -e ".[dev,cluster]"    # + [topic] if you want LLM-titled super-node
 
 ### Build the sample ontologies through the pipeline
 
-Fetch a large public ontology (ChEBI or IAO) and run it through the
-parser to confirm the clustering + predicate-policy pipeline handles it.
+Fetch a large public ontology (ChEBI or IAO) and run it through the parser to confirm the clustering + predicate-policy pipeline handles it.
 
 ```bash
 # ChEBI — very large (~2 GB uncompressed). Skip if you're on a slow disk.
@@ -120,58 +120,34 @@ print("Sample title:", clusters[0]["title"] if clusters else "(no communities)")
 PY
 ```
 
-Expected output for IAO: dozens of super-nodes, each 8-40 members, with
-titles like *"Information Content Entities"* / *"Editor Notes and
-Provenance"* (LLM path) or *"MaterialInformationEntity and ContinuantFiat"*
-(synthetic path — deterministic fallback).
+Expected output for IAO: dozens of super-nodes, each 8-40 members, with titles like *"Information Content Entities"* / *"Editor Notes and Provenance"* (LLM path) or *"MaterialInformationEntity and ContinuantFiat"* (synthetic path — deterministic fallback).
 
 ### Manual UI checks (in the playground)
 
 After `mkdocs serve`, open a big diagram and step through:
 
-- **LOD slider (0..6)** — drag left-to-right. Each stop should reveal a
-  new layer:
+- **LOD slider (0..6)** — drag left-to-right. Each stop should reveal a new layer:
   - L0 = super-nodes + top-K central classes only
   - L1 = adds every class
   - L2 = adds object-property edges (default)
   - L3 = adds OWL restriction pills (`∃/∀/=`)
   - L4 = adds individuals
   - L5 = adds data-property edges
-  - L6 = adds SHACL constraints + inferred triples
-  Verify: hiding a node also hides its incident edges (no dangling
-  arrows), and dragging **back** restores the exact same layout — the
-  Attic snapshot must be reversible.
-- **Attic drawer** — click **Attic** in the toolbar. The panel opens on
-  the right, virtualised by type. Pin a hidden node — it re-appears on
-  the canvas regardless of the current LOD level. Close the panel via
-  the × button.
-- **Super-node click** — a hexagon with a `·N` count. Clicking should
-  expand the community into its interior sub-graph (loaded from
-  `data-ontoink-side-store`); a second click re-collapses. Confirm the
-  ordinary node popup does **not** fire.
-- **Super checkbox** — un-tick to render every community's members
-  in-place (skipping the super-node collapse); re-tick to restore.
-- **SPARQL results respect the predicate policy** — open the SPARQL
-  panel, run `SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 100`. The result
-  rows should materialise into the live graph, folded through the same
-  `predicates:` policy the fence configured — hidden predicates stay
-  hidden, folded literals become node badges, not separate literal
-  nodes. A grey pill above the result table should read
-  *"SPARQL results — clustering unavailable for live queries"*.
+  - L6 = adds SHACL constraints + inferred triples Verify: hiding a node also hides its incident edges (no dangling arrows), and dragging **back** restores the exact same layout — the Attic snapshot must be reversible.
+- **Attic drawer** — click **Attic** in the toolbar. The panel opens on the right, virtualised by type. Pin a hidden node — it re-appears on the canvas regardless of the current LOD level. Close the panel via the × button.
+- **Super-node click** — a hexagon with a `·N` count. Clicking should expand the community into its interior sub-graph (loaded from `data-ontoink-side-store`); a second click re-collapses. Confirm the ordinary node popup does **not** fire.
+- **Super checkbox** — un-tick to render every community's members in-place (skipping the super-node collapse); re-tick to restore.
+- **SPARQL results respect the predicate policy** — open the SPARQL panel, run `SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 100`. The result rows should materialise into the live graph, folded through the same `predicates:` policy the fence configured — hidden predicates stay hidden, folded literals become node badges, not separate literal nodes. A grey pill above the result table should read *"SPARQL results — clustering unavailable for live queries"*.
 
 ### Regression: fences with no YAML config
 
 Open an existing (pre-0.7.0) example page and re-verify:
 
-- The toolbar renders the LOD slider group but the default value (L2)
-  produces the same set of visible elements the page rendered in 0.6.1.
+- The toolbar renders the LOD slider group but the default value (L2) produces the same set of visible elements the page rendered in 0.6.1.
 - No super-nodes are present (clustering did not run).
-- The Attic is empty — everything is on the canvas — until the user
-  drags the slider left.
+- The Attic is empty — everything is on the canvas — until the user drags the slider left.
 
-If any of those regressions fire, the culprit is almost always a
-non-empty `pol` set leaking through when the config is absent. Reproduce
-with:
+If any of those regressions fire, the culprit is almost always a non-empty `pol` set leaking through when the config is absent. Reproduce with:
 
 ```bash
 python -c "from ontoink.ttl_parser import apply_predicate_policy; \
@@ -423,5 +399,5 @@ Before tagging a release:
 5. ✅ `docker build .` succeeds
 6. ✅ All three `ONTOINK_MODE` values (`serve`, `build`, `api`) start without error
 7. ✅ At least one `ONTOINK_REASONER` value returns inferences via `/reason`
-8. ✅ Version bumped in `pyproject.toml`, `ontoink.js` header, `CHANGELOG.md`, `demo/docs/changelog.md`
+8. ✅ Version bumped in **`ontoink/__init__.py`** — and nowhere else in code. `pyproject.toml` reads it dynamically, `api.py` imports it, and the built page exposes it as `window.ONTOINK_VERSION`. (Before 0.7.7 this step listed four places to edit by hand and they drifted: the API announced `0.7.2` and the `ontoink.js` header claimed `v0.7.4` while the package shipped 0.7.6.) Then update the prose copies: `CHANGELOG.md`, `demo/docs/changelog.md`, `CITATION.cff` (`version:` + `date-released:`) and `demo/docs/cite.md`.
 9. ✅ Tag with `git tag vX.Y.Z && git push --tags`

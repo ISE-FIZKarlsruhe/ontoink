@@ -2,7 +2,7 @@
 
 ## Installation
 
-Install ontoink from [PyPI](https://pypi.org/project/ontoink/):
+Install OntoInk from [PyPI](https://pypi.org/project/ontoink/):
 
 ```bash
 pip install ontoink
@@ -57,7 +57,7 @@ docs/
   index.md
 ```
 
-### 3. Write an ontoink block
+### 3. Write an OntoInk block
 
 In any markdown page, use a fenced code block with the `ontoink` language:
 
@@ -140,7 +140,7 @@ In your repository, open **Settings → Pages → Build and deployment** and set
 
 ### 3. Set `site_url`
 
-GitHub Pages serves project sites from a sub-path (`/<repo>/`). Set `site_url` in `mkdocs.yml` so internal links and ontoink's assets resolve correctly:
+GitHub Pages serves project sites from a sub-path (`/<repo>/`). Set `site_url` in `mkdocs.yml` so internal links and OntoInk's assets resolve correctly:
 
 ```yaml
 site_url: https://<your-username>.github.io/<your-repo>/
@@ -158,15 +158,13 @@ The **Deploy site** workflow runs under the repository's **Actions** tab. When i
 
 ### 5. Reasoning — nothing to configure
 
-**The workflow above already gives you working OWL reasoning.** No extra
-dependencies, no Java, no server, no headers. Just rebuild and the
-**Reasoning** button works.
+**The workflow above already gives you working OWL reasoning.** No extra dependencies, no Java, no server, no headers. Just rebuild and the **Reasoning** button works.
 
 Two layers do the work, both installed automatically by the plugin:
 
 | Layer | When it runs | What you get |
 |:------|:-------------|:-------------|
-| **Build-time OWL-RL** | during `mkdocs build` | Inferences are computed once and baked into the page. The Reasoning panel shows them instantly, with no client-side work. Uses `owlrl`, which arrives with ontoink's own `pyshacl` dependency. |
+| **Build-time OWL-RL** | during `mkdocs build` | Inferences are computed once and baked into the page. The Reasoning panel shows them instantly, with no client-side work. Uses `owlrl`, which arrives with OntoInk's own `pyshacl` dependency. |
 | **Browser reasoners** | when a reader clicks **Reasoning** | **OWL-RL (JS)** — a built-in materialiser that runs in every browser. **Konclude WASM** — an OWL-DL reasoner; the plugin ships its bundle and a COOP/COEP service worker so it works on GitHub Pages, and falls back to the JS engine automatically if the WASM worker can't start. |
 
 !!! tip "Optional: consistency checking with HermiT"
@@ -186,7 +184,7 @@ Two layers do the work, both installed automatically by the plugin:
 
     HermiT is a *classifier*: it is strongest at class subsumption and
     consistency, and typically reports **fewer** instance-level facts than
-    OWL-RL. ontoink tries it first and automatically falls back to OWL-RL,
+    OWL-RL. OntoInk tries it first and automatically falls back to OWL-RL,
     so adding it never costs you inferences.
 
 !!! question "How do I know the reasoner is working?"
@@ -201,7 +199,7 @@ Two layers do the work, both installed automatically by the plugin:
 
 !!! tip "Self-hosting instead"
     The same `mkdocs build` output in `site/` is a plain static site you can
-    serve from any host (Nginx, S3, Netlify, …). ontoink self-hosts all of
+    serve from any host (Nginx, S3, Netlify, …). OntoInk self-hosts all of
     its browser libraries from `site/vendor/`, so the site works offline and
     under a strict `script-src 'self'` policy — no CDN, no extra build tooling.
 
@@ -220,12 +218,105 @@ Each `ontoink` code block accepts these YAML options:
 | `legend`     | `true`   | Show the legend overlay                        |
 | `namespaces` | `true`   | Show the namespace prefixes overlay            |
 | `reasoning`  | `true`   | Enable OWL-RL reasoning (show Reasoning button)|
+| `pixel_ratio`| auto     | Force the canvas backing-store ratio (`1` for speed, `2`/`3` for a crisp figure) |
+| `recommend_shapes` | `false` | Generate SHACL shapes for classes with no coverage |
+| `shape_drift` | `off`   | Compare committed shapes against what the data implies |
+| `predicates` | optional | Hide or fold predicates out of the diagram     |
+| `validation_inference` | `none` | pySHACL inference mode for build-time validation |
+
+### Shape recommendation
+
+`recommend_shapes: true` adds a **Shapes** button to the diagram listing a proposed `sh:NodeShape` for every class the shape file does not already cover, with the evidence behind each constraint and a Copy / Add-to-editor button. It runs at build time, so it works on GitHub Pages and any other static host.
+
+```yaml
+recommend_shapes:
+  method: auto          # auto (default) | baseline | astrea
+  min_confidence: 0.8   # drop constraints supported by less evidence
+  only_uncovered: true  # skip classes your shapes file already targets
+  max_shapes: 50
+```
+
+The methods come from the accompanying shape-induction benchmark. `baseline` profiles instance data (Mihindukulasooriya et al. 2018); `astrea` derives constraints from OWL axioms alone, which is what makes suggestions possible for documentation ontologies that ship no instances; `auto` runs both and merges them, recording on each constraint which method proposed it.
+
+You can also induce a shape for one class at a time: right-click a class node → **Induce shape from this class**. The proposed constraints appear as dashed edges whose opacity tracks their confidence, and clicking one accepts it into the Edit & Validate buffer.
+
+### Shape drift (CI gate)
+
+`shape_drift: warn` compares the shapes you committed against what the data supports today and logs a warning for each finding: constraints the data backs that the file omits, committed constraints almost nothing satisfies, and classes with no shape at all. Because the warnings go through the MkDocs logger, `mkdocs build --strict` turns them into a build failure.
+
+### Hiding predicates
+
+Bookkeeping predicates crowd a diagram without saying anything about the model:
+
+```yaml
+predicates:
+  hide_predicates: [dcterms:modified, "prov:*"]   # drop entirely
+  fold_into_badge: [rdfs:label, skos:notation]    # show as a badge on the node
+```
+
+A `prefix:*` wildcard matches the whole namespace.
+
+---
+
+## Competency questions
+
+A second fence runs the questions your ontology exists to answer, at build time:
+
+````markdown
+```ontoink-cq
+source: ontology/mwo.ttl
+reasoning: false              # merge inferred triples before querying
+questions:
+  - question: Every sample has a material.
+    ask: |
+      PREFIX ex: <http://example.org/>
+      ASK { ?s a ex:Sample . FILTER NOT EXISTS { ?s ex:material ?m } }
+    expect: false
+  - question: Which processes are described?
+    query: |
+      PREFIX ex: <http://example.org/>
+      SELECT ?p WHERE { ?p a ex:Process }
+    min_rows: 3
+```
+````
+
+Each question renders as a pass/fail card with its query and results. Use `expect:` for ASK, and `min_rows` / `max_rows` / `expect_rows` for SELECT; with no expectation given, a question passes when it returns at least one row. `reasoning: true` merges inferred triples first, so a question can assert what the ontology *entails* rather than only what it states.
+
+Every card whose results contain IRIs gets a **Show on graph** button, which selects those terms on the nearest diagram. Add `graph: <container-id>` only if you need to target a specific one — container ids are assigned by a build-wide counter, so hard-coding one is fragile and the automatic resolution is usually what you want. See [CI Gates](examples/ci-gates.md) for a working page.
+
+Failures are logged like drift findings, so `--strict` gates them in CI.
+
+---
+
+## Build report and badges
+
+Every build writes two artefacts into the site:
+
+- `ontoink-report.json` — per-diagram SHACL conformance, OntoSniff score, consistency, drift and competency-question results, plus a build-level summary.
+- `badges/*.svg` — self-contained shields-style badges (no request to an external badge service) for `ontosniff`, `shacl`, `consistency` and `shape-drift`.
+
+```markdown
+![OntoSniff](https://your-site.example/badges/ontosniff.svg)
+```
+
+To fail the build on a regression, configure thresholds on the plugin:
+
+```yaml
+plugins:
+  - ontoink:
+      quality_gate:
+        min_score: 75          # lowest acceptable OntoSniff score
+        max_violations: 0      # SHACL violations across all diagrams
+        require_consistent: true
+        max_shape_drift: 0
+      strict_quality: true     # fail the build outright; omit to rely on --strict
+```
 
 ---
 
 ## Visual Notation
 
-ontoink uses a formal visual notation for ontology elements:
+OntoInk uses a formal visual notation for ontology elements:
 
 ### Nodes
 
@@ -267,7 +358,7 @@ Classes are automatically color-coded by their source ontology:
 
 ## Toolbar Reference
 
-Every ontoink diagram comes with a toolbar:
+Every OntoInk diagram comes with a toolbar:
 
 | Button             | Action                                                    |
 |:-------------------|:----------------------------------------------------------|
@@ -279,59 +370,47 @@ Every ontoink diagram comes with a toolbar:
 | **TTL**            | Download the current TTL data                             |
 | **Edit Layout**    | Open the layout panel — change colors, shapes, edge styles|
 | **Reasoning**      | Toggle the reasoning panel — view inferred triples, show them on graph, validate with inferences |
+| **Shapes**         | Suggested SHACL shapes and drift findings. Shown only when the fence sets `recommend_shapes:` or `shape_drift:` |
+| **Cite**           | License, version and generated BibTeX for the ontology. Shown only when the source declares an `owl:Ontology` header |
 | **Edit & Validate**| Open the inline TTL editor and SHACL validation panel     |
+
+**Shapes** and **Cite** are deliberately conditional: a button that opens an empty drawer is worse than no button.
+
+Right-click adds more — on a class node, **Induce shape from this class**; on an inferred edge, **Explain this inference**.
 
 ---
 
 ## How It Works
 
-ontoink works in two phases:
+OntoInk works in two phases:
 
-**Build time (Python):**
-The MkDocs plugin parses your TTL files with [rdflib](https://rdflib.readthedocs.io/), classifies nodes, resolves labels, detects ontology sources for color coding, extracts SHACL constraints, and runs [pySHACL](https://github.com/RDFLib/pySHACL) validation. The result is serialized as JSON and embedded in the HTML.
+**Build time (Python):** The MkDocs plugin parses your TTL files with [rdflib](https://rdflib.readthedocs.io/), classifies nodes, resolves labels, detects ontology sources for color coding, extracts SHACL constraints, and runs [pySHACL](https://github.com/RDFLib/pySHACL) validation. The result is serialized as JSON and embedded in the HTML.
 
-**Browser (JavaScript):**
-[Cytoscape.js](https://js.cytoscape.org/) renders the interactive graph with a [dagre](https://github.com/dagrejs/dagre) layout. [CodeMirror](https://codemirror.net/5/) provides the TTL editor. A lightweight JavaScript SHACL checker enables live validation without server round-trips.
+**Browser (JavaScript):** [Cytoscape.js](https://js.cytoscape.org/) renders the interactive graph with a [dagre](https://github.com/dagrejs/dagre) layout. [CodeMirror](https://codemirror.net/5/) provides the TTL editor. A lightweight JavaScript SHACL checker enables live validation without server round-trips.
 
 ---
 
 ## OWL Reasoning
 
-Reasoning works out of the box with `pip install ontoink` — there is nothing
-to install or configure.
+Reasoning works out of the box with `pip install ontoink` — there is nothing to install or configure.
 
 ### Backends
 
-ontoink reasons in two places, and picks the best backend available:
+OntoInk reasons in two places, and picks the best backend available:
 
-**At build time**, during `mkdocs build`, inferences are computed once and
-baked into the page so readers see them instantly. The chain is
-HermiT → Konclude → [owlrl](https://owl-rl.readthedocs.io/), falling through
-to the next whenever one is unavailable or returns nothing. `owlrl` ships
-with ontoink automatically (it comes in with `pyshacl`), so this layer always
-works.
+**At build time**, during `mkdocs build`, inferences are computed once and baked into the page so readers see them instantly. The chain is HermiT → Konclude → [owlrl](https://owl-rl.readthedocs.io/), falling through to the next whenever one is unavailable or returns nothing. `owlrl` ships with OntoInk automatically (it comes in with `pyshacl`), so this layer always works.
 
-**In the browser**, when a reader clicks **Reasoning**, the dropdown offers
-**OWL-RL (JS)** — a built-in materialiser that runs everywhere with no server
-— and **Konclude WASM**, an OWL-DL reasoner whose bundle and COOP/COEP
-service worker the plugin installs for you. If the WASM worker can't start,
-ontoink falls back to the JS engine automatically. Server backends
-(`ONTOINK_MODE=api`/`all`) appear when a `/reason` endpoint is reachable.
+**In the browser**, when a reader clicks **Reasoning**, the dropdown offers **OWL-RL (JS)** — a built-in materialiser that runs everywhere with no server — and **Konclude WASM**, an OWL-DL reasoner whose bundle and COOP/COEP service worker the plugin installs for you. If the WASM worker can't start, OntoInk falls back to the JS engine automatically. Server backends (`ONTOINK_MODE=api`/`all`) appear when a `/reason` endpoint is reachable.
 
 ### Optional: HermiT for consistency checking
 
-One feature needs extra setup — the consistency badge
-(*"Ontology is consistent"* / *"N inconsistent classes"*), which comes from
-the [HermiT](http://www.hermit-reasoner.com/) DL reasoner via
-[owlready2](https://owlready2.readthedocs.io/). It requires Java:
+One feature needs extra setup — the consistency badge (*"Ontology is consistent"* / *"N inconsistent classes"*), which comes from the [HermiT](http://www.hermit-reasoner.com/) DL reasoner via [owlready2](https://owlready2.readthedocs.io/). It requires Java:
 
 ```bash
 pip install "ontoink[reasoning]"
 ```
 
-HermiT is a classifier — strongest at subsumption and consistency, and
-typically reporting fewer instance-level facts than OWL-RL. ontoink tries it
-first and falls back automatically, so adding it never costs you inferences.
+HermiT is a classifier — strongest at subsumption and consistency, and typically reporting fewer instance-level facts than OWL-RL. OntoInk tries it first and falls back automatically, so adding it never costs you inferences.
 
 ### What Gets Inferred
 
@@ -367,7 +446,7 @@ See the [OWL Reasoning example](examples/reasoning-demo.md) for a complete demo.
 
 ## Next Steps
 
-- Browse the [Examples](examples/foaf-person.md) to see ontoink in action
+- Browse the [Examples](examples/foaf-person.md) to see OntoInk in action
 - Read about [Contributing](contributing.md) if you'd like to help
 - Check the [Changelog](changelog.md) for release history
-- Learn how to [Cite ontoink](cite.md) in your publications
+- Learn how to [Cite OntoInk](cite.md) in your publications

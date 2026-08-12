@@ -54,6 +54,13 @@ Build SHACL shapes visually — no Turtle knowledge needed. Load an existing sha
 <details style="margin-bottom:12px;">
   <summary style="font-size:14px;font-weight:600;cursor:pointer;color:#6366f1;">Shape Recommender — auto-generate shapes from data</summary>
   <div style="padding:10px 0;">
+    <p markdown="span" style="font-size:12px;color:#6b7280;margin:0 0 8px;">
+      Runs the same induction engine as `ontoink.recommend` (Python) and the
+      `recommend_shapes:` fence key — `baseline` profiles instance
+      data (Mihindukulasooriya et al. 2018), `astrea` reads OWL axioms alone, and
+      works even when your file has no instances at all.
+      [See how it works](examples/shape-recommendation.md).
+    </p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
       <label style="padding:5px 12px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:13px;background:#fff;color:#374151;">
         Upload instance data <input type="file" accept=".ttl,.rdf,.owl" style="display:none;" onchange="seRecommendFromFile(this)">
@@ -61,9 +68,14 @@ Build SHACL shapes visually — no Turtle knowledge needed. Load an existing sha
       <span style="color:#9ca3af;font-size:12px;">or</span>
       <input id="se-sparql-endpoint" placeholder="SPARQL endpoint URL" style="flex:1;min-width:200px;padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;color:#374151;background:#fff;">
       <button class="ov-btn" onclick="seRecommendFromEndpoint()">Recommend from Endpoint</button>
+      <select id="se-rec-method" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;color:#374151;background:#fff;" title="auto runs both and merges them; astrea needs no instance data">
+        <option value="auto" selected>Method: auto (axioms + data)</option>
+        <option value="baseline">Method: baseline (data only)</option>
+        <option value="astrea">Method: astrea (axioms only)</option>
+      </select>
     </div>
     <textarea id="se-recommend-ttl" rows="6" placeholder="Or paste instance data TTL here..." style="width:100%;font-family:'JetBrains Mono',monospace;font-size:12px;border:1px solid #d1d5db;border-radius:6px;padding:8px;color:#374151;background:#fff;resize:vertical;"></textarea>
-    <div style="display:flex;gap:8px;margin-top:6px;">
+    <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
       <button class="ov-btn ov-btn-primary" onclick="seRecommendFromTTL()">Analyze &amp; Recommend</button>
       <span id="se-recommend-status" style="font-size:12px;color:#6b7280;"></span>
     </div>
@@ -245,8 +257,8 @@ function seParseAndLoad(ttl) {
   while ((m = pfRe.exec(ttl)) !== null) seState.prefixes[m[1]] = m[2];
   // Parse shapes (basic: find sh:NodeShape, sh:targetClass, sh:property blocks)
   var SH = "http://www.w3.org/ns/shacl#";
-  // Use ontoink's parser if available
-  if (typeof ontoink !== "undefined") {
+  // Use OntoInk's parser if available
+  if (typeof OntoInk !== "undefined") {
     // We'll parse as triples
     // For now, just put TTL in output and let user edit
     document.getElementById("se-ttl-output").value = ttl;
@@ -453,13 +465,54 @@ function seLoadTemplate(name) {
 seRender();
 
 // ── Shape Recommender ──────────────────────────────────────────────
-// Based on: Mihindukulasooriya et al. (2018) "RDF Shape Induction using Knowledge Base Profiling"
-// Algorithm: profile instance data → compute property statistics per class → generate SHACL constraints
+// Calls ontoink.recommendShapes — the same induction engine used by the
+// `recommend_shapes:` fence key and ontoink/recommend/ (Python). This page
+// used to carry its own reimplementation, with its own regex Turtle parser,
+// so the tool a reader actually clicked and the benchmark-backed engine
+// documented in the architecture page could silently disagree about the same
+// file. tests/test_recommend_parity.py runs both engines over identical
+// fixtures and asserts the constraint sets match, so that can't happen again.
+//
+// Known gap versus the old page-local recommender: sh:pattern, sh:minLength/
+// maxLength, sh:minInclusive/maxInclusive and uniqueness detection were never
+// validated against the benchmark and are not reproduced here. What you get
+// instead is a method that is actually measured (baseline: mean F1 0.695
+// across five benchmarks) and one that works with zero instance data
+// (astrea) — most documentation ontologies have none.
+
+var seRecState = { shapes: [], constraintsByClass: {}, current: 0, fullTurtle: "" };
+
+var SE_XSD_CURIE = {
+  "http://www.w3.org/2001/XMLSchema#string": "xsd:string",
+  "http://www.w3.org/2001/XMLSchema#integer": "xsd:integer",
+  "http://www.w3.org/2001/XMLSchema#decimal": "xsd:decimal",
+  "http://www.w3.org/2001/XMLSchema#boolean": "xsd:boolean",
+  "http://www.w3.org/2001/XMLSchema#date": "xsd:date",
+  "http://www.w3.org/2001/XMLSchema#dateTime": "xsd:dateTime",
+  "http://www.w3.org/2001/XMLSchema#anyURI": "xsd:anyURI",
+  "http://www.w3.org/2001/XMLSchema#float": "xsd:float",
+  "http://www.w3.org/2001/XMLSchema#double": "xsd:double"
+};
+
+function seEsc(s) {
+  return s == null ? "" : String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function seRecMethod() {
+  var sel = document.getElementById("se-rec-method");
+  return sel ? sel.value : "auto";
+}
+function seShort(iri) {
+  if (!iri) return "";
+  if (iri.charAt(0) === '"') return iri.replace(/^"|"(\^\^.*)?$/g, "");
+  var i = Math.max(iri.lastIndexOf("#"), iri.lastIndexOf("/"));
+  return i >= 0 ? iri.substring(i + 1) : iri;
+}
 
 function seRecommendFromFile(input) {
   if (!input.files.length) return;
   var reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = function (e) {
     document.getElementById("se-recommend-ttl").value = e.target.result;
     seRecommendFromTTL();
   };
@@ -469,315 +522,205 @@ function seRecommendFromFile(input) {
 function seRecommendFromTTL() {
   var ttl = document.getElementById("se-recommend-ttl").value.trim();
   if (!ttl) { alert("Paste or upload instance data first."); return; }
-  document.getElementById("se-recommend-status").textContent = "Analyzing...";
-
-  // Parse TTL
-  var prefixes = {};
-  ttl.replace(/@prefix\s+(\w*)\s*:\s*<([^>]+)>\s*\./g, function(_, p, u) { prefixes[p] = u; });
-
-  function resolve(t) {
-    t = t.trim();
-    if (t === "a") return "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
-    if (t[0] === "<" && t[t.length-1] === ">") return t.slice(1,-1);
-    var ci = t.indexOf(":"); if (ci >= 0 && prefixes[t.substring(0,ci)]) return prefixes[t.substring(0,ci)] + t.substring(ci+1);
-    return t;
+  var status = document.getElementById("se-recommend-status");
+  status.textContent = "Analyzing...";
+  try {
+    // Recommendations skip classes the shapes you have already built in this
+    // session already target — se-ttl-output is exactly that Turtle.
+    var already = (document.getElementById("se-ttl-output") || {}).value || "";
+    var result = window.ontoink.recommendShapes(ttl, { method: seRecMethod(), shacl: already });
+    seRenderRecommendations(result);
+    status.textContent = result.shapes.length + " shape(s) recommended — " +
+      result.stats.constraintsProposed + " constraint(s) total";
+  } catch (e) {
+    status.textContent = "Error: " + e.message;
   }
-  function shorten(u) { for (var p in prefixes) { if (u.indexOf(prefixes[p]) === 0) return p+":"+u.substring(prefixes[p].length); } return u.split("/").pop().split("#").pop(); }
-  function isLiteral(v) { return v[0] === '"'; }
-  function litType(v) {
-    if (v.indexOf("^^") >= 0) { var dt = v.split("^^").pop(); return resolve(dt); }
-    return "http://www.w3.org/2001/XMLSchema#string";
-  }
-
-  // Parse triples
-  var triples = [];
-  var RT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
-  var clean = ttl.replace(/#[^\n]*/g, "").replace(/@prefix[^.]*\.\s*/g, "").replace(/@base[^.]*\.\s*/g, "");
-  clean.split(/\.\s*(?=\S|$)/).forEach(function(st) {
-    st = st.trim(); if (!st) return;
-    var parts = st.split(/\s+/);
-    if (parts.length >= 3) {
-      var s = resolve(parts[0]), i = 1;
-      while (i < parts.length - 1) {
-        var p = resolve(parts[i]); i++;
-        while (i < parts.length) {
-          var o = parts[i]; i++;
-          if (o === ";") break; if (o === ",") continue;
-          var rO = resolve(o);
-          if (s && p && rO && s !== ";" && p !== ";" && rO !== ";") triples.push({s:s, p:p, o:rO, raw:parts[i-1]});
-          if (i < parts.length && parts[i] === ",") { i++; continue; }
-          if (i < parts.length && parts[i] === ";") { i++; break; }
-        }
-      }
-    }
-  });
-
-  // Profile: for each class, find instances and their properties
-  var classInstances = {}; // class -> [instance IRIs]
-  triples.forEach(function(t) { if (t.p === RT) { (classInstances[t.o] = classInstances[t.o] || []).push(t.s); } });
-
-  var recommendations = [];
-  Object.keys(classInstances).forEach(function(cls) {
-    if (cls.startsWith("http://www.w3.org/")) return;
-    var instances = classInstances[cls];
-    if (instances.length === 0) return;
-
-    // For each property, profile usage across instances
-    // Extended beyond Mihindukulasooriya (2018): tracks values for pattern/range/class inference
-    var propStats = {}; // prop -> {count, maxCount, types, allIRI, values, iriTargetClasses, strLengths, numValues, uniqueVals}
-    instances.forEach(function(inst) {
-      var instProps = {};
-      triples.forEach(function(t) {
-        if (t.s === inst && t.p !== RT && t.p.indexOf("http") === 0) {
-          instProps[t.p] = (instProps[t.p] || 0) + 1;
-          if (!propStats[t.p]) propStats[t.p] = {count:0, maxCount:0, allIRI:true, types:new Set(), values:[], iriTargets:[], strLengths:[], numValues:[], uniqueVals:new Set()};
-          var ps = propStats[t.p];
-          var raw = t.raw || t.o;
-          if (isLiteral(raw)) {
-            ps.allIRI = false;
-            ps.types.add(litType(raw));
-            var val = raw.indexOf('"') === 0 ? raw.substring(1, raw.lastIndexOf('"')) : raw;
-            ps.values.push(val);
-            ps.uniqueVals.add(val);
-            ps.strLengths.push(val.length);
-            var num = parseFloat(val);
-            if (!isNaN(num)) ps.numValues.push(num);
-          } else {
-            // Track target classes for sh:class inference
-            var targetClass = null;
-            triples.forEach(function(t2) { if (t2.s === t.o && t2.p === RT) targetClass = t2.o; });
-            if (targetClass) ps.iriTargets.push(targetClass);
-            ps.uniqueVals.add(t.o);
-          }
-        }
-      });
-      Object.keys(instProps).forEach(function(p) {
-        if (!propStats[p]) propStats[p] = {count:0, maxCount:0, allIRI:true, types:new Set(), values:[], iriTargets:[], strLengths:[], numValues:[], uniqueVals:new Set()};
-        propStats[p].count++;
-        if (instProps[p] > propStats[p].maxCount) propStats[p].maxCount = instProps[p];
-      });
-    });
-
-    // Generate constraints (extended algorithm)
-    var props = [];
-    Object.keys(propStats).forEach(function(p) {
-      var s = propStats[p];
-      var constraint = { path: p, pathLabel: shorten(p), extras: [] };
-      var confidence = s.count / instances.length;
-
-      // 1. Cardinality (Mihindukulasooriya 2018)
-      if (confidence >= 0.9) constraint.minCount = 1;
-      if (s.maxCount <= 1) constraint.maxCount = 1;
-
-      // 2. Datatype (Mihindukulasooriya 2018)
-      if (s.types.size === 1) constraint.datatype = shorten(Array.from(s.types)[0]);
-
-      // 3. NodeKind (Mihindukulasooriya 2018)
-      if (s.allIRI && s.types.size === 0) constraint.nodeKind = "sh:IRI";
-
-      // 4. NEW: sh:class inference — if all IRI values are instances of the same class
-      if (s.iriTargets.length > 0) {
-        var classCounts = {};
-        s.iriTargets.forEach(function(c) { classCounts[c] = (classCounts[c]||0) + 1; });
-        var topClass = Object.keys(classCounts).sort(function(a,b){return classCounts[b]-classCounts[a];})[0];
-        if (classCounts[topClass] >= s.iriTargets.length * 0.8) {
-          constraint.extras.push("sh:class " + shorten(topClass));
-        }
-      }
-
-      // 5. NEW: sh:pattern inference — detect common string patterns
-      if (s.values.length >= 3) {
-        var allEmail = s.values.every(function(v){return /^[^@]+@[^@]+\.[^@]+$/.test(v);});
-        var allUrl = s.values.every(function(v){return /^https?:\/\//.test(v);});
-        var allUpper = s.values.every(function(v){return /^[A-Z]/.test(v);});
-        if (allEmail) constraint.extras.push('sh:pattern "^[^@]+@[^@]+\\\\.[^@]+$"');
-        else if (allUrl) constraint.extras.push('sh:pattern "^https?://"');
-        else if (allUpper) constraint.extras.push('sh:pattern "^[A-Z]"');
-      }
-
-      // 6. NEW: sh:minLength / sh:maxLength for strings
-      if (s.strLengths.length >= 3) {
-        var minLen = Math.min.apply(null, s.strLengths);
-        var maxLen = Math.max.apply(null, s.strLengths);
-        if (minLen > 0) constraint.extras.push("sh:minLength " + minLen);
-        if (maxLen < 500 && maxLen === minLen) constraint.extras.push("sh:maxLength " + maxLen);
-      }
-
-      // 7. NEW: sh:minInclusive / sh:maxInclusive for numbers
-      if (s.numValues.length >= 3) {
-        var minNum = Math.min.apply(null, s.numValues);
-        var maxNum = Math.max.apply(null, s.numValues);
-        if (minNum >= 0) constraint.extras.push("sh:minInclusive " + minNum);
-        constraint.extras.push("sh:maxInclusive " + maxNum);
-      }
-
-      // 8. NEW: uniqueness detection — all values unique suggests identifier
-      if (s.uniqueVals.size === s.count && s.count >= 3) {
-        constraint.extras.push("# unique values — potential identifier");
-      }
-
-      constraint.confidence = Math.round(confidence * 100);
-      constraint.instanceCount = instances.length;
-      constraint.usageCount = s.count;
-      props.push(constraint);
-    });
-
-    if (props.length > 0) {
-      recommendations.push({
-        classIri: cls,
-        classLabel: shorten(cls),
-        instanceCount: instances.length,
-        properties: props.sort(function(a,b) { return b.confidence - a.confidence; })
-      });
-    }
-  });
-
-  // Deduplicate by class IRI
-  var seen = {};
-  recommendations = recommendations.filter(function(r) {
-    if (seen[r.classIri]) return false;
-    seen[r.classIri] = true;
-    return true;
-  });
-
-  seRenderRecommendations(recommendations, prefixes);
-  document.getElementById("se-recommend-status").textContent = recommendations.length + " shape(s) recommended";
-}
-
-var seRecState = { recommendations: [], current: 0, prefixes: {} };
-
-function seRenderRecommendations(recs, prefixes) {
-  seRecState.recommendations = recs;
-  seRecState.current = 0;
-  seRecState.prefixes = prefixes;
-  var el = document.getElementById("se-recommend-results");
-  if (!recs.length) { el.innerHTML = '<div style="color:#9ca3af;padding:8px;">No classes with instances found.</div>'; return; }
-  seRenderCurrentRec();
-}
-
-function seRenderCurrentRec() {
-  var el = document.getElementById("se-recommend-results");
-  var recs = seRecState.recommendations;
-  var idx = seRecState.current;
-  var rec = recs[idx];
-
-  var h = '<div style="display:flex;align-items:center;gap:8px;margin:10px 0;">';
-  h += '<button class="ov-btn" onclick="seRecPrev()" ' + (idx === 0 ? 'disabled style="opacity:0.4;"' : '') + '>&larr; Prev</button>';
-  h += '<span style="font-size:13px;font-weight:600;color:#374151;">Shape ' + (idx+1) + ' / ' + recs.length + ': <span style="color:#6366f1;">' + rec.classLabel + '</span> (' + rec.instanceCount + ' instances)</span>';
-  h += '<button class="ov-btn" onclick="seRecNext()" ' + (idx === recs.length-1 ? 'disabled style="opacity:0.4;"' : '') + '>Next &rarr;</button>';
-  h += '<button class="ov-btn ov-btn-primary" onclick="seRecAccept(' + idx + ')">Accept &amp; Edit</button>';
-  h += '<button class="ov-btn" onclick="seRecDownload(' + idx + ')">Download</button>';
-  h += '</div>';
-
-  h += '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;">';
-  var TH = 'style="padding:8px 10px;background:#1f2937;color:#f9fafb;font-size:11px;"';
-  h += '<thead><tr><th '+TH+' style="text-align:left;padding:8px 10px;background:#1f2937;color:#f9fafb;">Property</th><th '+TH+'>min</th><th '+TH+'>max</th><th '+TH+'>datatype</th><th '+TH+'>nodeKind</th><th '+TH+'>extra</th><th '+TH+'>confidence</th></tr></thead><tbody>';
-  rec.properties.forEach(function(p) {
-    var confColor = p.confidence >= 90 ? "#16a34a" : p.confidence >= 50 ? "#f59e0b" : "#9ca3af";
-    var TD = 'style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151;"';
-    var extras = (p.extras || []).join("; ");
-    h += '<tr><td '+TD+' style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151;font-weight:500;">' + p.pathLabel + '</td>';
-    h += '<td '+TD+' style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151;text-align:center;">' + (p.minCount != null ? p.minCount : '-') + '</td>';
-    h += '<td '+TD+' style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151;text-align:center;">' + (p.maxCount != null ? p.maxCount : '-') + '</td>';
-    h += '<td '+TD+' style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151;text-align:center;">' + (p.datatype || '-') + '</td>';
-    h += '<td '+TD+' style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151;text-align:center;">' + (p.nodeKind || '-') + '</td>';
-    h += '<td '+TD+' style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#6366f1;font-size:10px;">' + (extras || '-') + '</td>';
-    h += '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:center;color:' + confColor + ';font-weight:600;">' + p.confidence + '%</td>';
-    h += '</tr>';
-  });
-  h += '</tbody></table>';
-  el.innerHTML = h;
-}
-
-function seRecPrev() { if (seRecState.current > 0) { seRecState.current--; seRenderCurrentRec(); } }
-function seRecNext() { if (seRecState.current < seRecState.recommendations.length - 1) { seRecState.current++; seRenderCurrentRec(); } }
-
-function seRecAccept(idx) {
-  var rec = seRecState.recommendations[idx];
-  var pf = seRecState.prefixes;
-  // Merge prefixes
-  for (var p in pf) { if (!seState.prefixes[p]) seState.prefixes[p] = pf[p]; }
-  // Add shape
-  var shape = {
-    id: seId(), shapeIri: rec.classLabel.replace(":", "_") + "Shape", targetClass: rec.classLabel, closed: false,
-    properties: rec.properties.map(function(p) {
-      return { id: seId(), path: p.pathLabel, minCount: p.minCount || null, maxCount: p.maxCount || null,
-        datatype: p.datatype || "", nodeKind: p.nodeKind || "", pattern: "", message: "" };
-    })
-  };
-  seState.shapes.push(shape);
-  seRender();
-}
-
-function seRecDownload(idx) {
-  var rec = seRecState.recommendations[idx];
-  var pf = Object.assign({}, SE_PREFIXES, seRecState.prefixes);
-  var ttl = "";
-  for (var p in pf) ttl += "@prefix " + p + ": <" + pf[p] + "> .\n";
-  ttl += "\n";
-  var iri = rec.classLabel.replace(":", "_") + "Shape";
-  ttl += iri + " a sh:NodeShape ;\n    sh:targetClass " + rec.classLabel + " ;\n";
-  rec.properties.forEach(function(p) {
-    ttl += "    sh:property [\n        sh:path " + p.pathLabel + " ;\n";
-    if (p.minCount != null) ttl += "        sh:minCount " + p.minCount + " ;\n";
-    if (p.maxCount != null) ttl += "        sh:maxCount " + p.maxCount + " ;\n";
-    if (p.datatype) ttl += "        sh:datatype " + p.datatype + " ;\n";
-    if (p.nodeKind) ttl += "        sh:nodeKind " + p.nodeKind + " ;\n";
-    if (p.extras) p.extras.forEach(function(ex) { if (ex[0] !== "#") ttl += "        " + ex + " ;\n"; });
-    ttl += "    ] ;\n";
-  });
-  ttl = ttl.replace(/;\s*$/, ".\n");
-  var b = new Blob([ttl], {type:"text/turtle"});
-  var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = rec.classLabel.replace(":", "_") + "_shape.ttl"; a.click();
 }
 
 async function seRecommendFromEndpoint() {
   var endpoint = document.getElementById("se-sparql-endpoint").value.trim();
   if (!endpoint) { alert("Enter a SPARQL endpoint URL."); return; }
-  document.getElementById("se-recommend-status").textContent = "Querying endpoint...";
+  var status = document.getElementById("se-recommend-status");
+  status.textContent = "Discovering classes...";
 
   try {
-    // Discover classes with instance counts
-    var resp = await fetch(endpoint + "?query=" + encodeURIComponent("SELECT ?class (COUNT(?s) AS ?count) WHERE { ?s a ?class . } GROUP BY ?class ORDER BY DESC(?count) LIMIT 20"), {headers:{"Accept":"application/sparql-results+json"}});
-    var data = await resp.json();
-    var classes = data.results.bindings.map(function(b) { return {iri: b["class"].value, count: parseInt(b["count"].value)||0}; }).filter(function(c){return c.iri.indexOf("http")===0 && !c.iri.startsWith("http://www.w3.org/");});
+    var classQuery = "SELECT ?class (COUNT(?s) AS ?count) WHERE { ?s a ?class } GROUP BY ?class ORDER BY DESC(?count) LIMIT 20";
+    var classResp = await fetch(endpoint + "?query=" + encodeURIComponent(classQuery), { headers: { Accept: "application/sparql-results+json" } });
+    var classData = await classResp.json();
+    var classes = classData.results.bindings
+      .map(function (b) { return { iri: b["class"].value, count: parseInt(b["count"].value) || 0 }; })
+      .filter(function (c) { return c.iri.indexOf("http") === 0 && c.iri.indexOf("http://www.w3.org/") !== 0; })
+      .slice(0, 10);
+    if (!classes.length) { status.textContent = "No classes found."; return; }
 
-    var recommendations = [];
-    // For each class (top 10), profile properties
-    for (var ci = 0; ci < Math.min(classes.length, 10); ci++) {
-      var cls = classes[ci];
-      document.getElementById("se-recommend-status").textContent = "Profiling " + (ci+1) + "/" + Math.min(classes.length, 10) + "...";
+    // Bound the query cost the same way the old per-class aggregate queries
+    // did: cap instances per class, then pull every triple of those instances
+    // (rdf:type included) so the shared profiler sees exactly what
+    // profile_class expects — real triples, not pre-aggregated counts.
+    var triples = [];
+    for (var i = 0; i < classes.length; i++) {
+      status.textContent = "Fetching " + (i + 1) + "/" + classes.length + " (" + seShort(classes[i].iri) + ")...";
+      var q = "SELECT ?s ?p ?o WHERE { { SELECT DISTINCT ?s WHERE { ?s a <" + classes[i].iri + "> } LIMIT 30 } ?s ?p ?o . }";
       try {
-        var pResp = await fetch(endpoint + "?query=" + encodeURIComponent(
-          "SELECT ?prop (COUNT(?val) AS ?usage) (COUNT(DISTINCT ?s) AS ?instances) (MIN(DATATYPE(?val)) AS ?dtype) WHERE { ?s a <" + cls.iri + "> ; ?prop ?val . FILTER(?prop != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>) } GROUP BY ?prop ORDER BY DESC(?usage) LIMIT 30"
-        ), {headers:{"Accept":"application/sparql-results+json"}});
-        var pData = await pResp.json();
-        var props = pData.results.bindings.map(function(b) {
-          var instCount = parseInt(b["instances"]?.value) || 0;
-          var confidence = cls.count > 0 ? Math.round(instCount / cls.count * 100) : 0;
-          var short = b["prop"].value.indexOf("#") >= 0 ? b["prop"].value.split("#").pop() : b["prop"].value.split("/").pop();
-          return {
-            path: b["prop"].value, pathLabel: short,
-            minCount: confidence >= 90 ? 1 : null,
-            maxCount: null,
-            datatype: b["dtype"]?.value ? (b["dtype"].value.indexOf("#")>=0 ? "xsd:"+b["dtype"].value.split("#").pop() : "") : "",
-            nodeKind: "",
-            confidence: confidence, instanceCount: cls.count, usageCount: parseInt(b["usage"]?.value)||0
-          };
+        var r = await fetch(endpoint + "?query=" + encodeURIComponent(q), { headers: { Accept: "application/sparql-results+json" } });
+        var d = await r.json();
+        d.results.bindings.forEach(function (row) {
+          var s = row.s, p = row.p, o = row.o;
+          if (!s || !p || !o) return;
+          var sVal = s.type === "uri" ? s.value : ("_:" + s.value);
+          var oVal;
+          if (o.type === "literal") {
+            oVal = '"' + String(o.value).replace(/"/g, '\\"') + '"' + (o.datatype ? "^^<" + o.datatype + ">" : "");
+          } else if (o.type === "uri") {
+            oVal = o.value;
+          } else {
+            oVal = "_:" + o.value;
+          }
+          triples.push({ s: sVal, p: p.value, o: oVal });
         });
-        if (props.length) {
-          var short2 = cls.iri.indexOf("#") >= 0 ? cls.iri.split("#").pop() : cls.iri.split("/").pop();
-          recommendations.push({ classIri: cls.iri, classLabel: short2, instanceCount: cls.count, properties: props });
-        }
-      } catch(e) {}
+      } catch (e) { /* one class failing must not sink the rest */ }
     }
-    seRenderRecommendations(recommendations, {});
-    document.getElementById("se-recommend-status").textContent = recommendations.length + " shape(s) recommended from endpoint";
-  } catch(e) {
-    document.getElementById("se-recommend-status").textContent = "Error: " + e.message;
+
+    status.textContent = "Analyzing " + triples.length + " triple(s)...";
+    var already = (document.getElementById("se-ttl-output") || {}).value || "";
+    var result = window.ontoink.recommendShapes(
+      { triples: triples, prefixes: {} },
+      { method: seRecMethod(), shacl: already }
+    );
+    seRenderRecommendations(result);
+    status.textContent = result.shapes.length + " shape(s) recommended from " +
+      triples.length + " triple(s) across " + classes.length + " class(es)";
+  } catch (e) {
+    status.textContent = "Error: " + e.message;
   }
 }
 
+function seRenderRecommendations(result) {
+  var el = document.getElementById("se-recommend-results");
+  seRecState.shapes = result.shapes || [];
+  seRecState.current = 0;
+  seRecState.fullTurtle = result.turtle || "";
+  seRecState.constraintsByClass = {};
+  (result.constraints || []).forEach(function (c) {
+    (seRecState.constraintsByClass[c.targetClass] = seRecState.constraintsByClass[c.targetClass] || []).push(c);
+  });
+  if (!seRecState.shapes.length) {
+    el.innerHTML = '<div style="color:#9ca3af;padding:8px;">' +
+      (result.alreadyCovered && result.alreadyCovered.length
+        ? "Nothing new — every candidate class already has a shape."
+        : "No classes with enough evidence were found.") + '</div>';
+    return;
+  }
+  seRenderCurrentRec();
+}
+
+function seRecPrev() { if (seRecState.current > 0) { seRecState.current--; seRenderCurrentRec(); } }
+function seRecNext() { if (seRecState.current < seRecState.shapes.length - 1) { seRecState.current++; seRenderCurrentRec(); } }
+
+function seRenderCurrentRec() {
+  var el = document.getElementById("se-recommend-results");
+  var shapes = seRecState.shapes;
+  var idx = seRecState.current;
+  var shape = shapes[idx];
+  var constraints = seRecState.constraintsByClass[shape.targetClass] || [];
+
+  var h = '<div style="display:flex;align-items:center;gap:8px;margin:10px 0;flex-wrap:wrap;">';
+  h += '<button class="ov-btn" onclick="seRecPrev()" ' + (idx === 0 ? 'disabled style="opacity:0.4;"' : '') + '>&larr; Prev</button>';
+  h += '<span style="font-size:13px;font-weight:600;color:#374151;">Shape ' + (idx + 1) + ' / ' + shapes.length +
+       ': <span style="color:#6366f1;">' + seEsc(shape.label) + '</span> ' +
+       '<span style="color:#9ca3af;font-weight:400;">(' + shape.constraintCount + ' constraint' +
+       (shape.constraintCount === 1 ? '' : 's') + ')</span></span>';
+  h += '<button class="ov-btn" onclick="seRecNext()" ' + (idx === shapes.length - 1 ? 'disabled style="opacity:0.4;"' : '') + '>Next &rarr;</button>';
+  h += '<button class="ov-btn ov-btn-primary" onclick="seRecAccept(' + idx + ')">Accept &amp; Edit</button>';
+  h += '<button class="ov-btn" onclick="seRecDownload(' + idx + ')">Download</button>';
+  if (shapes.length > 1) h += '<button class="ov-btn" onclick="seRecDownloadAll()">Download all ' + shapes.length + '</button>';
+  h += '</div>';
+
+  h += '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;">';
+  var TH = 'style="padding:8px 10px;background:#1f2937;color:#f9fafb;font-size:11px;text-align:left;"';
+  h += '<thead><tr><th ' + TH + '>Property</th><th ' + TH + '>constraint</th><th ' + TH + '>value</th>' +
+       '<th ' + TH + '>method</th><th ' + TH + '>evidence</th></tr></thead><tbody>';
+  constraints.forEach(function (c) {
+    var confColor = c.confidence >= 0.9 ? "#16a34a" : c.confidence >= 0.7 ? "#f59e0b" : "#9ca3af";
+    var TD = 'style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151;"';
+    h += '<tr><td ' + TD + ' style="font-weight:500;">' + seEsc(seShort(c.path)) + '</td>';
+    h += '<td ' + TD + '>sh:' + seEsc(c.kind) + '</td>';
+    h += '<td ' + TD + '>' + seEsc(seShort(c.value)) + '</td>';
+    h += '<td ' + TD + ' style="font-size:10px;color:#6b7280;">' + seEsc(c.method || "") + '</td>';
+    h += '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:' + confColor + ';">' + seEsc(c.evidence || "") + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  h += '<p style="font-size:11px;color:#9ca3af;margin-top:6px;">Same engine as ' +
+       '<code>ontoink.recommend</code> (Python) — <code>baseline</code> profiles instance data, ' +
+       '<code>astrea</code> reads OWL axioms alone. sh:class constraints download with the shape ' +
+       'but are not editable in the form above — the visual builder does not have a field for them yet.</p>';
+  el.innerHTML = h;
+}
+
+/**
+ * Accept a recommendation into the visual builder.
+ *
+ * The builder's property model only has fields for path/minCount/maxCount/
+ * datatype/nodeKind/pattern/message (see seAddProperty) — there is no
+ * sh:class field. A recommended sh:class constraint is therefore dropped here
+ * exactly as the previous implementation dropped it, and stays reachable only
+ * through Download, which emits the complete Turtle unchanged.
+ */
+function seRecAccept(idx) {
+  var shape = seRecState.shapes[idx];
+  var constraints = seRecState.constraintsByClass[shape.targetClass] || [];
+  var byPath = {}, order = [];
+  constraints.forEach(function (c) {
+    if (!byPath[c.path]) { byPath[c.path] = []; order.push(c.path); }
+    byPath[c.path].push(c);
+  });
+
+  var droppedClass = false;
+  var properties = order.map(function (path) {
+    var prop = { id: seId(), path: path, minCount: null, maxCount: null, datatype: "", nodeKind: "", pattern: "", message: "" };
+    byPath[path].forEach(function (c) {
+      if (c.kind === "minCount") prop.minCount = parseInt(c.value, 10);
+      else if (c.kind === "maxCount") prop.maxCount = parseInt(c.value, 10);
+      else if (c.kind === "datatype") prop.datatype = SE_XSD_CURIE[c.value] || ("<" + c.value + ">");
+      else if (c.kind === "nodeKind") prop.nodeKind = c.value === "http://www.w3.org/ns/shacl#IRI" ? "sh:IRI" : ("<" + c.value + ">");
+      else if (c.kind === "class") droppedClass = true;
+    });
+    return prop;
+  });
+  if (!properties.length) {
+    properties.push({ id: seId(), path: "", minCount: null, maxCount: null, datatype: "", nodeKind: "", pattern: "", message: "" });
+  }
+
+  seState.shapes.push({ id: seId(), shapeIri: shape.shapeIri, targetClass: shape.targetClass, closed: false, properties: properties });
+  seRender();
+
+  var status = document.getElementById("se-recommend-status");
+  if (status) {
+    status.textContent = droppedClass
+      ? "Added to the builder — an sh:class constraint was left out (use Download for the full shape)."
+      : "Added to the builder below.";
+  }
+}
+
+function seRecDownload(idx) {
+  var shape = seRecState.shapes[idx];
+  var ttl = "@prefix sh: <http://www.w3.org/ns/shacl#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n" +
+    shape.turtle + "\n";
+  var b = new Blob([ttl], { type: "text/turtle" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(b);
+  a.download = (shape.label || "shape").replace(/[^A-Za-z0-9_.-]+/g, "_") + ".ttl";
+  a.click();
+}
+
+function seRecDownloadAll() {
+  var b = new Blob([seRecState.fullTurtle], { type: "text/turtle" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(b);
+  a.download = "recommended-shapes.ttl";
+  a.click();
+}
 // Datalist suggestions for common classes and properties
 var COMMON_CLASSES = ["ex:Person","ex:Organization","ex:Article","ex:Event","ex:Place","ex:Document","ex:Agent","ex:Dataset","rdfs:Resource","owl:Thing","foaf:Person","foaf:Agent","schema:Person","schema:Organization","schema:Article","schema:Event","skos:Concept"];
 var COMMON_PROPS = ["rdfs:label","rdfs:comment","ex:name","ex:title","ex:author","ex:date","ex:email","ex:description","ex:identifier","ex:url","ex:homepage","foaf:name","foaf:mbox","foaf:knows","schema:name","schema:author","schema:datePublished","schema:description","schema:url","skos:prefLabel","skos:altLabel","skos:definition","dc:title","dc:creator","dc:date"];
@@ -813,32 +756,35 @@ seRender = function() { origSeRender(); buildDataLists(); };
 
 ## Shape Recommender — Methodology
 
-The Shape Recommender uses **data profiling** to auto-generate SHACL constraints from instance data. It extends the approach from *Mihindukulasooriya et al. (2018) "RDF Shape Induction using Knowledge Base Profiling"* with novel constraint types.
+This page's recommender calls `ontoink.recommendShapes`, a JavaScript port of `ontoink/recommend/` — the same engine the [`recommend_shapes:`](getting-started.md) fence key and `POST /recommend-shapes` use. It used to carry its own reimplementation with its own regex Turtle parser; that meant this page and the Python engine could disagree about the same file, so it was replaced. A test suite (`tests/test_recommend_parity.py`) runs both engines over identical fixtures on every change and asserts the constraint sets match — see [Shape Recommendation](examples/shape-recommendation.md) for the full design rationale.
 
-### Algorithm
+### Two methods, chosen on evidence
 
-1. **Class discovery** — finds all classes with `rdf:type` instances
-2. **Property profiling** — for each class, counts property usage across all instances
-3. **Constraint inference:**
-    - **Cardinality**: 90%+ coverage → `sh:minCount 1`; max 1 per instance → `sh:maxCount 1`
-    - **Datatype**: consistent XSD type → `sh:datatype`
-    - **NodeKind**: all IRI values → `sh:nodeKind sh:IRI`
-    - **sh:class** *(novel)*: 80%+ of IRI values typed as same class → `sh:class`
-    - **sh:pattern** *(novel)*: auto-detect email, URL, uppercase patterns from string values
-    - **sh:minLength/maxLength** *(novel)*: from string length statistics
-    - **sh:minInclusive/maxInclusive** *(novel)*: from numeric value ranges
-    - **Uniqueness** *(novel)*: all values unique → potential identifier annotation
-4. **Confidence scoring** — percentage of instances exhibiting each pattern
+Both were ported from a benchmark comparing eight induction methods on five datasets plus two real ontologies (MWO, NFDIcore):
 
-### Input Modes
+- **`baseline`** — frequency profiling of instance data (Mihindukulasooriya et al. 2018). Property present on ≥90% of a class's instances → `sh:minCount 1`; no instance with more than one value → `sh:maxCount 1`; one consistent XSD datatype or target class across all observed values → `sh:datatype` / `sh:class` + `sh:nodeKind sh:IRI`. Best F1-to-complexity ratio in the benchmark (mean F1 0.695 across five datasets).
+- **`astrea`** — reads OWL axioms alone: `rdfs:domain`/`rdfs:range`, `owl:FunctionalProperty`, and cardinality/`someValuesFrom`/`allValuesFrom` restrictions. Needs no instance data, which is what most documentation ontologies ship.
+- **`auto`** (default) — runs both and merges them; a constraint both methods derive keeps the evidence from whichever pass measured it.
 
-- **Upload TTL** — client-side analysis, instant results
-- **SPARQL endpoint** — remote profiling via SPARQL queries (top 10 classes, 30 properties each)
+Six other benchmarked methods are not shipped here: they over-predicted, produced output identical to the baseline on real ontologies, or were never fully implemented against their own design. See [Architecture: SHACL Shape Recommendation](design.md#shacl-shape-recommendation) for the full accounting.
+
+**Known gap.** The previous page-local recommender also detected `sh:pattern` (email/URL/uppercase heuristics), `sh:minLength`/`maxLength`, numeric ranges, and uniqueness — extensions that were never run against the benchmark. They are not reproduced by the shared engine. If you need them today, describe the constraint by hand in the builder above; folding validated versions into `ontoink/recommend/` is tracked on the [roadmap](roadmap.md).
+
+### Confidence, honestly
+
+Confidence is `support / population` for `baseline` constraints — so a constraint backed by 3 of 3 instances currently reads the same as one backed by 300 of 300. `astrea` constraints show `confidence: 1.0` because they come from an asserted axiom, not a measurement; a `basis` field distinguishing "measured" from "assumed" is planned rather than shipped. Read the `evidence` column before trusting a green row on a small dataset.
+
+### Input modes
+
+- **Upload / paste TTL** — runs entirely in your browser, instant results, works offline and on static hosting.
+- **SPARQL endpoint** — for each of the top 20 classes by instance count, fetches up to 30 instances and every triple of those instances, then profiles the result with the same engine. Bounded so it stays usable against a large public endpoint; a small sample can under- or over-state a constraint's real support.
+
+Either mode skips classes already covered by the shapes you've built in this session — the recommendations narrow as your shape set grows.
 
 ### References
 
-- Mihindukulasooriya, N., Poveda-Villalón, M., Li, D., Gómez-Pérez, A. (2018). *RDF Shape Induction using Knowledge Base Profiling.* SAC 2018.
-- Spahiu, B., Kontokostas, D., Hellmann, S., Auer, S. (2018). *Towards Improving the Quality of Knowledge Graphs with Data-driven Ontology Patterns.* ISWC 2018.
+- Mihindukulasooriya, N., Rashid, M. R. A., Rizzo, G., García-Castro, R., Corcho, O., Torchiano, M. (2018). *RDF Shape Induction Using Knowledge Base Profiling.* SAC 2018.
+- Cimmino, A., Fernández-Izquierdo, A., García-Castro, R. (2020). *ASTREA: Automatic Generation of SHACL Shapes.* ESWC 2020.
 
 ---
 

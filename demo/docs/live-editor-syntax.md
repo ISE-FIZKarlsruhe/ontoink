@@ -1,9 +1,6 @@
 # Live Editor · Syntax Reference
 
-The live editor accepts a compact, D2-inspired ontology DSL. Everything
-below the "Basics" section is optional — the parser round-trips to Turtle
-so any triple you can express in Turtle can be expressed here (usually
-with fewer keystrokes).
+The live editor accepts a compact, D2-inspired ontology DSL. Everything below the "Basics" section is optional — the parser round-trips to Turtle so any triple you can express in Turtle can be expressed here (usually with fewer keystrokes).
 
 ## Auto-declared prefixes
 
@@ -88,26 +85,21 @@ ex:Bush {
 
 ## Error diagnostics
 
-The editor shows line + column for every parse error in the red panel
-below the DSL. Common cases:
+The editor shows line + column for every parse error in the red panel below the DSL. Common cases:
 
 - **`unterminated string literal`** — you forgot the closing `"`.
 - **`unterminated <IRI>`** — you opened `<` without closing `>`.
 - **`expected '->' to close predicate`** — the arrow is `-P->`, not `-P >` or `>P->`.
-- **`expected '-<predicate>->' or '{' after subject`** — a subject
-  needs either a triple or a block.
+- **`expected '-<predicate>->' or '{' after subject`** — a subject needs either a triple or a block.
 - **`block opened with '{' but never closed with '}'`** — one `}` per `{`.
 
 ## Turtle round-trip
 
-The bottom pane shows the generated Turtle. Everything typed in the DSL
-appears there in a canonical form — copy it into your project, or save
-as `.ttl` / `.nt` from the toolbar.
+The bottom pane shows the generated Turtle. Everything typed in the DSL appears there in a canonical form — copy it into your project, or save as `.ttl` / `.nt` from the toolbar.
 
 ## OWL restrictions
 
-Parenthesised Manchester-style expressions that expand to `owl:Restriction`
-axioms with a blank node:
+Parenthesised Manchester-style expressions that expand to `owl:Restriction` axioms with a blank node:
 
 | Syntax | Emitted axioms |
 |--------|----------------|
@@ -149,12 +141,9 @@ ex:NonRedFruit -isa-> (ex:Fruit and (not ex:Red))
 
 ## Ctrl+Space autocomplete
 
-Anywhere in the editor, press **Ctrl+Space** (Cmd+Space on Mac) to open
-a floating suggestion list. Type to filter; ↑/↓ navigates; **Enter**
-or **Tab** inserts. **Esc** dismisses.
+Anywhere in the editor, press **Ctrl+Space** (Cmd+Space on Mac) to open a floating suggestion list. Type to filter; ↑/↓ navigates; **Enter** or **Tab** inserts. **Esc** dismisses.
 
-The suggestion pool contains **144 well-known terms** from these
-vocabularies:
+The suggestion pool contains **144 well-known terms** from these vocabularies:
 
 - **Core**: RDF, RDFS, OWL, XSD
 - **Labels & content**: SKOS, FOAF, Dublin Core, schema.org
@@ -162,12 +151,9 @@ vocabularies:
 - **Foundation**: BFO 2, RO, IAO, SIO (OBO Foundry style)
 - **Shapes**: SHACL core
 
-Every entry shows a **kind badge** (`class`, `obj`, `dat`, `ann`,
-`dty`, `ind`) and a one-line description. When you pick a term whose
-prefix isn't declared, the `@prefix` line is auto-inserted at the top.
+Every entry shows a **kind badge** (`class`, `obj`, `dat`, `ann`, `dty`, `ind`) and a one-line description. When you pick a term whose prefix isn't declared, the `@prefix` line is auto-inserted at the top.
 
-The autocomplete pool also includes prefixes YOU declared in the current
-document, so `mwo:` terms you've already used will appear.
+The autocomplete pool also includes prefixes YOU declared in the current document, so `mwo:` terms you've already used will appear.
 
 ## Multi-subject lines
 
@@ -193,22 +179,16 @@ ex:hasUncle owl:propertyChainAxiom ( ex:hasParent ex:hasBrother ) .
 
 ## Inline blank nodes `[...]`
 
-Turtle-style inline blanks with `;`-separated predicate/object pairs.
-Perfect for SHACL shapes and nested OWL axioms:
+Turtle-style inline blanks with `;`-separated predicate/object pairs. Perfect for SHACL shapes and nested OWL axioms:
 
 ```
 ex:PersonShape -sh:property-> [sh:path foaf:name; sh:minCount 1; sh:datatype xsd:string]
 ```
 
-Inline blanks are **single-line** — for multi-property shapes, chain
-multiple `-sh:property->` lines inside a subject block. See the SHACL
-example in the "Load example" dropdown.
+Inline blanks are **single-line** — for multi-property shapes, chain multiple `-sh:property->` lines inside a subject block. See the SHACL example in the "Load example" dropdown.
 
 ## What is NOT in the DSL
 
-- Reified statements (use RDF-star in Turtle, then paste into the
-  [playground](../playground/))
-- SPARQL queries (a different language — use the SPARQL Explorer
-  page instead)
-- Multi-line inline blank nodes (put them on one line, or use a subject
-  block)
+- Reified statements (use RDF-star in Turtle, then paste into the [playground](../playground/))
+- SPARQL queries (a different language — use the SPARQL Explorer page instead)
+- Multi-line inline blank nodes (put them on one line, or use a subject block)

@@ -28,10 +28,11 @@ except ImportError as exc:
 
 from rdflib import Graph
 
+from . import __version__
 from .ttl_parser import _run_reasoning, _extract_namespaces
 
 
-app = FastAPI(title="ontoink", version="0.7.2", description="OWL reasoning & SHACL validation")
+app = FastAPI(title="ontoink", version=__version__, description="OWL reasoning & SHACL validation")
 
 
 # Cross-origin isolation headers — enable SharedArrayBuffer (required by the
@@ -51,12 +52,27 @@ async def add_coop_coep(request, call_next):
     return response
 
 
+class RecommendRequest(BaseModel):
+    ttl: str
+    # Existing shapes, so the recommender can skip classes already covered.
+    shacl: Optional[str] = None
+    method: str = "auto"          # auto | baseline | astrea
+    min_confidence: float = 0.0
+    only_uncovered: bool = True
+    max_shapes: int = 50
+
+
 class TtlRequest(BaseModel):
     ttl: str
     shacl: Optional[str] = None
     # Optional per-request override of ONTOINK_REASONER. Valid values:
     # auto | owlready2 | konclude | konclude-wasm | owlrl | none
     reasoner: Optional[str] = None
+    # Optional pySHACL inference mode for /validate. Defaults to
+    # shacl_validator.DEFAULT_INFERENCE so server, build-time and browser
+    # validation agree; "rdfs"/"owlrl" opt into entailment-aware validation
+    # that the browser panel cannot reproduce.
+    inference: Optional[str] = None
 
 
 @app.get("/health")
@@ -64,7 +80,7 @@ def health() -> Dict[str, Any]:
     return {
         "status": "ok",
         "reasoner": os.environ.get("ONTOINK_REASONER", "auto"),
-        "version": "0.7.2",
+        "version": __version__,
     }
 
 
@@ -78,19 +94,12 @@ def reason(req: TtlRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=f"Invalid TTL: {exc}") from exc
 
     namespaces = _extract_namespaces(g, req.ttl)
-    # If the caller specified a reasoner, scope it to this request only
-    prev = os.environ.get("ONTOINK_REASONER")
+    # Per-request reasoner override is passed as an argument, never through
+    # os.environ: the environment is process-global, so two concurrent requests
+    # choosing different backends would otherwise race (one could observe the
+    # other's setting, or its restore, mid-run).
     started = time.time()
-    try:
-        if req.reasoner:
-            os.environ["ONTOINK_REASONER"] = req.reasoner
-        inferred = _run_reasoning(g, namespaces)
-    finally:
-        if req.reasoner:
-            if prev is None:
-                os.environ.pop("ONTOINK_REASONER", None)
-            else:
-                os.environ["ONTOINK_REASONER"] = prev
+    inferred = _run_reasoning(g, namespaces, reasoner=req.reasoner)
     elapsed_ms = int((time.time() - started) * 1000)
     chosen = req.reasoner or os.environ.get("ONTOINK_REASONER", "auto")
     result = {"inferred": inferred, "count": len(inferred), "reasoner": chosen, "elapsed_ms": elapsed_ms}
@@ -131,23 +140,59 @@ def validate(req: TtlRequest) -> Dict[str, Any]:
     if not req.shacl:
         raise HTTPException(status_code=400, detail="SHACL shapes required")
 
-    try:
-        import pyshacl
-    except ImportError as exc:
-        raise HTTPException(status_code=500, detail="pyshacl not installed") from exc
+    from .shacl_validator import validate_text
 
-    data_g = Graph()
-    shacl_g = Graph()
     try:
-        data_g.parse(data=req.ttl, format="turtle")
-        shacl_g.parse(data=req.shacl, format="turtle")
+        # One shared code path with build-time validation, so the same
+        # data+shapes cannot conform here and fail in CI (or vice versa).
+        result = validate_text(req.ttl, req.shacl, inference=req.inference)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid TTL: {exc}") from exc
 
-    conforms, report_g, report_text = pyshacl.validate(
-        data_g, shacl_graph=shacl_g, inference="rdfs", abort_on_first=False,
+    if result["conforms"] is None:
+        raise HTTPException(status_code=500, detail="pyshacl not installed")
+    return result
+
+
+@app.post("/recommend-shapes")
+def recommend_shapes(req: RecommendRequest) -> Dict[str, Any]:
+    """Induce SHACL shapes for a graph.
+
+    The same engine the fence, the SHACL editor page (via its JS port) and the
+    graph context menu use — this endpoint exposes it to server-mode clients.
+    """
+    from .recommend import METHODS, recommend_payload
+
+    if req.method not in ("auto",) + tuple(METHODS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown method {req.method!r}; expected auto, "
+                   + ", ".join(sorted(METHODS)),
+        )
+
+    data_graph = Graph()
+    try:
+        data_graph.parse(data=req.ttl, format="turtle")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid TTL: {exc}") from exc
+
+    shape_graph = None
+    if req.shacl:
+        shape_graph = Graph()
+        try:
+            shape_graph.parse(data=req.shacl, format="turtle")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid SHACL: {exc}") from exc
+
+    return recommend_payload(
+        data_graph,
+        method=req.method,
+        min_confidence=req.min_confidence,
+        shape_graph=shape_graph,
+        only_uncovered=req.only_uncovered,
+        max_shapes=req.max_shapes,
     )
-    return {"conforms": conforms, "report": report_text}
 
 
 # ── Ontology dereference proxy ────────────────────────────────────────────
@@ -217,7 +262,7 @@ def _deref_fetch(iri: str):
             raise _DerefError(f"refused to fetch non-public URL: {current}", status=400)
         req = urllib.request.Request(current, headers={
             "Accept": _DEREF_ACCEPT,
-            "User-Agent": "ontoink-deref/0.7.2 (+https://github.com/ISE-FIZKarlsruhe/ontoink)",
+            "User-Agent": f"ontoink-deref/{__version__} (+https://github.com/ISE-FIZKarlsruhe/ontoink)",
         })
         try:
             resp = opener.open(req, timeout=_DEREF_TIMEOUT)

@@ -122,3 +122,43 @@ def test_render_includes_coverage_and_sparql():
 
     assert "showCoverage" in result or "toggleStats" in result
     assert "ov-sparql-panel" in result
+
+
+def _graph_blob(html):
+    """Decode the base64 graph payload the fence embeds in the container."""
+    import base64
+    import json
+    import re
+
+    m = re.search(r'data-ontoink-graph="([^"]+)"', html)
+    assert m, "no data-ontoink-graph attribute in the rendered HTML"
+    return json.loads(base64.b64decode(m.group(1)).decode("utf-8"))
+
+
+def test_pixel_ratio_option_reaches_the_graph_payload():
+    """``pixel_ratio: N`` must survive into the JSON the runtime reads.
+
+    The runtime picks a ratio automatically (device ratio capped at 2, or 1 for
+    graphs >= 500 nodes); this fence key is the author's override in either
+    direction. Without the propagation it would be silently ignored.
+    """
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+    source = "source: fixtures/sample-data.ttl\npixel_ratio: 3"
+    data = _graph_blob(render_ontoink(source, "ontoink", "ontoink", {}, None))
+
+    assert data["pixel_ratio"] == 3.0
+
+
+def test_pixel_ratio_absent_by_default_and_ignores_garbage():
+    reset_counter()
+    render_ontoink.docs_dir = str(FIXTURES.parent)
+
+    plain = _graph_blob(render_ontoink("source: fixtures/sample-data.ttl", "ontoink", "ontoink", {}, None))
+    assert "pixel_ratio" not in plain
+
+    reset_counter()
+    bad = _graph_blob(
+        render_ontoink("source: fixtures/sample-data.ttl\npixel_ratio: huge", "ontoink", "ontoink", {}, None)
+    )
+    assert "pixel_ratio" not in bad

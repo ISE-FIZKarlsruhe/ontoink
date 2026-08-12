@@ -1,12 +1,10 @@
 # Architecture & Design Decisions
 
-How ontoink works under the hood: why it exists, how it talks to SPARQL
-endpoints, how reasoning and shape recommendation are implemented, and how
-labels get resolved.
+How OntoInk works under the hood: why it exists, how it talks to SPARQL endpoints, how reasoning and shape recommendation are implemented, how build results become CI gates, and how labels get resolved.
 
-### Why ontoink?
+### Why OntoInk?
 
-Existing ontology visualization tools either require complex desktop installations (Protégé), produce static non-interactive diagrams (WebVOWL), or don't integrate with documentation workflows. ontoink fills this gap:
+Existing ontology visualization tools either require complex desktop installations (Protégé), produce static non-interactive diagrams (WebVOWL), or don't integrate with documentation workflows. OntoInk fills this gap:
 
 - **Documentation-first**: embeds directly in MkDocs, the standard for Python project documentation
 - **Interactive by default**: every diagram is explorable — click, search, zoom, export
@@ -27,11 +25,23 @@ This adaptive approach means any endpoint works — from a 100-triple demo to Wi
 
 ### OWL Reasoning Pipeline
 
-ontoink uses a two-stage reasoning approach:
+OntoInk uses a two-stage reasoning approach:
 
 1. **Primary: HermiT** (via owlready2) — full OWL DL tableau reasoner. Handles class hierarchy completion, inverse/transitive/symmetric property inference, consistency checking. Runs at MkDocs build time.
 2. **Fallback: owlrl** — OWL-RL profile for environments without Java. Provides rdfs:subClassOf and basic property inference.
 3. **Smart filtering** — removes reflexive triples (`x sameAs x`), built-in namespace noise (XSD, OWL, RDF, RDFS), and domain/range propagation to show only meaningful inferences.
+4. **Justification capture (browser OWL-RL only)** — every derivation in the in-page materializer funnels through a single `add(s, p, o)` call, which records the rule that fired and the premises it consumed. That is what lets *Explain this inference* render a proof tree down to asserted facts. The tableau reasoners cannot do this: HermiT, Konclude and the server route all return proof-free triples, so the panel reports the absence rather than inventing a derivation. An unexplained inferred edge costs trust; a wrong explanation costs more.
+
+### Build Report and Quality Gates
+
+Every diagram already computed numbers worth gating on — SHACL conformance, the OntoSniff score, consistency — but they only ever reached the rendered page, so a regression could merge unnoticed. Three build-time passes now feed one repo-level artefact:
+
+1. **Per-fence collection** — each rendered fence appends a summary to a module-level registry, reset in `on_config` so `mkdocs serve` rebuilds don't double-count.
+2. **Shape drift** (`shape_drift:`) — re-runs induction and diffs it set-theoretically against the committed shapes, reporting constraints the data supports but the file omits, constraints almost nothing satisfies, and uncovered classes. Staleness needs instance data, so an axiom-only ontology reports none rather than guessing.
+3. **Competency questions** (the `ontoink-cq` fence) — SPARQL with an expectation, optionally over the inferred closure so a question can assert what the ontology *entails*.
+4. **Aggregation** — `on_post_build` writes `ontoink-report.json` plus self-contained SVG badges, and applies the `quality_gate:` thresholds.
+
+Findings are reported through the `mkdocs.plugins.ontoink` logger rather than raised. That is deliberate: pymdownx catches exceptions from a fence handler and silently falls back to rendering the block as plain text, so raising would *lose* the diagnostics. Logging makes `mkdocs build --strict` the gate, and badges make the state visible without one.
 
 ### SHACL Shape Recommendation
 
@@ -50,7 +60,7 @@ Based on: *Mihindukulasooriya et al. (2018) "RDF Shape Induction using Knowledge
 
 **Novel extensions beyond Mihindukulasooriya (2018):**
 
-| Feature | Original paper | ontoink extension |
+| Feature | Original paper | OntoInk extension |
 |:--------|:---------------|:------------------|
 | Cardinality | min/max count | Same |
 | Datatype | XSD detection | Same |
@@ -63,6 +73,23 @@ Based on: *Mihindukulasooriya et al. (2018) "RDF Shape Induction using Knowledge
 
 Works from uploaded TTL data or directly from SPARQL endpoints. Navigate shapes with Prev/Next, edit, download individually, or accept into the visual editor.
 
+#### The `ontoink.recommend` package (0.7.7)
+
+The browser recommender above serves the SHACL Editor page. Since 0.7.7 the same job is also done at build time by `ontoink/recommend/`, ported from a benchmark that compared eight shape-induction methods on five datasets plus two real ontologies (MWO, NFDIcore). Two methods earned their way in:
+
+| Method | Reads | Why it is here |
+|:-------|:------|:---------------|
+| `baseline` | instance data | Best F1-to-complexity ratio in the benchmark (mean F1 0.695; ~0.95 on the three clean datasets). Faithful reimplementation of Mihindukulasooriya et al. (2018). |
+| `astrea` | OWL axioms only | Emits nothing on benchmarks whose ontologies carry no restrictions, but produced 39–58 useful constraints on MWO and NFDIcore. Documentation ontologies usually ship no individuals, so this is the case that matters most here. |
+| `auto` | both | The default. Axioms first — they are assertions the author made on purpose — then instance data, merged and deduplicated on the `(class, path, kind, value)` identity tuple. |
+
+The six methods left in the research project were excluded on evidence, not taste: the reasoner-aware method over-predicted (precision ~0.25); the LLM-augmented one produced output byte-identical to the baseline on both real ontologies across four providers, so its benchmark win exists only on a purpose-built identifiers dataset; and the active-learning, counterfactual and property-path methods were partly unimplemented against their own docstrings.
+
+Two design decisions are worth stating:
+
+- **Evidence travels with the constraint.** The research writers computed a confidence per constraint and dropped it during serialisation, which left a consumer unable to distinguish a constraint backed by 45 of 45 instances from one backed by 9 of 10. Emitted shapes now carry `sh:description` plus `oi:confidence`, `oi:support`, `oi:population` and `oi:method`. These are annotations — a SHACL processor ignores them, so the output is still a plain shapes graph you can hand to `pyshacl` unchanged.
+- **Nothing is written on the user's behalf.** A suggestion can be copied, or appended to the Edit & Validate buffer, and that is where it stops. The proposal has to survive the user pressing *Validate* before they decide to keep it; a recommender that edits source files is one that has to be right every time.
+
 ### Client-side SPARQL Autocomplete
 
 The SPARQL query editor provides Wikidata-style autocomplete:
@@ -74,7 +101,7 @@ The SPARQL query editor provides Wikidata-style autocomplete:
 
 ### Automatic Ontology Label Resolution
 
-ontoink automatically fetches and caches labels from all ontologies referenced in the graph:
+OntoInk automatically fetches and caches labels from all ontologies referenced in the graph:
 
 1. **On graph init** — collects all unique namespaces from nodes/edges and fetches ontology files in the background
 2. **Known ontology registry** — maps namespaces to CORS-friendly download URLs (GitHub Pages, raw GitHub, W3C), bypassing servers that redirect without CORS headers (e.g., `nfdi.fiz-karlsruhe.de → ise-fizkarlsruhe.github.io`)

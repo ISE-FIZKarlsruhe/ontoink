@@ -4,7 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ontoink"
-version = "0.7.5"
+# Read from ontoink/__init__.py so the version lives in exactly one place. It
+# used to be stated here, in __init__.py and hard-coded three more times in
+# api.py, and the copies drifted — 0.7.6 shipped with the API still announcing
+# itself as 0.7.2 in its metadata, /health response and deref User-Agent.
+dynamic = ["version"]
 description = "Interactive ontology visualization, SHACL validation, and live TTL editing plugin for MkDocs"
 readme = "README.md"
 license = "MIT"
@@ -78,8 +82,19 @@ Issues = "https://github.com/ISE-FIZKarlsruhe/ontoink/issues"
 [project.entry-points."mkdocs.plugins"]
 ontoink = "ontoink.plugin:OntoinkPlugin"
 
+[tool.setuptools.dynamic]
+version = {attr = "ontoink.__version__"}
+
 [tool.setuptools.packages.find]
 where = ["."]
+# Both settings are load-bearing. `packages.find` in pyproject.toml defaults to
+# namespace discovery, which treats every directory in the repo root as a
+# package — so the wheel was shipping `tests/`, `scripts/`, the whole
+# `shape-recommender/` research project and `paper-shape-recommender/` alongside
+# the plugin. Pinning the include pattern and turning namespaces off keeps the
+# distribution to ontoink itself.
+include = ["ontoink*"]
+namespaces = false
 
 [tool.setuptools.package-data]
 # resources/vendor/* ships the self-hosted third-party libs (Cytoscape, dagre,

@@ -1,6 +1,6 @@
 # Docker & self-hosting
 
-A production-ready image is provided that bundles ontoink, MkDocs, Java (for HermiT), and Node.js (for the Konclude WASM reasoner).
+A production-ready image is provided that bundles OntoInk, MkDocs, Java (for HermiT), and Node.js (for the Konclude WASM reasoner).
 
 ```bash
 cp .env.sample .env       # edit ONTOINK_MODE and ONTOINK_REASONER

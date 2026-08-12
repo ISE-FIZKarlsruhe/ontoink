@@ -1,6 +1,10 @@
 /**
- * ontoink.js v0.7.4 — Interactive ontology visualization with formal notation,
+ * ontoink.js — Interactive ontology visualization with formal notation,
  * draggable legend/prefix overlays, inline TTL editing, SHACL validation, and color customization.
+ *
+ * The version deliberately isn't written here: `plugin.py` injects
+ * `window.ONTOINK_VERSION` from `ontoink.__version__` instead, so there is one
+ * source, checkable from the console.
  */
 var ontoink = (function () {
   "use strict";
@@ -279,7 +283,7 @@ var ontoink = (function () {
     if (d.message) html += '<div class="ov-popup-meta">Message: ' + esc(d.message) + '</div>';
     // OWL restriction details: surface the operator + predicate + filler so the
     // reader sees the Manchester-style rendering even after the bnode is hidden.
-    // v0.7.3-fix (adversarial finding #10): skip this block for FANNED
+    // skip this block for FANNED
     // super-edges (clusterManaged + weight > 1) — the "Bundle: N relations"
     // block below already summarises them, and the owlOp/owlOpSymbol
     // fields are stale (they come from the first origEdge only, not the
@@ -304,9 +308,9 @@ var ontoink = (function () {
       if (d.owlPredicate) html += '<div class="ov-popup-meta">On property: <a href="'+esc(d.owlPredicate)+'" target="_blank">'+esc(d.owlPredicate)+'</a></div>';
       if (d.owlFiller) html += '<div class="ov-popup-meta">Filler: <a href="'+esc(d.owlFiller)+'" target="_blank">'+esc(d.owlFiller)+'</a></div>';
     }
-    // v0.7.3 \u2014 Edge fanning: cluster-managed edge with weight > 1
-    // aggregates N originals. Show the count + underlying predicate
-    // list so the user sees WHAT connects the two clusters.
+    // Edge fanning: a cluster-managed edge with weight > 1 aggregates N
+    // originals. Show the count + underlying predicate list so the user sees
+    // WHAT connects the two clusters.
     if (d.clusterManaged && d.weight && d.weight > 1) {
       var fanArr = (d.fan && d.fan.length) ? d.fan : [];
       html += '<div class="ov-popup-section"><strong>Bundle:</strong> ' + esc(String(d.weight)) + ' relations</div>';
@@ -1103,7 +1107,7 @@ var ontoink = (function () {
     if (!b64) { inst.sideStore = {}; return; }
     try { inst.sideStore = JSON.parse(_decodeUtf8Base64(b64)); }
     catch (e) { inst.sideStore = {}; }
-    // v0.7.3-fix (adversarial review finding #5): when build-time
+    // when build-time
     // clustering (fence.py + cluster.py) shipped the side-store, we
     // ALSO need to synthesize the two fields that only the browser-side
     // `_autoClusterByNamespace` writes: `_memberToCid` (id → cluster id)
@@ -1146,12 +1150,11 @@ var ontoink = (function () {
       }
     });
     // Interior edges live in sideStore[cid].edges; pristine cross-cluster
-    // boundary edges (v0.7.3-fix round-3 finding #5) live in
-    // sideStore[cid].boundary_edges when cluster.py emitted them. Fold
-    // both back so _rebuildClusterBoundary has enough to recompute
-    // real member↔outer links. Cross-cluster boundary edges are
-    // stored on BOTH endpoints' sides — dedup by id so we don't
-    // add each one twice.
+    // boundary edges live in sideStore[cid].boundary_edges when cluster.py
+    // emitted them. Fold both back so _rebuildClusterBoundary has enough to
+    // recompute real member<->outer links. Cross-cluster boundary edges are
+    // stored on BOTH endpoints' sides — dedup by id so we don't add each one
+    // twice.
     if (inst.sideStore) {
       var seenEdgeIds = {};
       Object.keys(inst.sideStore).forEach(function(cid) {
@@ -1224,7 +1227,7 @@ var ontoink = (function () {
 
     // Built-in floors
     if (el.isEdge && el.isEdge()) {
-      // v0.7.4 — Cluster-managed super-edges always surface at L1+ so
+      // Cluster-managed super-edges always surface at L1+ so
       // users see WHICH clusters connect to which even at "hierarchy"
       // level. The underlying originals might be object-property
       // (floor 2) or subclass (floor 1) — treating the aggregate as
@@ -1240,7 +1243,7 @@ var ontoink = (function () {
       return 2;
     }
     // Node
-    // v0.7.3 — ClusterHull is a UI wrapper, not ontology content, but
+    // ClusterHull is a UI wrapper, not ontology content, but
     // it must survive LOD culling whenever its children survive. Give
     // it floor 0 (visible at every level) — the members inside decide
     // via Fix #3 (setLodLevel skip for expanded-cluster interior).
@@ -1266,7 +1269,7 @@ var ontoink = (function () {
   }
 
   // ==========================================================================
-  // v0.7.3 — Layout position cache (#4 in docs/big-ontology-plan.md)
+  // Layout position cache (#4 in docs/big-ontology-plan.md)
   //
   // Second open of the same ontology skips the dagre layout and reuses
   // the positions the user last dragged things to. Keyed by djb2 hash
@@ -1337,11 +1340,10 @@ var ontoink = (function () {
     if (restored > 0) { try { cy.fit(cy.elements(), 30); } catch (e) {} }
     return restored > 0;
   }
-  // v0.7.3-fix (adversarial finding #7 / #11): position cache used to
-  // save exactly once (cy.one("layoutstop")); user drags after that
-  // never persisted. `_wirePositionCache` binds a persistent listener
-  // for both layout ends and user drag-drops, debounced to 500 ms so a
-  // burst of layout events (dagre + preset) coalesces into one write.
+  // `_wirePositionCache` binds a persistent listener for both layout ends and
+  // user drag-drops — not a one-shot `cy.one("layoutstop")` — so a drag after
+  // the initial layout still gets saved. Debounced to 500 ms so a burst of
+  // layout events (dagre + preset) coalesces into one write.
   function _wirePositionCache(cy, cacheKeyGetter) {
     var pending = null;
     function schedule() {
@@ -1357,7 +1359,7 @@ var ontoink = (function () {
   }
 
   // ==========================================================================
-  // v0.7.3 — Faceted browsing (#33 in docs/big-ontology-plan.md)
+  // Faceted browsing (#33 in docs/big-ontology-plan.md)
   //
   // Facets are a left-rail complement to the LOD slider: instead of "how
   // much detail", they answer "which slice of the ontology". Every facet
@@ -1411,19 +1413,16 @@ var ontoink = (function () {
     // edge with it. We only test edge facet state for edges with an
     // explicit `namespace` field (rare).
     if (isEdge) return true;
-    // v0.7.3-fix (round-3 findings #1, #2): ClusterHull nodes previously
-    // blanket-passed here, which produced two visible bugs:
-    //   1. Uncheck an expanded cluster's namespace → interior members
-    //      atticized, hull stays as a "N members · click to collapse"
-    //      phantom with an empty interior.
-    //   2. Clear-all-namespaces (empty Set) → collapsed super-nodes
-    //      vanish (they carry data.namespace), but every expanded hull
-    //      persists as a phantom.
-    // Fix: hulls without a namespace still pass (rare), but hulls whose
-    // namespace fails the whitelist fail — and cascade-cull their
-    // children. Same rule as super-nodes (both carry data.namespace).
-    // The empty-Set case is also covered: has() returns false for every
-    // ns, so any hull with a namespace fails.
+    // ClusterHull nodes are checked against the namespace whitelist just like
+    // super-nodes (both carry data.namespace) rather than blanket-passed:
+    // hulls without a namespace (rare) still pass, but a hull whose namespace
+    // fails the whitelist fails too — and cascade-culls its children. A
+    // blanket pass would instead leave two phantoms behind: unchecking an
+    // expanded cluster's namespace would attic the interior members but leave
+    // the hull as an empty "N members · click to collapse" shell, and
+    // clearing every namespace (empty Set — has() returns false for every ns,
+    // so this falls out of the same rule) would remove collapsed super-nodes
+    // while every expanded hull persisted.
     // Namespace whitelist
     if (s.namespaces && s.namespaces.size !== undefined) {
       var ns = data.namespace;
@@ -1463,8 +1462,7 @@ var ontoink = (function () {
     // is enough. For edges we additionally need BOTH endpoints present
     // (either already in cy or in nodeCandidates) — otherwise cy.add
     // throws "nonexistent source/target" and the entry stays stranded
-    // in the attic on every subsequent setLodLevel call (adversarial
-    // finding #2).
+    // in the attic on every subsequent setLodLevel call.
     var nodeCandidates = [];       // {key, json}
     var edgeCandidates = [];       // {key, json}
     inst.attic.forEach(function(json, key) {
@@ -1491,8 +1489,7 @@ var ontoink = (function () {
     // Now snapshot currently-visible elements whose floor exceeds level.
     // Collect first, remove after — never mutate during iteration.
     //
-    // v0.7.3-fix (adversarial review 2026-07-10 findings 1/3/4/7):
-    //   1. Facet check runs BEFORE the expanded-cluster shortcut so an
+    // //   1. Facet check runs BEFORE the expanded-cluster shortcut so an
     //      unchecked namespace also hides expanded cluster interior.
     //   2. Edges are considered facet-failed when either endpoint is
     //      facet-failed — otherwise cy.remove's cascade removes them
@@ -1524,11 +1521,11 @@ var ontoink = (function () {
       if ((d.isSuperNode || d.type === "SuperNode") && inst.showSuperNodes === false) {
         toRemove.push(el); return;
       }
-      // v0.7.3-fix — Facet filter FIRST, before any early-return that
+      // Facet filter FIRST, before any early-return that
       // could smuggle a facet-hidden element past the cull. For edges,
       // "facet-hidden" means "either endpoint's namespace/annotation
       // filter fails" — otherwise the edge would cascade-remove without
-      // being atticized (finding #1).
+      // being atticized.
       var isEdge = el.isEdge && el.isEdge();
       if (hasFacetSelections) {
         if (isEdge) {
@@ -1539,7 +1536,7 @@ var ontoink = (function () {
           toRemove.push(el); return;
         }
       }
-      // v0.7.2 — cluster interior is managed by sideStore, NOT the LOD attic.
+      // cluster interior is managed by sideStore, NOT the LOD attic.
       // Rule: an element whose owning cluster is currently EXPANDED stays
       // visible regardless of LOD level (facet check above already
       // handled facet exclusion).
@@ -1557,7 +1554,7 @@ var ontoink = (function () {
       var floor = _lodFloorFor(el, inst);
       if (floor > level) toRemove.push(el);
     });
-    // v0.7.3-fix — Atticize cascade victims BEFORE cy.remove takes them.
+    // Atticize cascade victims BEFORE cy.remove takes them.
     // For every node in toRemove, snapshot its connected edges into the
     // attic if not already there. This preserves the edge for restore
     // when the user re-checks the facet / raises the LOD (findings 1/3).
@@ -1595,7 +1592,7 @@ var ontoink = (function () {
     };
     var container = document.getElementById(id);
     if (container) {
-      // v0.7.4 — LOD is now a dropdown (.ov-lod-select). The legacy
+      // LOD is now a dropdown (.ov-lod-select). The legacy
       // slider (.ov-lod-slider) and the descriptor span (.ov-lod-value)
       // may still be present in older fences — sync all three where
       // they exist so nothing goes stale.
@@ -1662,8 +1659,8 @@ var ontoink = (function () {
       isClusterHull: true,
       clusterId: supernode_id,
       memberCount: memberCount,
-      // Carry the cluster's namespace so facet filters (v0.7.3 #33) can
-      // treat the hull as belonging to the same namespace as its members.
+      // Carry the cluster's namespace so facet filters can treat the hull as
+      // belonging to the same namespace as its members.
       namespace: (meta && meta.ns) || null
     }});
 
@@ -1707,8 +1704,7 @@ var ontoink = (function () {
     // Re-apply LOD so freshly added elements settle at the slider position.
     // Suppressed when inside a batch expand/collapse (toggleSuperNodes) —
     // running setLodLevel mid-loop would evict sibling super-nodes into
-    // the attic, corrupting the pre-collapse state for later iterations
-    // (adversarial review 2026-07-10).
+    // the attic, corrupting the pre-collapse state for later iterations.
     if (!inst._batchOp) setLodLevel(id, inst.lodLevel);
   }
 
@@ -1744,12 +1740,11 @@ var ontoink = (function () {
     // unset). We removed the members above so this call is safe.
     if (hullEl && hullEl.length) cy.remove(hullEl);
 
-    // Purge stale attic copies of these members/edges. Fix #3 keeps
-    // cluster interior OUT of the LOD attic when the cluster is
-    // expanded, but historical attic entries from an earlier session
-    // state could still be there — belt-and-braces guarantees a later
-    // re-expand won't collide with a stale `cy.add(side.nodes)` on the
-    // same ids (adversarial review 2026-07-10).
+    // Purge stale attic copies of these members/edges. Cluster interior is
+    // kept OUT of the LOD attic while the cluster is expanded, but historical
+    // attic entries from an earlier session state could still be there —
+    // belt-and-braces guarantees a later re-expand won't collide with a
+    // stale `cy.add(side.nodes)` on the same ids.
     if (inst.attic && inst.attic.delete) {
       for (var mi = 0; mi < memberIds.length; mi++) inst.attic.delete(memberIds[mi]);
       for (var ei = 0; ei < interiorEdgeIds.length; ei++) inst.attic.delete(interiorEdgeIds[ei]);
@@ -1864,7 +1859,7 @@ var ontoink = (function () {
     _renderAtticList(id);
   }
 
-  // ── Facets panel (v0.7.3 #33) ──────────────────────────────────────
+  // ── Facets panel ─────────────────────────────────────────────────────
   // Windowed renderer for the facets panel; wired via the ``Facets``
   // toolbar button. The panel offers three sections: namespaces (a
   // scrollable list of prefixes with counts), has-restriction (single
@@ -1974,7 +1969,7 @@ var ontoink = (function () {
   }
 
   // ==========================================================================
-  // v0.7.3 — Metrics dashboard splash (#38 in docs/big-ontology-plan.md)
+  // Metrics dashboard splash (#38 in docs/big-ontology-plan.md)
   //
   // For big ontologies (>= 500 subjects), the honest entry point is a
   // dashboard, not a graph. The splash renders subject/edge counts,
@@ -1993,9 +1988,9 @@ var ontoink = (function () {
     return id.indexOf("_:") === 0;
   }
   // Stamp isBlankNode=true on every cy node whose id starts with "_:".
-  // The v0.7.4 style block matches this flag to render blank nodes as
-  // dashed grey ghosts (round-diamond shape) so users see immediately
-  // that they're OWL/SHACL scaffolding, not domain entities.
+  // The style block matches this flag to render blank nodes as dashed grey
+  // ghosts (round-diamond shape) so users see immediately that they're
+  // OWL/SHACL scaffolding, not domain entities.
   function _flagBlankNodes(cy) {
     if (!cy) return;
     cy.nodes().forEach(function(n) {
@@ -2020,7 +2015,7 @@ var ontoink = (function () {
       if (c && c.id) clusterById[c.id] = c;
     });
 
-    // v0.7.4 — Scan sideStore members too. When the graph is clustered
+    // Scan sideStore members too. When the graph is clustered
     // (browser or build-time), the vast majority of nodes with
     // annotations / restrictions live INSIDE sideStore[cid].nodes,
     // never in inst.data.nodes. Iterating only the top-level list was
@@ -2055,7 +2050,7 @@ var ontoink = (function () {
         return;
       }
       var t = d.type;
-      // v0.7.4 — Blank nodes should not be typed as "Individual" (which
+      // Blank nodes should not be typed as "Individual" (which
       // is what the current parser labels them). Give them a bucket
       // of their own in the metrics so users see how much of the
       // ontology is anonymous.
@@ -2226,19 +2221,15 @@ var ontoink = (function () {
   };
 
   // ==========================================================================
-  // v0.7.2 — Client-side namespace clustering
+  // Client-side namespace clustering
   //
-  // Problem the earlier build shipped with: `cluster.detect_clusters` (Python)
-  // was never wired into the fence or playground pipeline, so the browser-side
-  // `sideStore` was always `{}` and no node ever carried `isSuperNode=true`.
-  // The "Super" checkbox (and every super-node code path) was therefore inert
-  // for every real user — flip the box, nothing happens.
-  //
-  // v0.7.2 fixes that in the browser, without adding a Python dependency:
-  // every ontoink instance auto-clusters its nodes by namespace at init time
-  // if no build-time side-store was shipped. A namespace with `MIN_MEMBERS`
-  // or more members collapses into one hexagonal super-node whose interior is
-  // stashed in `sideStore[cid]` and re-emerges on click.
+  // Browser-side namespace auto-clustering, without any Python dependency:
+  // when `cluster.detect_clusters` (Python) hasn't run — the browser-side
+  // `sideStore` is `{}` and no node carries `isSuperNode=true` — every
+  // ontoink instance auto-clusters its nodes by namespace at init time
+  // instead. A namespace with `MIN_MEMBERS` or more members collapses into
+  // one hexagonal super-node whose interior is stashed in `sideStore[cid]`
+  // and re-emerges on click.
   //
   // Cross-cluster edges are rewritten to point at the containing super-nodes;
   // interior edges (both endpoints in the same namespace) stay in the
@@ -2271,9 +2262,8 @@ var ontoink = (function () {
     // The naive `replace(/[^a-zA-Z0-9]/g, "_")` aliased common ontology
     // patterns: `http://ex.org/foo/` and `http://ex.org/foo#` both
     // collapse to `_grp_http___ex_org_foo_`, silently merging two
-    // logically distinct namespace groups into one mislabeled super-node
-    // (adversarial review 2026-07-10). Hex-encoding preserves round-trip
-    // uniqueness while staying DOM-safe.
+    // logically distinct namespace groups into one mislabeled super-node.
+    // Hex-encoding preserves round-trip uniqueness while staying DOM-safe.
     return "_grp_" + String(ns || "").replace(/[^a-zA-Z0-9]/g, function(c) {
       return "_" + c.charCodeAt(0).toString(16) + "_";
     });
@@ -2302,16 +2292,14 @@ var ontoink = (function () {
     // current topology is by definition wrong. Without this, the sequence
     // expand-A → drop LOD below the object-property floor → collapse-A →
     // raise LOD would restore a stale A_member→B edge whose source is no
-    // longer in cy, throwing "missing endpoint" (adversarial review 2026-07-10).
+    // longer in cy, throwing "missing endpoint".
     var m = inst._memberToCid || {};
     var expanded = inst.expandedSuperNodes || new Set();
-    // v0.7.3-fix (round-3 findings #3, #4): the purge previously nuked
-    // EVERY clusterManaged attic entry — but this function only rebuilds
-    // ONE cluster's boundary, so entries belonging to OTHER clusters
-    // (e.g. a facet-hidden cluster B whose boundary edges are legitimately
-    // atticized) got destroyed as collateral. Scope the purge: only
-    // delete entries whose either endpoint touches `cid` (as member or
-    // as the super-id itself).
+    // Scope the purge to entries whose either endpoint touches `cid` (as
+    // member or as the super-id itself) — a blanket purge of every
+    // clusterManaged attic entry would also destroy other clusters' boundary
+    // edges that are legitimately atticized (e.g. a facet-hidden cluster B),
+    // even though this function only rebuilds ONE cluster's boundary.
     if (inst.attic && inst.attic.forEach) {
       var stale = [];
       inst.attic.forEach(function(json, key) {
@@ -2382,7 +2370,7 @@ var ontoink = (function () {
     if (toAdd.length) cy.add(toAdd);
   }
 
-  // v0.7.4 — Compact subtitle for a cluster's hexagon / hull header.
+  // Compact subtitle for a cluster's hexagon / hull header.
   // Examples: "52C · 8I · 5B" (Class / Individual / BlankNode counts),
   // or "no members" if empty. Only shows type entries with count > 0.
   // Edge-type entries (prefixed "e_") from the breakdown are ignored
@@ -2436,7 +2424,7 @@ var ontoink = (function () {
       if (members.length < _CLUSTER_MIN_MEMBERS) return;
       var cid = _cidForNs(ns);
       var title = _shortNsLabel(ns, prefixes);
-      // v0.7.4 — Per-cluster type breakdown: how many Classes vs
+      // Per-cluster type breakdown: how many Classes vs
       // Individuals vs blank-nodes vs other. Used by the hexagon /
       // hull label so users see cluster composition at a glance
       // ("mwo · 65 · 52 classes · 8 individuals · 5 blanks").
@@ -2492,7 +2480,7 @@ var ontoink = (function () {
     var toRemove = nodes.filter(function(n) { return !!memberToCid[n.id()]; });
     if (toRemove.length) cy.remove(toRemove);
 
-    // Add super-node placeholders. v0.7.4 — richer label built from the
+    // Add super-node placeholders, with a richer label built from the
     // per-cluster type breakdown (see `_clusterSubtitle`) so users can
     // read the composition without expanding: "mwo · 65 · 52C · 8I · 5B".
     var superNodes = Object.keys(clusters).map(function(cid) {
@@ -2556,17 +2544,16 @@ var ontoink = (function () {
     try { cy.layout({ name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 }).run(); } catch (e) {}
   }
 
-  // "Group by namespace" toggle — the renamed v0.7.2 replacement for the
-  // inert "Super" checkbox.
+  // "Group by namespace" toggle.
   //   checked  → grouped view: collapse every currently-expanded cluster
   //   unchecked → flat view: expand every super-node still in cy
   //
   // Batched via inst._batchOp so expand/collapseSuperNode skip their tail
   // setLodLevel — otherwise the mid-loop LOD sweep sees the new
   // showSuperNodes state and evicts every still-collapsed sibling
-  // super-node into the attic before the loop reaches it (adversarial
-  // review 2026-07-10 finding #7). Similarly `showSuperNodes` is written
-  // AFTER the loop so the sweep during the tail setLodLevel sees the
+  // super-node into the attic before the loop reaches it. Similarly
+  // `showSuperNodes` is written AFTER the loop so the sweep during the
+  // tail setLodLevel sees the
   // correct final state, not an intermediate one.
   function toggleSuperNodes(id, checked) {
     var inst = instances[id]; if (!inst || !inst.cy) return;
@@ -3009,7 +2996,7 @@ var ontoink = (function () {
         { selector: 'node[type="Literal"]', style: { "shape":"ellipse","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#6a9" }},
         { selector: 'node[type="Datatype"]', style: { "shape":"diamond" }},
         { selector: 'node[type="SHACL Shape"]', style: { "shape":"round-rectangle","border-color":"#0891b2" }},
-        // v0.7.0 — SuperNode gets a chunkier hexagon + double border so
+        // SuperNode gets a chunkier hexagon + double border so
         // it reads as a "container" node. Label mapper appends the member
         // count (e.g. "People and Addresses  ·  42") so the cluster size
         // is legible without a hover.
@@ -3034,7 +3021,7 @@ var ontoink = (function () {
             "text-max-width":"200px"
         }},
         { selector: 'node[?isSuperNode]:selected', style: { "border-color":"#0e7490","border-width":4 }},
-        // v0.7.3 — ClusterHull compound parent for expanded clusters.
+        // ClusterHull compound parent for expanded clusters.
         // Dashed rounded rectangle that visually contains its members;
         // header label at top says "<title> · N · click header to
         // collapse". Draggable as a whole (Cytoscape's built-in
@@ -3066,7 +3053,7 @@ var ontoink = (function () {
           "text-background-padding":"3px","text-background-shape":"round-rectangle",
           "padding":"16px","compound-sizing-wrt-labels":"include"
         }},
-        // v0.7.4 — Blank-node styling. rdflib emits blank subjects as
+        // Blank-node styling. rdflib emits blank subjects as
         // "_:bN..." — they aren't real Individuals no matter what
         // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
         // on init; the style below matches that flag reliably (avoiding
@@ -3076,7 +3063,7 @@ var ontoink = (function () {
           "color":"#6b7280","font-style":"italic","opacity":0.7,
           "shape":"round-diamond","width":24,"height":24
         }},
-        // v0.7.3 — Fanned super-edges: when multiple originals collapse
+        // Fanned super-edges: when multiple originals collapse
         // into one boundary edge, `data.weight > 1`. Widen the line
         // proportionally (mapData → 3..12 px) and paint it a distinct
         // "bundle" purple so users can tell "45 relations" apart from
@@ -3097,21 +3084,29 @@ var ontoink = (function () {
         { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
         { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
         { selector: "edge[edgeType='owl-restriction'][source = target]", style: { "curve-style":"bezier","control-point-step-size":40 }},
+        // proposed (not yet accepted) SHACL constraints. Opacity is
+        // mapped from the constraint's own confidence, so a weakly-evidenced
+        // suggestion literally looks fainter than a near-certain one. The value
+        // lives in element data rather than a style bypass, so LOD sweeps and
+        // style-preset swaps don't wipe it.
+        { selector: "edge[edgeType='recommended-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-dash-pattern":[4,4],"line-color":"#7c3aed","target-arrow-color":"#7c3aed","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-12,"color":"#7c3aed","text-background-color":"#fff","text-background-opacity":0.92,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":"mapData(confidence, 0.5, 1, 0.28, 0.92)" }},
+        { selector: "edge[edgeType='recommended-constraint'][source = target]", style: { "curve-style":"bezier","control-point-step-size":55 }},
+        // Deprecated terms stay visible but read as retired. Cytoscape cannot
+        // strike a label through, so dimming plus a dashed border carries it.
+        { selector: "node[?deprecated]", style: { "opacity":0.45,"border-style":"dashed","border-width":2,"border-color":"#9ca3af" }},
         { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
       ]),
       layout: { name:"dagre", rankDir:"BT", nodeSep:60, rankSep:80, edgeSep:20, animate:false, fit:true, padding:30 },
-      // v0.7.4 — Viewport optimizations for large ontologies. On pan/zoom
-      // over hundreds of edges Cytoscape's canvas renderer thrashes; these
-      // flags trade visual detail for interactivity: edges + labels hide
-      // during motion, and the whole scene is bitmap-cached to a texture.
-      // wheelSensitivity 0.15 gives finer-grained zoom control — the old
-      // 0.3 skipped past the sweet spot on trackpads.
+      // the 0.7.4 motion optimizations now apply only to big graphs,
+      // and pixelRatio follows the display instead of being pinned to 1 (which
+      // rendered every diagram at half resolution on a HiDPI screen).
+      // See _isBigGraph / _pixelRatio.
       wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
-      hideEdgesOnViewport: true,
-      hideLabelsOnViewport: true,
-      textureOnViewport: true,
-      pixelRatio: 1,
+      hideEdgesOnViewport: _useMotionOptims((data.nodes || []).length),
+      hideLabelsOnViewport: _useMotionOptims((data.nodes || []).length),
+      textureOnViewport: _useMotionOptims((data.nodes || []).length),
+      pixelRatio: _pixelRatio((data.nodes || []).length, data.pixel_ratio),
     });
 
     instances[containerId] = {
@@ -3137,14 +3132,14 @@ var ontoink = (function () {
     };
     // Big-ontology bootstrap: side-store + auto-cluster + facets + LOD settlement.
     // loadSideStore first — it only fills sideStore if a build-time Leiden
-    // blob was shipped (v0.7.3 wires cluster.py at build time when the
+    // blob was shipped (cluster.py wires this at build time when the
     // ontoink[cluster] extras are installed). If it comes back empty, the
     // browser-side namespace clusterer takes over so "Group" is meaningful.
     loadSideStore(containerId);
     _flagBlankNodes(cy);
     _autoClusterByNamespace(containerId);
     _buildFacets(instances[containerId]);
-    // v0.7.3 — Position cache (#4). Reuse positions from a previous
+    // Position cache (#4). Reuse positions from a previous
     // open so second visits skip the dagre stall. Key = djb2 hash of
     // the base64 graph blob (stable per TTL). If nothing cached, we
     // persist positions on layoutstop below.
@@ -3156,7 +3151,7 @@ var ontoink = (function () {
       _wirePositionCache(cy, function() { return instances[containerId] && instances[containerId]._posCacheKey; });
     } catch (e) {}
     setLodLevel(containerId, instances[containerId].lodLevel);
-    // v0.7.3 — open the metrics splash for big fence-side ontologies too
+    // open the metrics splash for big fence-side ontologies too
     // (#38). Author can suppress via ``metrics_splash: false`` in fence
     // YAML if they've placed the fence in a static docs page context.
     if (data.nodes && data.nodes.length >= 500 && data.metrics_splash !== false) {
@@ -3185,7 +3180,7 @@ var ontoink = (function () {
       });
       makePopupDraggable(popup);
     }
-    // v0.7.0 — super-node tap: expand/collapse instead of showing the
+    // super-node tap: expand/collapse instead of showing the
     // generic popup. Bound BEFORE the generic 'node' handler so Cytoscape
     // fires the more-specific selector first; we stopPropagation() to
     // keep the generic handler off.
@@ -3199,7 +3194,7 @@ var ontoink = (function () {
       else                                       expandSuperNode(containerId, n.id());
       evt.stopPropagation();
     });
-    // v0.7.3 — ClusterHull tap: collapse the cluster it wraps. The header
+    // ClusterHull tap: collapse the cluster it wraps. The header
     // label already reads "click header to collapse" so this is the
     // discoverable affordance we promised. `evt.target` is the parent
     // only when the user hit the border/header/padding — clicks on child
@@ -3217,7 +3212,7 @@ var ontoink = (function () {
       // already handled them).
       if (evt.target.data("isSuperNode")) return;
       if (evt.target.data("isClusterHull")) return;
-      // v0.7.5 — a ctrl/cmd/shift click is a SELECTION gesture (and so is any
+      // a ctrl/cmd/shift click is a SELECTION gesture (and so is any
       // click while several nodes are selected): popping the detail card over
       // the graph there would fight the user mid-arrangement.
       if (_isMultiSelectGesture(evt, cy)) { removePopup(container); return; }
@@ -3230,7 +3225,17 @@ var ontoink = (function () {
       requestAnimationFrame(function(){var r=popup.getBoundingClientRect();if(r.right>pR.right-10)popup.style.left=(parseFloat(popup.style.left)-r.width-30)+"px";if(r.bottom>pR.bottom-10)popup.style.top=(parseFloat(popup.style.top)-r.height)+"px";});
       wirePopup(popup, d);
     });
+    // A ghost constraint is a proposal, so clicking it accepts it — the whole
+    // point of drawing suggestions on the canvas is that judging one is a
+    // single click. Handled before the generic edge popup so the click is not
+    // spent on an info bubble instead.
+    cy.on("tap", "edge[?ghost]", function(evt) {
+      evt.stopPropagation();
+      removePopup(container);
+      solidifyGhost(containerId, evt.target.id());
+    });
     cy.on("tap", "edge", function(evt) {
+      if (evt.target.data("ghost")) return;
       removePopup(container);
       var d=evt.target.data(), midpoint=evt.target.midpoint();
       var zoom = cy.zoom(), pan = cy.pan();
@@ -3243,7 +3248,7 @@ var ontoink = (function () {
       wirePopup(popup, d);
     });
     cy.on("tap", function(e) { if(e.target===cy) removePopup(container); });
-    // v0.7.5 — ctrl/shift multi-select, selection halo, right-click menu.
+    // ctrl/shift multi-select, selection halo, right-click menu.
     wireSelectionUX(containerId, cy, container, canvas);
 
     buildLegendOverlay(container, data);
@@ -3470,7 +3475,7 @@ var ontoink = (function () {
       if(!inQ&&ch==="."&&(si===cl.length-1||/\s/.test(cl[si+1])||cl[si+1]===undefined)){if(cur.trim())stmts.push(cur.trim());cur="";continue;}
       cur+=ch;}
     if(cur.trim())stmts.push(cur.trim());
-    // v0.7.4 — Recursive predicate-object-list parser with Turtle
+    // Recursive predicate-object-list parser with Turtle
     // blank-node support. The previous flat loop had no notion of
     // `[ ... ]`, so an anonymous restriction like
     //   ex:D owl:equivalentClass [ a owl:Restriction ; owl:onProperty ex:p ]
@@ -3538,7 +3543,7 @@ var ontoink = (function () {
     if(t[i]==="<"){var e=t.indexOf(">",i);if(e<0)e=t.length-1;tk.push(t.substring(i,e+1));i=e+1;}
     else if(t[i]==='"'){var j=i+1;while(j<t.length&&t[j]!=='"'){if(t[j]==="\\")j++;j++;}j++;while(j<t.length&&(t[j]==="@"||t[j]==="^")){if(t[j]==="@"){j++;while(j<t.length&&/[a-zA-Z-]/.test(t[j]))j++;}if(j<t.length&&t[j]==="^"&&t[j+1]==="^"){j+=2;if(t[j]==="<")j=t.indexOf(">",j)+1;else while(j<t.length&&/\S/.test(t[j])&&t[j]!==";"&&t[j]!==",")j++;}}tk.push(t.substring(i,j));i=j;}
     else if(t[i]===";"||t[i]===","){tk.push(t[i]);i++;}
-    // v0.7.4 — `[` / `]` are structural (anonymous blank nodes), not term
+    // `[` / `]` are structural (anonymous blank nodes), not term
     // characters; emit them as their own tokens and treat them as term
     // delimiters so `[a owl:Restriction]` doesn't glue into one blob.
     else if(t[i]==="["||t[i]==="]"||t[i]==="("||t[i]===")"){tk.push(t[i]);i++;}
@@ -3715,7 +3720,40 @@ var ontoink = (function () {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // v0.7.5 — Typography & shape sizing
+  // Renderer options, shared by all three render paths.
+  //
+  // 0.7.4 added viewport optimizations for large ontologies and applied them
+  // to EVERY graph, including `pixelRatio: 1`. On a HiDPI display that halves
+  // (or thirds) the canvas backing store: a 900px-wide canvas on a 2× screen
+  // renders 900 device pixels instead of 1800, so labels and edges look soft.
+  // The perf trade is real, but only for big graphs — so make it conditional
+  // instead of unconditional, and cap the ratio at 2 so a 3×/4× phone screen
+  // doesn't quadruple the memory for an invisible gain.
+  //
+  // `pixel_ratio` in the fence YAML (or `opts.pixelRatio` for embeds) forces a
+  // value: 1 to buy back frame rate on a huge ontology, `window.devicePixelRatio`
+  // to insist on full sharpness.
+  var BIG_GRAPH_NODES = 500;
+  // True when the 0.7.4 motion optimizations are worth their visual cost. On
+  // pan/zoom over hundreds of edges Cytoscape's canvas renderer thrashes, so
+  // big graphs hide edges + labels during motion and cache the scene to a
+  // texture. On a small graph there is nothing to trade away — and texture
+  // caching is exactly what makes a stationary graph look soft.
+  // NB: `playground` declares a local `var _isBigGraph` boolean, which would
+  // shadow this for its entire body — hence the distinct name.
+  function _useMotionOptims(nodeCount) { return (nodeCount || 0) >= BIG_GRAPH_NODES; }
+  function _pixelRatio(nodeCount, override) {
+    if (override != null && override !== "") {
+      var forced = parseFloat(override);
+      if (isFinite(forced) && forced > 0) return forced;
+    }
+    if (_useMotionOptims(nodeCount)) return 1;
+    var dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    return Math.min(dpr, 2);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Typography & shape sizing
   //
   // "Edit Layout" can now change how BIG the shapes are and which FONT they
   // use. Two properties of the existing code shaped the design:
@@ -3744,9 +3782,8 @@ var ontoink = (function () {
   // NOTE — no quotes in these stacks. Cytoscape validates `font-family`
   // against /^([\w- .]+(?:\s*,\s*[\w- .]+)*)$/, so a CSS-style quoted stack
   // ("'Inter','Segoe UI',…") fails the regex and is silently dropped back to
-  // the Cytoscape default (Helvetica Neue). That is why ontoink's diagrams
-  // never actually rendered in Inter before v0.7.5 — the stylesheets asked
-  // for it in CSS syntax. Multi-word family names are fine unquoted.
+  // the Cytoscape default (Helvetica Neue), with no error. Multi-word family
+  // names are fine unquoted.
   var OI_FONT_STACKS = [
     { label: "Inter (default)",   value: "Inter, Segoe UI, system-ui, sans-serif" },
     { label: "Helvetica / Arial", value: "Helvetica, Arial, sans-serif" },
@@ -3919,7 +3956,7 @@ var ontoink = (function () {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // v0.7.5 — Multi-selection + right-click context menu
+  // Multi-selection + right-click context menu
   //
   // Cytoscape already treats ctrl/cmd/shift as its additive-selection
   // modifier (vendor/cytoscape.min.js: `e.shiftKey||e.metaKey||e.ctrlKey`)
@@ -4321,7 +4358,7 @@ var ontoink = (function () {
   // ── undo / redo for the destructive verbs ─────────────────────────────
   // Every verb below is one click and the position cache autosaves 500 ms
   // later, so an accidental "arrange in a circle" over a hand-built diagram
-  // used to be unrecoverable. Snapshot before each mutating verb.
+  // would otherwise be unrecoverable. Snapshot before each mutating verb.
   var CTX_UNDO_DEPTH = 25;
   function _ctxSnapshot(inst) {
     var cy = inst.cy, nodes = [], edges = [];
@@ -4473,6 +4510,16 @@ var ontoink = (function () {
       h += _ctxItem(id, "path", "Path between the 2 selected", "path",
                     "Shortest path — needs exactly two selected nodes", n !== 2);
       h += _ctxSep();
+      h += _ctxSection("SHACL");
+      // Enabled only for a single Class: inducing a shape is a per-class
+      // question, and "a shape for these six classes at once" is not one.
+      var oneClass = n === 1 && sel[0].data("type") === "Class";
+      h += _ctxItem(id, "induce-shape", "Induce shape from this class…", "shield",
+                    "Propose constraints from the instances and axioms — they appear as dashed edges you can accept",
+                    !oneClass);
+      h += _ctxItem(id, "clear-ghosts", "Clear suggestions", "close",
+                    "Remove the dashed suggestion edges", !(inst._ghosts));
+      h += _ctxSep();
       h += _ctxSection("Copy & export");
       h += _ctxItem(id, "copy-iri", "Copy IRIs", "copy");
       h += _ctxItem(id, "copy-label", "Copy labels", "copy");
@@ -4490,6 +4537,18 @@ var ontoink = (function () {
                       "shacl-constraint": "SHACL constraint", "owl-restriction": "OWL restriction",
                       "inferred": "Inferred" }[d.edgeType] || (d.edgeType || "Edge");
       h += '<div class="ov-ctx-head">' + esc(d.label || etLabel) + '<span class="ov-ctx-hint">' + esc(etLabel) + '</span></div>';
+      if (d.edgeType === "inferred") {
+        // Only the in-page OWL-RL reasoner records justifications; the item
+        // still opens for other backends and says so rather than pretending.
+        h += _ctxItem(id, "edge-explain", "Explain this inference…", "info",
+                      "Which OWL rule fired, and on which premises");
+        h += _ctxSep();
+      }
+      if (d.ghost) {
+        h += _ctxItem(id, "edge-accept-ghost", "Accept this constraint", "shield",
+                      "Turn the suggestion into SHACL and add it to the editor");
+        h += _ctxSep();
+      }
       h += _ctxItem(id, "edge-select-ends", "Select both endpoints", "selectAll", "Then align, copy or trace a path between them");
       h += _ctxItem(id, "edge-select-same", "Select all with this predicate", "link", "Every node using this property — its de-facto domain and range");
       h += _ctxItem(id, "edge-hide-type", "Hide all edges of this type", "eyeOff", "Declutter without changing the LOD level");
@@ -4604,6 +4663,11 @@ var ontoink = (function () {
     if (verb === "export-png") return exportSelectionPNG(id);
     if (verb === "fit") return fit(id);
     if (verb === "relayout") { var sl = document.getElementById(id).querySelector(".ov-layout-select"); return changeLayout(id, sl ? sl.value : "dagre"); }
+    if (verb === "induce-shape") {
+      var sel = _selNodes(inst.cy);
+      return induceShape(id, sel.length ? sel[0].id() : null);
+    }
+    if (verb === "clear-ghosts") return clearGhosts(id);
     if (verb.indexOf("edge-") === 0) return edgeAction(id, verb.slice(5));
     if (verb.indexOf("cluster-") === 0) return clusterAction(id, verb.slice(8));
   }
@@ -4616,6 +4680,8 @@ var ontoink = (function () {
     var inst = instances[id]; if (!inst) return;
     var cy = inst.cy, e = inst._ctxEdge;
     if (!e || !e.length) { _ctxToast(id, "No edge under the cursor"); return; }
+    if (verb === "explain") return explainEdge(id, e.id());
+    if (verb === "accept-ghost") return solidifyGhost(id, e.id());
     if (verb === "select-ends") {
       cy.elements().unselect(); e.source().select(); e.target().select();
       _ctxToast(id, "Both endpoints selected"); return;
@@ -4736,7 +4802,10 @@ var ontoink = (function () {
     var wasHidden = rest.filter(function (e) { return e.style("display") === "none"; });
     rest.style("display", "none");
     try {
-      var url = cy.png({ scale: 3, bg: "#ffffff", full: true });
+      // Same auto-resolution rule as the full export (see _exportScale) — a
+      // fixed scale here would be multiplied by the renderer pixel ratio and
+      // produce a needlessly huge file on a HiDPI screen.
+      var url = cy.png({ scale: _exportScale(cy), bg: "#ffffff", full: true });
       var a = document.createElement("a");
       a.href = url; a.download = id + "-selection.png";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -5096,11 +5165,60 @@ var ontoink = (function () {
     return { types: types, sources: sources };
   }
 
-  function exportPNG(id){
+  // Export resolution. `cy.png({scale})` renders into its own buffer,
+  // so the exported pixel size is scale × the graph's on-screen size and is
+  // independent of the renderer's pixelRatio. A fixed scale:2 meant a compact
+  // diagram exported at ~1400px wide — fine on a screen, thin for print (a
+  // 12cm figure at 300dpi wants ~1400px on its own, before any margin).
+  //
+  // Pick the scale so the result lands near EXPORT_TARGET_PX on its long edge,
+  // never below 2x, never above 8x, and never beyond the browser's canvas
+  // limits (~16384px per side, and total area matters more than either side).
+  // Measured, not assumed: the exported bitmap is
+  //     graph size × scale × renderer pixelRatio
+  // (pr=1, scale=4 → 2824px for a 706px graph; pr=2, scale=2 → the same 2824).
+  // So the pixelRatio bump above would silently double every export; compute
+  // the scale in OUTPUT pixels and divide the ratio back out.
+  var EXPORT_TARGET_PX = 3000;   // long edge of a figure that prints well
+  var EXPORT_MAX_SIDE = 14000;   // browsers cap a canvas side around 16384
+  var EXPORT_MAX_AREA = 60e6;    // …and total area matters more than either side
+  // Cytoscape does not expose the ratio it is using (`cy.renderer().pixelRatio`
+  // is undefined), so read it off the canvas: backing-store px per CSS px.
+  function _effectivePixelRatio(cy) {
+    try {
+      var cont = cy.container && cy.container();
+      var cvs = cont && cont.querySelector("canvas");
+      if (cvs && cvs.width && cvs.clientWidth) {
+        var r = cvs.width / cvs.clientWidth;
+        if (isFinite(r) && r > 0) return r;
+      }
+    } catch (e) {}
+    return 1;
+  }
+
+  function _exportScale(cy, requested) {
+    var pr = _effectivePixelRatio(cy);
+    if (requested != null && requested !== "") {
+      var forced = parseFloat(requested);
+      if (isFinite(forced) && forced > 0) return forced;   // caller knows best
+    }
+    var bb = cy.elements().boundingBox();
+    var w = Math.max(1, bb.w), h = Math.max(1, bb.h), long = Math.max(w, h);
+    var s = EXPORT_TARGET_PX / (long * pr);
+    s = Math.min(8, Math.max(2 / pr, s));                  // never below 2x output
+    s = Math.min(s, EXPORT_MAX_SIDE / (long * pr));        // side clamp
+    s = Math.min(s, Math.sqrt(EXPORT_MAX_AREA / (w * h * pr * pr)));  // area clamp
+    if (!isFinite(s) || s <= 0) s = 2 / pr;
+    return Math.max(0.25, Math.round(s * 100) / 100);
+  }
+
+  // `scale` is optional: omit it for the automatic high-resolution pick, or
+  // pass a number (ontoink.exportPNG('id', 4)) to force one.
+  function exportPNG(id, scale){
     var inst=instances[id];if(!inst)return;
     var cy=inst.cy;
     var c=document.getElementById(id);
-    var scale=2;
+    scale=_exportScale(cy, scale);
 
     // Hide minimap during export
     var minimap=c.querySelector(".ov-minimap"); if(minimap)minimap.style.visibility="hidden";
@@ -5121,7 +5239,7 @@ var ontoink = (function () {
       });
       exportData._live = liveStyles;
     }
-    // v0.7.4 — Legend rows are derived from `data.edges`, but overlay edge
+    // Legend rows are derived from `data.edges`, but overlay edge
     // types (notably the purple dotted "inferred" overlay) live only in
     // cytoscape — setInferredOverlay cy.add()s them without appending to
     // inst.data.edges. The on-screen legend compensates by sweeping
@@ -5199,7 +5317,7 @@ var ontoink = (function () {
       // full:false = the current viewport (WYSIWYG), matching the browser so the
       // legend/prefixes boxes line up with their on-screen positions.
       //
-      // v0.7.5 — WYSIWYG also means "whatever is off-screen is CUT". Since the
+      // WYSIWYG also means "whatever is off-screen is CUT". Since the
       // align/distribute/arrange verbs actively encourage spreading a diagram
       // out, silently truncating it here would ruin exactly the figures those
       // verbs exist to produce. So: if anything sits outside the viewport, fit
@@ -5225,7 +5343,7 @@ var ontoink = (function () {
         usedShapes[t]=live.typeShapes[t]||n.data.shape||"rectangle";
       });
       inst.data.edges.forEach(function(e){usedEdge[e.data.edgeType]=true;});
-      // v0.7.4 — also pick up overlay-only edge types (e.g. "inferred"),
+      // also pick up overlay-only edge types (e.g. "inferred"),
       // which live in cytoscape but never in inst.data.edges. Mirrors the
       // sweep buildLegendOverlay does for the on-screen legend.
       inst.cy.edges().forEach(function(e){var et=e.data("edgeType");if(et)usedEdge[et]=true;});
@@ -5358,7 +5476,7 @@ var ontoink = (function () {
     // Pre-fill the panel with any build-time inferences, before the user
     // chooses to re-run with a different backend.
     //
-    // v0.7.3 — Distinguish "reasoner ran and produced zero triples" from
+    // Distinguish "reasoner ran and produced zero triples" from
     // "no reasoner installed at build time". The consistency probe uses
     // the same owlready2 that _run_reasoning does, so its `status` field
     // tells us whether reasoning was actually available:
@@ -5383,7 +5501,7 @@ var ontoink = (function () {
         '<div class="ov-reasoning-body">' +
           '<div style="padding:8px 12px;color:#374151;font-size:13px;background:#f0fdf4;border-bottom:1px solid #d1d5db;"><strong>' + pre.length + '</strong> pre-computed inference' + (pre.length === 1 ? '' : 's') + ' from build time. <a href="#" data-oi-onclick="ontoink.togglePlaygroundReasoning(\'' + id + '\');ontoink.togglePlaygroundReasoning(\'' + id + '\');event.preventDefault();return false;">Re-run with selected backend ↻</a></div>' +
           '<table class="ov-reasoning-table"><thead><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-          // v0.7.4 — keep the SHACL-over-inferences action reachable; this
+          // keep the SHACL-over-inferences action reachable; this
           // innerHTML assignment otherwise discards the button fence.py
           // rendered into the panel.
           ((inst.data && inst.data.shacl && inst.data.shacl.length)
@@ -5653,13 +5771,13 @@ var ontoink = (function () {
         { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
         { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":0.75 }},
         { selector: "node[?inferred]", style: { "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
-        // v0.7.2 — namespace-cluster super-nodes. Same visual language as
+        // namespace-cluster super-nodes. Same visual language as
         // the fence-side style block (~line 1788): chunky hexagon, double
         // cyan border, member-count suffix. Ensures the playground and
         // fence renders read as one product.
         { selector: 'node[?isSuperNode]', style: {
           "label": function(ele) {
-            // v0.7.4 — Multi-line label. Line 1: prefix + total count.
+            // Multi-line label. Line 1: prefix + total count.
             // Line 2: type breakdown ("52C · 8I · 5B"). Uses \n which
             // Cytoscape renders when text-wrap='wrap' is applied.
             var n = ele.data("memberCount");
@@ -5675,7 +5793,7 @@ var ontoink = (function () {
           "padding":"18px","text-max-width":"200px"
         }},
         { selector: 'node[?isSuperNode]:selected', style: { "border-color":"#0e7490","border-width":4 }},
-        // v0.7.3 — ClusterHull compound parent for expanded clusters.
+        // ClusterHull compound parent for expanded clusters.
         // Same visual language as the fence-side hull (~line 2192).
         { selector: 'node[?isClusterHull]', style: {
           "shape":"round-rectangle","background-color":"#f0f9ff","background-opacity":0.35,
@@ -5703,7 +5821,7 @@ var ontoink = (function () {
           "text-background-padding":"3px","text-background-shape":"round-rectangle",
           "padding":"16px","compound-sizing-wrt-labels":"include"
         }},
-        // v0.7.4 — Blank-node styling. rdflib emits blank subjects as
+        // Blank-node styling. rdflib emits blank subjects as
         // "_:bN..." — they aren't real Individuals no matter what
         // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
         // on init; the style below matches that flag reliably (avoiding
@@ -5713,7 +5831,7 @@ var ontoink = (function () {
           "color":"#6b7280","font-style":"italic","opacity":0.7,
           "shape":"round-diamond","width":24,"height":24
         }},
-        // v0.7.3 — Fanned super-edges: when multiple originals collapse
+        // Fanned super-edges: when multiple originals collapse
         // into one boundary edge, `data.weight > 1`. Widen the line
         // proportionally (mapData → 3..12 px) and paint it a distinct
         // "bundle" purple so users can tell "45 relations" apart from
@@ -5727,21 +5845,19 @@ var ontoink = (function () {
         }},
       ]),
       layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, edgeSep: 20, animate: false, fit: true, padding: 30 },
-      // v0.7.4 — Viewport optimizations for large ontologies. On pan/zoom
-      // over hundreds of edges Cytoscape's canvas renderer thrashes; these
-      // flags trade visual detail for interactivity: edges + labels hide
-      // during motion, and the whole scene is bitmap-cached to a texture.
-      // wheelSensitivity 0.15 gives finer-grained zoom control — the old
-      // 0.3 skipped past the sweet spot on trackpads.
+      // the 0.7.4 motion optimizations now apply only to big graphs,
+      // and pixelRatio follows the display instead of being pinned to 1 (which
+      // rendered every diagram at half resolution on a HiDPI screen).
+      // See _isBigGraph / _pixelRatio.
       wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
-      hideEdgesOnViewport: true,
-      hideLabelsOnViewport: true,
-      textureOnViewport: true,
-      pixelRatio: 1,
+      hideEdgesOnViewport: _useMotionOptims(nodeList.length),
+      hideLabelsOnViewport: _useMotionOptims(nodeList.length),
+      textureOnViewport: _useMotionOptims(nodeList.length),
+      pixelRatio: _pixelRatio(nodeList.length, (data && data.pixel_ratio)),
     });
 
-    // Playground init — mirror the fence-side v0.7.0 semantic-tile fields
-    // so LOD slider + Attic + Super toggle + node badges all work here.
+    // Playground init — mirror the fence-side semantic-tile fields so LOD
+    // slider + Attic + Super toggle + node badges all work here.
     // The playground has no build-time side-store (no Leiden clustering
     // runs on the user's live TTL), so ``sideStore`` starts empty and
     // ``expandedSuperNodes`` stays untouched.
@@ -5764,14 +5880,14 @@ var ontoink = (function () {
       _nodeBadgesRendered: new Set(),
       _isPlayground: true
     };
-    // v0.7.2 — run browser-side namespace clustering on the pasted TTL so
+    // run browser-side namespace clustering on the pasted TTL so
     // the "Group by namespace" checkbox is meaningful in the playground.
     // The fence path has an equivalent bootstrap at line ~1848; keeping
     // the two in sync is deliberate.
     _flagBlankNodes(cy);
     _autoClusterByNamespace(containerId);
     _buildFacets(instances[containerId]);
-    // v0.7.3 — Position cache (#4). Keyed off the pasted TTL so the
+    // Position cache (#4). Keyed off the pasted TTL so the
     // same paste on a later session recovers its layout.
     try {
       instances[containerId]._posCacheKey = _posCacheKeyFor(ttl || "");
@@ -5782,7 +5898,7 @@ var ontoink = (function () {
     // Bootstrap the LOD pipeline so the toolbar controls in
     // demo/docs/playground.md take effect the moment the graph appears.
     setLodLevel(containerId, instances[containerId].lodLevel);
-    // v0.7.3 — on big graphs, open the metrics dashboard splash so the
+    // on big graphs, open the metrics dashboard splash so the
     // user sees the shape of what they pasted (with a LOD picker) before
     // committing to a first render (#38 in docs/big-ontology-plan.md).
     if (_isBigGraph) { try { openMetricsSplash(containerId); } catch (e) {} }
@@ -5809,7 +5925,7 @@ var ontoink = (function () {
       });
       makePopupDraggable(popup);
     }
-    // v0.7.2 — super-node tap: expand/collapse the cluster instead of showing
+    // super-node tap: expand/collapse the cluster instead of showing
     // the ordinary popup. Bound BEFORE the generic 'node' handler so
     // Cytoscape fires the more-specific selector first; stopPropagation()
     // then keeps the generic handler off. Mirrors the fence-side wiring
@@ -5824,7 +5940,7 @@ var ontoink = (function () {
       else                                       expandSuperNode(containerId, n.id());
       evt.stopPropagation();
     });
-    // v0.7.3 — ClusterHull tap: collapse. Matches the fence wiring
+    // ClusterHull tap: collapse. Matches the fence wiring
     // (~line 2290). The header label reads "click header to collapse".
     cy.on("tap", 'node[?isClusterHull]', function(evt) {
       removePopup(container);
@@ -5836,7 +5952,7 @@ var ontoink = (function () {
       // Don't double-fire for super-nodes or hulls.
       if (evt.target.data("isSuperNode")) return;
       if (evt.target.data("isClusterHull")) return;
-      // v0.7.5 — see the fence-side handler: ctrl/cmd/shift click is a
+      // see the fence-side handler: ctrl/cmd/shift click is a
       // selection gesture, not a "show me this node" gesture.
       if (_isMultiSelectGesture(evt, cy)) { removePopup(container); return; }
       removePopup(container);
@@ -5861,7 +5977,7 @@ var ontoink = (function () {
       wirePlaygroundPopup(popup, d);
     });
     cy.on("tap", function(e) { if (e.target === cy) removePopup(container); });
-    // v0.7.5 — same selection UX as the fence path.
+    // same selection UX as the fence path.
     wireSelectionUX(containerId, cy, container, canvas);
 
     buildLegendOverlay(container, data);
@@ -6074,14 +6190,29 @@ var ontoink = (function () {
     var smells = inst.data.smells || [];
     if (smells.length) {
       h += '<div class="ov-stats-section"><strong>OntoSniff \u2014 Quality</strong> <span style="font-size:10px;color:#9ca3af;">(' + smells.length + ' smell' + (smells.length > 1 ? 's' : '') + ')</span>';
-      smells.forEach(function(s) {
+      smells.forEach(function(s, si) {
         var sevColor = s.severity === "error" ? "#dc2626" : s.severity === "warning" ? "#f59e0b" : "#6b7280";
         var sevIcon = s.severity === "error" ? "\u2718" : s.severity === "warning" ? "\u26A0" : "\u2139";
         h += '<details style="margin:4px 0;font-size:12px;"><summary style="cursor:pointer;color:' + sevColor + ';">' + sevIcon + ' <strong>' + esc(s.name) + '</strong> <span style="color:#9ca3af;">(' + s.entities.length + ')</span></summary>';
         h += '<div style="padding:4px 0 4px 18px;color:#4b5563;">' + esc(s.description) + '</div>';
         if (s.suggestion) h += '<div style="padding:0 0 4px 18px;color:#0891b2;font-size:11px;">\u2192 ' + esc(s.suggestion) + '</div>';
         h += '<div style="padding:0 0 4px 18px;">';
-        s.entities.forEach(function(e) { h += '<span style="display:inline-block;font-size:10px;background:#f3f4f6;padding:1px 6px;border-radius:3px;margin:1px;color:#374151;">' + esc(e.label) + '</span> '; });
+        s.entities.forEach(function(e, ei) {
+          h += '<span class="ov-smell-chip">' + esc(e.label);
+          // A finding that names IRIs should be able to point at them, and one
+          // that carries a generated fix should be able to hand it over.
+          if (e.iri) {
+            h += '<button class="ov-chip-btn" title="Select on the graph" ' +
+                 'data-oi-onclick="ontoink.selectIris(\'' + id + "',['" + _oiStr(e.iri) +
+                 "'])\">&#9678;</button>";
+          }
+          if (e.shape) {
+            h += '<button class="ov-chip-btn" title="Copy the suggested sh:NodeShape" ' +
+                 'data-oi-onclick="ontoink.copySmellShape(\'' + id + "'," + si + "," + ei +
+                 ')">&#128203;</button>';
+          }
+          h += "</span> ";
+        });
         h += '</div></details>';
       });
       h += '</div>';
@@ -6111,6 +6242,9 @@ var ontoink = (function () {
 
     h += '</div>';
     panel.innerHTML = h;
+    // The smell chips carry data-oi-on* attributes; without this the CSP shim
+    // never sees them and the select/copy buttons do nothing.
+    try { wireHandlers(panel); } catch (e) {}
   }
 
   // ── Validation Coverage Map ────────────────────────────────────────────
@@ -6652,7 +6786,7 @@ var ontoink = (function () {
 
     if (!results.length) { resultEl.innerHTML = '<span style="color:#9ca3af;">No results.</span>'; return; }
 
-    // v0.7.0 — SPARQL → LOD/Attic integration.
+    // SPARQL → LOD/Attic integration.
     // If the SELECT projected ?s ?p ?o (the canonical triple pattern),
     // materialise the rows into cytoscape elements so they participate in
     // the SAME LOD slider + Attic UX as fence-loaded graphs. We do NOT
@@ -6799,7 +6933,7 @@ var ontoink = (function () {
     var options = [
       { value: "auto",            label: "Auto (best available)", enabled: true },
       { value: "browser",         label: browserOk ? "Browser: Konclude WASM" : "Browser: Konclude WASM (needs cross-origin isolation)", enabled: browserOk },
-      // v0.7.3 — dependency-free JS materializer; works in every browser,
+      // dependency-free JS materializer; works in every browser,
       // no isolation, no server. Also the automatic fallback when the
       // Konclude WASM worker crashes.
       { value: "browser-js",      label: "Browser: OWL-RL (JS, always available)", enabled: true },
@@ -6850,7 +6984,7 @@ var ontoink = (function () {
     });
   }
 
-  // v0.7.3 — Built-in pure-JS OWL-RL materializer. A dependency-free
+  // Built-in pure-JS OWL-RL materializer. A dependency-free
   // fixpoint over the OWL-RL rule subset that matters for the diagrams
   // ontoink renders (class/property hierarchies, domains/ranges,
   // inverses, symmetric/transitive properties, equivalences, sameAs).
@@ -6930,8 +7064,15 @@ var ontoink = (function () {
     });
 
     var derived = [];
+    var proofs = {};   // key -> {rule, premises:[{s,p,o}]}  — why each triple exists
     var MAX_DERIVED = 5000, MAX_ROUNDS = 30;
-    function add(s, p, o) {
+    // Every derivation in this materializer funnels through add(), which makes
+    // it the one place that can record *why* a triple exists. `rule` is the
+    // OWL-RL rule name and `premises` are the triples it consumed; together
+    // they are what the "Explain" context-menu item renders as a proof tree.
+    // Without this, an inferred edge is an unexplained purple line the reader
+    // has to take on faith.
+    function add(s, p, o, rule, premises) {
       if (!s || !p || !o) return;
       if (s === o && (p === SUB_C || p === SUB_P || p === SAME)) return;  // skip reflexive noise
       if (!isIri(s)) return;                                             // literals can't be subjects
@@ -6941,6 +7082,7 @@ var ontoink = (function () {
       seen[k] = true;
       var t = { s: s, p: p, o: o };
       all.push(t); derived.push(t);
+      if (rule) proofs[k] = { rule: rule, premises: (premises || []).filter(Boolean) };
       changed = true;
     }
 
@@ -6964,27 +7106,35 @@ var ontoink = (function () {
       });
       all.slice().forEach(function(t) {
         // scm-sco / scm-spo: transitivity of the hierarchies themselves
-        if (t.p === SUB_C && subC[t.o]) subC[t.o].forEach(function(c2) { add(t.s, SUB_C, c2); });
-        if (t.p === SUB_P && subP[t.o]) subP[t.o].forEach(function(p2) { add(t.s, SUB_P, p2); });
+        if (t.p === SUB_C && subC[t.o]) subC[t.o].forEach(function(c2) {
+          add(t.s, SUB_C, c2, "scm-sco", [t, { s: t.o, p: SUB_C, o: c2 }]); });
+        if (t.p === SUB_P && subP[t.o]) subP[t.o].forEach(function(p2) {
+          add(t.s, SUB_P, p2, "scm-spo", [t, { s: t.o, p: SUB_P, o: p2 }]); });
         // cax-sco: instance type propagation up the class hierarchy
-        if (t.p === RDF_TYPE && subC[t.o]) subC[t.o].forEach(function(c2) { add(t.s, RDF_TYPE, c2); });
+        if (t.p === RDF_TYPE && subC[t.o]) subC[t.o].forEach(function(c2) {
+          add(t.s, RDF_TYPE, c2, "cax-sco", [t, { s: t.o, p: SUB_C, o: c2 }]); });
         // prp-spo1: assertion propagation up the property hierarchy
-        if (subP[t.p]) subP[t.p].forEach(function(p2) { add(t.s, p2, t.o); });
+        if (subP[t.p]) subP[t.p].forEach(function(p2) {
+          add(t.s, p2, t.o, "prp-spo1", [t, { s: t.p, p: SUB_P, o: p2 }]); });
         // prp-dom / prp-rng
-        if (dom[t.p]) dom[t.p].forEach(function(c) { add(t.s, RDF_TYPE, c); });
-        if (rng[t.p] && isIri(t.o)) rng[t.p].forEach(function(c) { add(t.o, RDF_TYPE, c); });
+        if (dom[t.p]) dom[t.p].forEach(function(c) {
+          add(t.s, RDF_TYPE, c, "prp-dom", [t, { s: t.p, p: DOM, o: c }]); });
+        if (rng[t.p] && isIri(t.o)) rng[t.p].forEach(function(c) {
+          add(t.o, RDF_TYPE, c, "prp-rng", [t, { s: t.p, p: RNG, o: c }]); });
         // prp-inv (both directions collapsed into the inv index)
-        if (inv[t.p] && isIri(t.o)) inv[t.p].forEach(function(p2) { add(t.o, p2, t.s); });
+        if (inv[t.p] && isIri(t.o)) inv[t.p].forEach(function(p2) {
+          add(t.o, p2, t.s, "prp-inv", [t, { s: t.p, p: INV, o: p2 }]); });
         // prp-symp
-        if (symP[t.p] && isIri(t.o)) add(t.o, t.p, t.s);
+        if (symP[t.p] && isIri(t.o)) add(t.o, t.p, t.s, "prp-symp", [t, { s: t.p, p: RDF_TYPE, o: SYM }]);
         // prp-trp
         if (trnP[t.p] && isIri(t.o) && byP[t.p]) byP[t.p].forEach(function(t2) {
-          if (t2.s === t.o) add(t.s, t.p, t2.o);
+          if (t2.s === t.o) add(t.s, t.p, t2.o, "prp-trp", [t, t2, { s: t.p, p: RDF_TYPE, o: TRN }]);
         });
         // sameAs symmetry + transitivity (kept light: no full triple cloning)
         if (t.p === SAME && isIri(t.o)) {
-          add(t.o, SAME, t.s);
-          if (byP[SAME]) byP[SAME].forEach(function(t2) { if (t2.s === t.o) add(t.s, SAME, t2.o); });
+          add(t.o, SAME, t.s, "eq-sym", [t]);
+          if (byP[SAME]) byP[SAME].forEach(function(t2) {
+            if (t2.s === t.o) add(t.s, SAME, t2.o, "eq-trans", [t, t2]); });
         }
       });
 
@@ -7007,30 +7157,36 @@ var ontoink = (function () {
           if (r.kind === "some") {
             // cls ≡ ∃p.D :  x p y ∧ y a D  ⟹  x a cls
             (propOut[r.p] || []).forEach(function(t2) {
-              if (isIri(t2.o) && hasType(t2.o, r.filler)) add(t2.s, RDF_TYPE, cls);
+              if (isIri(t2.o) && hasType(t2.o, r.filler))
+                add(t2.s, RDF_TYPE, cls, "cls-svf-def", [t2, { s: t2.o, p: RDF_TYPE, o: r.filler }]);
             });
           } else if (r.kind === "all") {
             // cls ≡ ∀p.D :  x a cls ∧ x p y  ⟹  y a D
             (propOut[r.p] || []).forEach(function(t2) {
-              if (isIri(t2.o) && hasType(t2.s, cls)) add(t2.o, RDF_TYPE, r.filler);
+              if (isIri(t2.o) && hasType(t2.s, cls))
+                add(t2.o, RDF_TYPE, r.filler, "cls-avf", [t2, { s: t2.s, p: RDF_TYPE, o: cls }]);
             });
           } else if (r.kind === "value") {
             // cls ≡ (p = v) :  x p v ⟹ x a cls ;  x a cls ⟹ x p v
-            (propOut[r.p] || []).forEach(function(t2) { if (t2.o === r.filler) add(t2.s, RDF_TYPE, cls); });
-            Object.keys(typesOf).forEach(function(x) { if (hasType(x, cls)) add(x, r.p, r.filler); });
+            (propOut[r.p] || []).forEach(function(t2) {
+              if (t2.o === r.filler) add(t2.s, RDF_TYPE, cls, "cls-hv1", [t2]); });
+            Object.keys(typesOf).forEach(function(x) {
+              if (hasType(x, cls)) add(x, r.p, r.filler, "cls-hv2", [{ s: x, p: RDF_TYPE, o: cls }]); });
           }
         }
         var b = boolCls[defOf[cls]];
         if (b && b.items.length) {
           if (b.op === "and") {
             // cls ≡ A ⊓ B :  cls ⊑ A, cls ⊑ B ;  x a A ∧ x a B ⟹ x a cls
-            b.items.forEach(function(it) { add(cls, SUB_C, it); });
+            b.items.forEach(function(it) { add(cls, SUB_C, it, "cls-int2", []); });
             Object.keys(typesOf).forEach(function(x) {
-              if (b.items.every(function(it) { return hasType(x, it); })) add(x, RDF_TYPE, cls);
+              if (b.items.every(function(it) { return hasType(x, it); }))
+                add(x, RDF_TYPE, cls, "cls-int1", b.items.map(function(it) {
+                  return { s: x, p: RDF_TYPE, o: it }; }));
             });
           } else {
             // cls ≡ A ⊔ B :  A ⊑ cls, B ⊑ cls
-            b.items.forEach(function(it) { add(it, SUB_C, cls); });
+            b.items.forEach(function(it) { add(it, SUB_C, cls, "cls-uni", []); });
           }
         }
       });
@@ -7040,7 +7196,8 @@ var ontoink = (function () {
         var r = restr[necOf[cls]];
         if (r && r.kind === "all") {
           (propOut[r.p] || []).forEach(function(t2) {
-            if (isIri(t2.o) && hasType(t2.s, cls)) add(t2.o, RDF_TYPE, r.filler);
+            if (isIri(t2.o) && hasType(t2.s, cls))
+              add(t2.o, RDF_TYPE, r.filler, "cls-avf", [t2, { s: t2.s, p: RDF_TYPE, o: cls }]);
           });
         }
       });
@@ -7055,7 +7212,8 @@ var ontoink = (function () {
           var r2 = restr[defOf[c2]];
           if (!r2 || r2.kind !== r1.kind || r2.p !== r1.p) return;
           if (r1.filler === r2.filler) return;
-          if ((subC[r1.filler] || []).indexOf(r2.filler) >= 0) add(c1, SUB_C, c2);
+          if ((subC[r1.filler] || []).indexOf(r2.filler) >= 0)
+            add(c1, SUB_C, c2, "scm-restriction", [{ s: r1.filler, p: SUB_C, o: r2.filler }]);
         });
       });
       // Equivalence unfolding: C ≡ D ⟹ C ⊑ D, D ⊑ C, D ≡ C (and the
@@ -7065,9 +7223,13 @@ var ontoink = (function () {
       all.slice().forEach(function(t) {
         if (t.p === EQ_C && isIri(t.o) && t.s !== t.o) {
           if (restr[t.o] || boolCls[t.o] || restr[t.s] || boolCls[t.s]) return;
-          add(t.s, SUB_C, t.o); add(t.o, SUB_C, t.s); add(t.o, EQ_C, t.s);
+          add(t.s, SUB_C, t.o, "scm-eqc1", [t]);
+          add(t.o, SUB_C, t.s, "scm-eqc1", [t]);
+          add(t.o, EQ_C, t.s, "eq-sym", [t]);
         } else if (t.p === EQ_P && isIri(t.o) && t.s !== t.o) {
-          add(t.s, SUB_P, t.o); add(t.o, SUB_P, t.s); add(t.o, EQ_P, t.s);
+          add(t.s, SUB_P, t.o, "scm-eqp1", [t]);
+          add(t.o, SUB_P, t.s, "scm-eqp1", [t]);
+          add(t.o, EQ_P, t.s, "eq-sym", [t]);
         }
       });
       // prp-fp / prp-ifp — functional and inverse-functional properties
@@ -7082,7 +7244,8 @@ var ontoink = (function () {
         var ts = propOut[p] || [];
         for (var a = 0; a < ts.length; a++) for (var b2 = a + 1; b2 < ts.length; b2++) {
           if (ts[a].s === ts[b2].s && ts[a].o !== ts[b2].o && isIri(ts[a].o) && isIri(ts[b2].o)) {
-            add(ts[a].o, SAME, ts[b2].o); add(ts[b2].o, SAME, ts[a].o);
+            add(ts[a].o, SAME, ts[b2].o, "prp-fp", [ts[a], ts[b2], { s: p, p: RDF_TYPE, o: OWL + "FunctionalProperty" }]);
+            add(ts[b2].o, SAME, ts[a].o, "prp-fp", [ts[a], ts[b2], { s: p, p: RDF_TYPE, o: OWL + "FunctionalProperty" }]);
           }
         }
       });
@@ -7090,7 +7253,8 @@ var ontoink = (function () {
         var ts = propOut[p] || [];
         for (var a2 = 0; a2 < ts.length; a2++) for (var b3 = a2 + 1; b3 < ts.length; b3++) {
           if (ts[a2].o === ts[b3].o && ts[a2].s !== ts[b3].s) {
-            add(ts[a2].s, SAME, ts[b3].s); add(ts[b3].s, SAME, ts[a2].s);
+            add(ts[a2].s, SAME, ts[b3].s, "prp-ifp", [ts[a2], ts[b3], { s: p, p: RDF_TYPE, o: OWL + "InverseFunctionalProperty" }]);
+            add(ts[b3].s, SAME, ts[a2].s, "prp-ifp", [ts[a2], ts[b3], { s: p, p: RDF_TYPE, o: OWL + "InverseFunctionalProperty" }]);
           }
         }
       });
@@ -7101,8 +7265,8 @@ var ontoink = (function () {
         if (!isIri(e.o) || e.s === e.o) return;
         all.slice().forEach(function(t2) {
           if (t2.p === SAME) return;
-          if (t2.s === e.s) add(e.o, t2.p, t2.o);
-          if (t2.o === e.s && isIri(t2.o)) add(t2.s, t2.p, e.o);
+          if (t2.s === e.s) add(e.o, t2.p, t2.o, "eq-rep-s", [e, t2]);
+          if (t2.o === e.s && isIri(t2.o)) add(t2.s, t2.p, e.o, "eq-rep-o", [e, t2]);
         });
       });
       // A necessary restriction that is structurally identical to some
@@ -7114,7 +7278,8 @@ var ontoink = (function () {
       Object.keys(defOf).forEach(function(d) { var sg = rsig(restr[defOf[d]]); if (sg) defBySig[sg] = d; });
       Object.keys(necOf).forEach(function(c) {
         var sg = rsig(restr[necOf[c]]);
-        if (sg && defBySig[sg] && defBySig[sg] !== c) add(c, SUB_C, defBySig[sg]);
+        if (sg && defBySig[sg] && defBySig[sg] !== c)
+          add(c, SUB_C, defBySig[sg], "scm-restriction-match", []);
       });
       // Property chains:  p ← q1 ∘ q2 ∘ …
       Object.keys(chains).forEach(function(p) {
@@ -7152,7 +7317,7 @@ var ontoink = (function () {
       for (var i = 0; i < BUILTIN_NS.length; i++) if (v.indexOf(BUILTIN_NS[i]) === 0) return true;
       return false;
     }
-    return derived.filter(function(t) {
+    var kept = derived.filter(function(t) {
       if (t.s.indexOf("_:") === 0) return false;            // blank-node scaffolding
       if (t.p === DOM || t.p === RNG) return false;         // domain/range propagation is noise
       if (isBuiltin(t.s)) return false;
@@ -7161,6 +7326,14 @@ var ontoink = (function () {
       if (!oLit && (t.o.indexOf("_:") === 0 || isBuiltin(t.o))) return false;
       return true;
     });
+    // Ride the proof index along on the array rather than changing the return
+    // type — `_owlRlMaterialize` is part of the public api object and callers
+    // outside this file expect an array of triples. Non-enumerable so it never
+    // shows up in a JSON dump of the results.
+    try {
+      Object.defineProperty(kept, "proofs", { value: proofs, enumerable: false });
+    } catch (e) {}
+    return kept;
   }
 
   // Run the built-in JS OWL-RL materializer over the diagram's Turtle.
@@ -7173,7 +7346,7 @@ var ontoink = (function () {
       var t0 = performance.now();
       var derived = _owlRlMaterialize(parsed.triples);
       log("Materialized " + derived.length + " new triple(s) in " + (performance.now() - t0).toFixed(0) + " ms");
-      resolve(derived.map(function(t) {
+      var out = derived.map(function(t) {
         var isLit = t.o.charAt(0) === '"';
         return {
           s: t.s, p: t.p, o: isLit ? t.o.replace(/^"|"$/g, "") : t.o, isLiteral: isLit,
@@ -7181,11 +7354,18 @@ var ontoink = (function () {
           pLabel: t.p.split(/[#/]/).pop(),
           oLabel: isLit ? t.o.replace(/^"|"$/g, "") : t.o.split(/[#/]/).pop(),
         };
-      }));
+      });
+      // Carry the proof index forward. This is what makes "Explain" available
+      // on the JS path and (correctly) unavailable on the WASM / server paths,
+      // which return proof-free triples.
+      try {
+        Object.defineProperty(out, "proofs", { value: derived.proofs || {}, enumerable: false });
+      } catch (e) {}
+      resolve(out);
     });
   }
 
-  // v0.7.3 — Resolve the vendored bundle RELATIVE to the current page via
+  // Resolve the vendored bundle RELATIVE to the current page via
   // ONTOINK_ASSET_BASE (injected per-page by the MkDocs plugin as e.g.
   // "../../assets/"). The previous hardcoded root-absolute
   // "/assets/reasoner/bundle.mjs" only worked when the site was served at
@@ -7227,7 +7407,7 @@ var ontoink = (function () {
     });
   }
 
-  // v0.7.3 — Konclude WASM with crash recovery. The nested pthread
+  // Konclude WASM with crash recovery. The nested pthread
   // workers Konclude spawns are unreliable under service-worker-emulated
   // COOP/COEP (a nested worker load failure surfaces as an uncaught
   // "[object ErrorEvent]" and poisons the whole thread pool — every
@@ -7299,7 +7479,7 @@ var ontoink = (function () {
         return ctx.reasoner.reason(store).catch(function(e) {
           // Emscripten unwinds the WASM call stack on program exit by throwing a
           // sentinel value ("unwind" / "Error: unwind"). Our vendored worker.js
-          // swallows it in the classify RPC (v0.7.3), but the esm.sh fallback
+          // swallows it in the classify RPC, but the esm.sh fallback
           // ships the UNPATCHED upstream worker where the sentinel escapes and
           // reason() rejects BEFORE its getInferredNTriples harvest step. If
           // Konclude already populated the inferred graph, the run actually
@@ -7312,7 +7492,7 @@ var ontoink = (function () {
         }).then(function() {
           var inferred = store.getQuads(null, null, null, ctx.Konclude.INFERRED_GRAPH_IRI);
           if (unwound && !inferred.length) {
-            // v0.7.3 — reason() rejected before its own harvest step, but the
+            // reason() rejected before its own harvest step, but the
             // C++ reasoner instance in the worker survives the unwind (the
             // Node build relies on the same fact). Ask it directly for the
             // inferred triples instead of giving up. Timeboxed: if the worker
@@ -7330,7 +7510,7 @@ var ontoink = (function () {
                 new ctx.N3.Parser({ format: "N-Triples" }).parse(String(nt || ""), function(err, quad) {
                   if (err) return reject(fail);
                   if (quad) { got.push(quad); return; }
-                  // v0.7.3 — An EMPTY harvest after an unwind is a failure, not
+                  // An EMPTY harvest after an unwind is a failure, not
                   // "0 inferences": a healthy Konclude run completes its RPCs
                   // without any unwind escaping (verified against the Node
                   // build), so unwind + nothing harvested means the engine
@@ -7473,7 +7653,7 @@ var ontoink = (function () {
     log("Input size: " + ttl.length + " chars");
 
     function resolveReasoner() {
-      // v0.7.3 — the built-in JS materializer is the universal last
+      // the built-in JS materializer is the universal last
       // resort: it works in every browser with no isolation and no
       // server, so "No reasoner available" is no longer a reachable
       // outcome on any code path.
@@ -7560,7 +7740,7 @@ var ontoink = (function () {
       '<div class="ov-stat"><div class="ov-stat-val" style="text-transform:uppercase;font-size:11px;">' + esc(backend) + '</div><div class="ov-stat-lbl">backend</div></div>' +
       '</div>';
 
-    // v0.7.4 — This panel replaces the container's innerHTML, which used
+    // This panel replaces the container's innerHTML, which used
     // to discard the "Validate with Inferences" button that fence.py
     // renders statically inside `.ov-reasoning-panel` — so on any diagram
     // with a `shape:` the documented "run SHACL over the reasoned graph"
@@ -7737,13 +7917,19 @@ var ontoink = (function () {
   var _embedSeq = 0;
 
   function _oiSplitTop(code, sep) {
-    // Split on `sep` at the top level, ignoring separators inside quotes.
-    var out = [], cur = "", q = null;
+    // Split on `sep` at the top level, ignoring separators inside quotes and
+    // inside bracket/brace groups. The bracket depth matters: without it, an
+    // argument list like `('g0', ["a", "b"])` would split at the comma
+    // *inside* the array, handing the callee three mangled arguments instead
+    // of two.
+    var out = [], cur = "", q = null, depth = 0;
     for (var i = 0; i < code.length; i++) {
       var c = code[i];
       if (q) { cur += c; if (c === q && code[i - 1] !== "\\") q = null; }
       else if (c === "'" || c === '"') { q = c; cur += c; }
-      else if (c === sep) { out.push(cur); cur = ""; }
+      else if (c === "[" || c === "{") { depth++; cur += c; }
+      else if (c === "]" || c === "}") { depth--; cur += c; }
+      else if (c === sep && depth === 0) { out.push(cur); cur = ""; }
       else cur += c;
     }
     if (cur.length) out.push(cur);
@@ -7762,7 +7948,27 @@ var ontoink = (function () {
     if (/^-?\d+(\.\d+)?$/.test(a)) return parseFloat(a);
     var m = a.match(/^(['"])([\s\S]*)\1$/);
     if (m) return m[2].replace(/\\'/g, "'").replace(/\\"/g, '"');
+    // Array literal — needed by any verb that acts on a set of IRIs
+    // (selectIris from a quality finding or a competency-question result).
+    // Elements recurse through this same grammar rather than through
+    // JSON.parse or eval, so an element is still only ever a string, number,
+    // boolean, null or a nested array. Both quote styles work: the fence emits
+    // &quot; entities, ontoink.js emits apostrophes.
+    if (a.charAt(0) === "[" && a.charAt(a.length - 1) === "]") {
+      var inner = a.slice(1, -1).trim();
+      if (!inner) return [];
+      return _oiSplitTop(inner, ",").map(function (x) { return _oiArg(x, el, ev); });
+    }
     return a;
+  }
+
+  // Escape a string for use inside a SINGLE-quoted JS argument in a
+  // data-oi-on* attribute. `esc()` deliberately leaves apostrophes alone
+  // (correct for text nodes), but an apostrophe in an rdfs:label — "Alzheimer's
+  // disease" is a real term in more than one biomedical ontology — would
+  // terminate the argument early and silently kill the button.
+  function _oiStr(s) {
+    return esc(String(s == null ? "" : s)).replace(/'/g, "&#39;");
   }
 
   function _oiRun(stmt, el, ev) {
@@ -7887,6 +8093,12 @@ var ontoink = (function () {
           '<button class="ov-btn" data-oi-onclick="ontoink.toggleStats(\'' + id + '\')" title="Graph statistics">Stats</button>' +
           '<button class="ov-btn" data-oi-onclick="ontoink.togglePathFinder(\'' + id + '\')" title="Find paths between nodes">Paths</button>' +
           '<button class="ov-btn" data-oi-onclick="ontoink.toggleSparql(\'' + id + '\')" title="SPARQL query">SPARQL</button>' +
+          // Kept in sync with fence.py. The embed path always shows these two —
+          // it has no build-time payload to test, and both panels degrade to an
+          // honest "nothing to show" message when the graph carries no
+          // recommendations or ontology header.
+          '<button class="ov-btn" data-oi-onclick="ontoink.toggleRecommendations(\'' + id + '\')" title="Suggested SHACL shapes">Shapes</button>' +
+          '<button class="ov-btn" data-oi-onclick="ontoink.toggleCitation(\'' + id + '\')" title="License, version and citation">Cite</button>' +
           reasoningBtn +
           '<select class="ov-reasoner-select" title="Select reasoner backend"></select>' +
           editorBtn +
@@ -7909,6 +8121,14 @@ var ontoink = (function () {
       '<div class="ov-stats-panel" style="display:none;"></div>' +
       '<div class="ov-pathfinder-panel" style="display:none;"></div>' +
       '<div class="ov-sparql-panel" style="display:none;"></div>' +
+      '<div class="ov-recommend-panel" style="display:none;">' +
+        '<div class="ov-editor-header ov-panel-head">Suggested SHACL shapes<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-recommend-panel\').style.display=\'none\'">&times;</button></div>' +
+        '<div class="ov-recommend-content"></div>' +
+      '</div>' +
+      '<div class="ov-citation-panel" style="display:none;">' +
+        '<div class="ov-editor-header ov-panel-head">Cite this ontology<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-citation-panel\').style.display=\'none\'">&times;</button></div>' +
+        '<div class="ov-citation-content"></div>' +
+      '</div>' +
       '<div class="ov-reasoning-panel" style="display:none;">' +
         '<div class="ov-editor-header ov-panel-head">Inferred Triples (OWL-RL)<button class="ov-panel-close" data-oi-onclick="this.closest(\'.ov-reasoning-panel\').style.display=\'none\'">&times;</button></div>' +
         '<div class="ov-reasoning-content"></div>' +
@@ -7980,6 +8200,1140 @@ var ontoink = (function () {
     return id;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Explain, shape recommendations, citation, select-by-IRI
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Human-readable gloss for each OWL-RL rule the materializer records. The
+  // rule *name* alone ("cax-sco") means nothing to an ontology author reading a
+  // diagram; the sentence is the part that builds trust in a purple edge.
+  var _RULE_TEXT = {
+    "scm-sco":   "subclass chains compose: A ⊑ B and B ⊑ C give A ⊑ C",
+    "scm-spo":   "sub-property chains compose: p ⊑ q and q ⊑ r give p ⊑ r",
+    "cax-sco":   "an instance of a class is an instance of its superclasses",
+    "prp-spo1":  "an assertion on a sub-property also holds for its super-property",
+    "prp-dom":   "the subject of a property takes the property's rdfs:domain as a type",
+    "prp-rng":   "the object of a property takes the property's rdfs:range as a type",
+    "prp-inv":   "an inverse property asserts the same link in the other direction",
+    "prp-symp":  "a symmetric property holds in both directions",
+    "prp-trp":   "a transitive property composes with itself",
+    "prp-fp":    "a functional property forces its two values to be the same thing",
+    "prp-ifp":   "an inverse-functional property forces its two subjects to be the same thing",
+    "eq-sym":    "owl:sameAs and owl:equivalentClass are symmetric",
+    "eq-trans":  "owl:sameAs is transitive",
+    "eq-rep-s":  "identical individuals share every assertion (subject position)",
+    "eq-rep-o":  "identical individuals share every assertion (object position)",
+    "cls-svf-def": "the class is defined as ∃p.D, and this subject has such a value",
+    "cls-avf":   "the class is restricted to ∀p.D, so every value takes type D",
+    "cls-hv1":   "the class is defined by owl:hasValue, and this subject has that value",
+    "cls-hv2":   "membership in an owl:hasValue class implies the asserted value",
+    "cls-int1":  "an individual in every operand of an intersection is in the intersection",
+    "cls-int2":  "an intersection is a subclass of each of its operands",
+    "cls-uni":   "each operand of a union is a subclass of the union",
+    "scm-eqc1":  "equivalent classes subsume each other",
+    "scm-eqp1":  "equivalent properties subsume each other",
+    "scm-restriction": "∃/∀ are monotone in the filler, so a narrower filler gives a subclass",
+    "scm-restriction-match": "a necessary restriction matching a class definition licenses subsumption",
+    "prp-chain": "a property chain axiom composes the steps into the head property"
+  };
+
+  function _proofKey(s, p, o) { return s + "" + p + "" + o; }
+
+  // copyText() above takes a <button> to flash "Copied!" on; these panels copy
+  // from code that has no button in hand, so they use the raw clipboard write
+  // plus a transient notice.
+  function _copyRaw(text) {
+    try { navigator.clipboard.writeText(text).catch(function() {}); } catch (e) {}
+  }
+
+  function _notify(container, message) {
+    if (!container) return;
+    var el = container.querySelector(".ov-notice");
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "ov-notice";
+      container.appendChild(el);
+    }
+    el.textContent = message;
+    el.style.opacity = "1";
+    clearTimeout(el._t);
+    el._t = setTimeout(function() { el.style.opacity = "0"; }, 2200);
+  }
+
+  function _shortIri(v) {
+    if (!v) return "";
+    if (v.charAt(0) === '"') return v.replace(/^"|"$/g, "");
+    var tail = String(v).split(/[#/]/).pop();
+    return tail || v;
+  }
+
+  // Render one proof node and recurse into premises that are themselves
+  // derived. Depth is capped and the visited set breaks cycles — OWL-RL
+  // fixpoints readily produce mutually-supporting triples (A sameAs B and
+  // B sameAs A), which would otherwise recurse forever.
+  function _renderProofTree(proofs, s, p, o, depth, visited) {
+    var k = _proofKey(s, p, o);
+    var triple = '<span class="ov-proof-triple"><b>' + esc(_shortIri(s)) + '</b> ' +
+                 esc(_shortIri(p)) + ' <b>' + esc(_shortIri(o)) + '</b></span>';
+
+    if (visited[k] || depth > 6) {
+      return '<li class="ov-proof-leaf">' + triple +
+             ' <span class="ov-proof-why">(already shown above)</span></li>';
+    }
+    visited[k] = true;
+
+    var proof = proofs[k];
+    if (!proof) {
+      return '<li class="ov-proof-leaf ov-proof-asserted">' + triple +
+             ' <span class="ov-proof-why">asserted in the source</span></li>';
+    }
+
+    var why = _RULE_TEXT[proof.rule] || "derived by the OWL-RL materializer";
+    var html = '<li class="ov-proof-step">' + triple +
+               '<div class="ov-proof-rule"><code>' + esc(proof.rule) + '</code> — ' + esc(why) + '</div>';
+    if (proof.premises && proof.premises.length) {
+      html += '<ul class="ov-proof-list">';
+      proof.premises.forEach(function(prem) {
+        html += _renderProofTree(proofs, prem.s, prem.p, prem.o, depth + 1, visited);
+      });
+      html += "</ul>";
+    }
+    return html + "</li>";
+  }
+
+  function _instProofs(inst) {
+    var last = inst && inst._lastReasoning;
+    var inferred = last && last.inferred;
+    return (inferred && inferred.proofs) || null;
+  }
+
+  /**
+   * Explain why an inferred edge exists, as a proof tree down to asserted facts.
+   *
+   * Only the built-in JS OWL-RL path records justifications. Konclude (native
+   * or WASM), owlready2/HermiT and the server backends all return proof-free
+   * triples, so this says so plainly instead of inventing a derivation.
+   */
+  function explainEdge(id, edgeId) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    var c = document.getElementById(id); if (!c) return;
+    var edge = inst.cy.getElementById(edgeId);
+    if (!edge || !edge.length) return;
+
+    var d = edge.data();
+    var s = d.source, p = d.iri, o = d.target;
+    var proofs = _instProofs(inst);
+    var body;
+
+    if (!proofs) {
+      // The common case on a freshly-loaded page: the edges came from the
+      // build-time payload (HermiT/Konclude/owlrl in Python), which returns
+      // triples without derivations. Say what to do about it, not just that it
+      // cannot be done — otherwise the feature reads as broken.
+      var backend = (inst._lastReasoning && inst._lastReasoning.backend) || "";
+      body =
+        '<p class="ov-proof-none">No justification is available' +
+        (backend ? ' from <b>' + esc(backend) + '</b>' : ' for this edge') + '.</p>' +
+        '<p class="ov-proof-none">Only the built-in <b>Browser: OWL-RL</b> reasoner records ' +
+        'which rule produced each triple. HermiT, Konclude and the server backends — ' +
+        'including the inferences baked in at build time, which is what you are ' +
+        'looking at now — return the inferred triples alone.</p>' +
+        '<p class="ov-proof-none">To get a proof tree: open <b>Reasoning</b>, choose ' +
+        '<b>Browser: OWL-RL</b> in the reasoner dropdown, re-run it, then right-click ' +
+        'an inferred edge again.</p>';
+    } else if (!proofs[_proofKey(s, p, o)]) {
+      body = '<p class="ov-proof-none">This triple is asserted in the source, not inferred.</p>';
+    } else {
+      body = '<ul class="ov-proof-list ov-proof-root">' +
+             _renderProofTree(proofs, s, p, o, 0, {}) + "</ul>";
+    }
+
+    removePopup(c);
+    var pop = document.createElement("div");
+    pop.className = "ov-popup ov-proof-popup";
+    pop.innerHTML =
+      '<div class="ov-popup-head">Why was this inferred?' +
+      '<button class="ov-btn-close" data-oi-onclick="ontoink.closePopup(\'' + id + '\')">&times;</button></div>' +
+      '<div class="ov-popup-body">' + body + '</div>';
+    c.appendChild(pop);
+    // .ov-popup is position:absolute, so without explicit offsets it lands at
+    // its static position — after every panel in the container, i.e. far below
+    // the diagram and invisible. Anchor it to the edge like the node and edge
+    // popups do, then pull it back inside the container if it would overflow.
+    _placePopupAtEle(c, pop, inst.cy, edge);
+    try { wireHandlers(pop); } catch (e) {}
+  }
+
+  /** Position an absolutely-placed popup next to a graph element. */
+  function _placePopupAtEle(container, popup, cy, ele) {
+    var canvas = container.querySelector(".ov-canvas");
+    if (!canvas || !cy || !ele || !ele.length) return;
+    var mid = ele.midpoint ? ele.midpoint() : ele.position();
+    var zoom = cy.zoom(), pan = cy.pan();
+    var rx = mid.x * zoom + pan.x, ry = mid.y * zoom + pan.y;
+    var cR = canvas.getBoundingClientRect(), pR = container.getBoundingClientRect();
+    popup.style.left = (cR.left - pR.left + rx + 15) + "px";
+    popup.style.top = (cR.top - pR.top + ry - 15) + "px";
+    requestAnimationFrame(function () {
+      var r = popup.getBoundingClientRect();
+      if (r.right > pR.right - 10) {
+        popup.style.left = Math.max(4, parseFloat(popup.style.left) - r.width - 30) + "px";
+      }
+      if (r.bottom > pR.bottom - 10) {
+        popup.style.top = Math.max(4, parseFloat(popup.style.top) - r.height) + "px";
+      }
+    });
+  }
+
+  function closePopup(id) {
+    var c = document.getElementById(id); if (c) removePopup(c);
+  }
+
+  /**
+   * Select and reveal nodes by IRI. The bridge that makes findings actionable:
+   * competency-question results, quality-smell chips and validation violations
+   * all know IRIs but had no way to point at them on the canvas.
+   */
+  /**
+   * Select by IRI on whichever diagram is nearest this element in the DOM.
+   *
+   * Container ids are handed out by a build-wide counter, so a page cannot know
+   * its own diagram's id — anything that hard-codes one (e.g. a
+   * competency-question card naming `ontoink-graph-0`) silently points at some
+   * other page's graph the moment a fence is added anywhere earlier in the
+   * build. Resolving at click time from the clicked element removes the
+   * coupling entirely.
+   */
+  function selectIrisNearby(el, iris) {
+    if (!el) return;
+    var scope = el.closest && el.closest(".ov-cq-block, .ontoink-container");
+    var container = null;
+    // Prefer a diagram inside the same block, then the nearest one after it,
+    // then the nearest one before it.
+    if (scope) container = scope.querySelector(".ontoink-container");
+    var node = scope || el;
+    while (!container && node) {
+      var sib = node.nextElementSibling;
+      while (sib && !container) {
+        container = sib.classList && sib.classList.contains("ontoink-container")
+          ? sib : (sib.querySelector && sib.querySelector(".ontoink-container"));
+        sib = sib.nextElementSibling;
+      }
+      node = node.parentElement;
+    }
+    if (!container) container = document.querySelector(".ontoink-container");
+    if (container && container.id) selectIris(container.id, iris);
+  }
+
+  function selectIris(id, iris) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    if (!iris || !iris.length) return;
+    var cy = inst.cy;
+    var wanted = {};
+    (Array.isArray(iris) ? iris : [iris]).forEach(function(x) { wanted[String(x)] = true; });
+
+    var matched = cy.nodes().filter(function(n) {
+      return wanted[n.data("iri")] || wanted[n.data("id")];
+    });
+    if (!matched.length) return;
+
+    cy.elements().unselect();
+    matched.select();
+    // A hidden node cannot be seen even when selected — reveal anything the
+    // current LOD level has filtered out, or the button appears to do nothing.
+    matched.forEach(function(n) { if (n.style("display") === "none") n.style("display", "element"); });
+    cy.animate({ fit: { eles: matched, padding: 80 } }, { duration: 350 });
+  }
+
+  // ── Suggested shapes ────────────────────────────────────────────────────
+
+  function _renderConstraintRow(c) {
+    var pct = Math.round((c.confidence || 0) * 100);
+    var cls = pct >= 90 ? "ov-conf-high" : pct >= 70 ? "ov-conf-mid" : "ov-conf-low";
+    return '<li class="ov-rec-constraint">' +
+      '<code>sh:' + esc(c.kind) + " " + esc(_shortIri(c.value)) + "</code> on <code>" +
+      esc(_shortIri(c.path)) + "</code>" +
+      '<span class="ov-rec-conf ' + cls + '">' + pct + "%</span>" +
+      '<span class="ov-rec-evidence">' + esc(c.evidence || "") + "</span></li>";
+  }
+
+  function _renderRecommendations(id, inst) {
+    var rec = (inst.data && inst.data.shape_recommendations) || null;
+    var drift = (inst.data && inst.data.shape_drift) || null;
+    var h = "";
+
+    if (rec && rec.shapes && rec.shapes.length) {
+      h += '<div class="ov-rec-head">' + rec.shapes.length + " shape" +
+           (rec.shapes.length === 1 ? "" : "s") + " suggested for classes with no SHACL coverage" +
+           (rec.methodDescription ? ' <span class="ov-rec-method">' + esc(rec.methodDescription) + "</span>" : "") +
+           "</div>";
+      if (rec.truncated) {
+        h += '<p class="ov-rec-note">Showing the ' + rec.shapes.length +
+             " largest; more classes are uncovered.</p>";
+      }
+      var byClass = {};
+      (rec.constraints || []).forEach(function(c) {
+        (byClass[c.targetClass] = byClass[c.targetClass] || []).push(c);
+      });
+      rec.shapes.forEach(function(s) {
+        var cs = byClass[s.targetClass] || [];
+        h += '<details class="ov-rec-shape"><summary>' + esc(s.label) +
+             ' <span class="ov-rec-count">' + s.constraintCount + " constraint" +
+             (s.constraintCount === 1 ? "" : "s") + "</span></summary>";
+        if (cs.length) {
+          h += '<ul class="ov-rec-constraints">' + cs.map(_renderConstraintRow).join("") + "</ul>";
+        }
+        h += '<pre class="ov-rec-turtle"><code>' + esc(s.turtle) + "</code></pre>";
+        h += '<div class="ov-rec-actions">' +
+             '<button class="ov-btn" data-oi-onclick="ontoink.copyShape(\'' + id +
+             "','" + _oiStr(s.targetClass) + '\')">Copy Turtle</button>' +
+             '<button class="ov-btn" data-oi-onclick="ontoink.appendShapeToEditor(\'' + id +
+             "','" + _oiStr(s.targetClass) + '\')">Add to editor</button>' +
+             '<button class="ov-btn" data-oi-onclick="ontoink.selectIris(\'' + id +
+             "',['" + _oiStr(s.targetClass) + "'])\">Show class</button></div>";
+        h += "</details>";
+      });
+    }
+
+    if (drift) {
+      var missing = drift.missing || [], stale = drift.stale || [];
+      h += '<div class="ov-rec-head">Shape drift</div>';
+      if (!missing.length && !stale.length) {
+        h += '<p class="ov-rec-note">The committed shapes match what the data implies.</p>';
+      }
+      if (missing.length) {
+        h += '<p class="ov-rec-note">' + missing.length +
+             " constraint(s) the data supports but the shapes file does not state:</p>" +
+             '<ul class="ov-rec-constraints">' + missing.map(_renderConstraintRow).join("") + "</ul>";
+      }
+      if (stale.length) {
+        h += '<p class="ov-rec-note">' + stale.length +
+             " committed constraint(s) that almost nothing satisfies:</p><ul class=\"ov-rec-constraints\">";
+        stale.forEach(function(r) {
+          h += '<li class="ov-rec-constraint ov-rec-stale"><code>sh:' + esc(r.kind) + " " +
+               esc(r.value) + "</code> on <code>" + esc(_shortIri(r.path)) + "</code>" +
+               '<span class="ov-rec-conf ov-conf-low">' + Math.round(r.violationRate * 100) +
+               "% violate</span><span class=\"ov-rec-evidence\">" + esc(r.suggestion || "") + "</span></li>";
+        });
+        h += "</ul>";
+      }
+    }
+
+    return h || '<p class="ov-rec-note">No shape suggestions for this diagram.</p>';
+  }
+
+  function toggleRecommendations(id) {
+    var c = document.getElementById(id); if (!c) return;
+    var inst = instances[id]; if (!inst) return;
+    var panel = c.querySelector(".ov-recommend-panel"); if (!panel) return;
+    var open = panel.style.display !== "none";
+    if (open) { panel.style.display = "none"; return; }
+    var content = panel.querySelector(".ov-recommend-content");
+    if (content) {
+      content.innerHTML = _renderRecommendations(id, inst);
+      try { wireHandlers(content); } catch (e) {}
+    }
+    panel.style.display = "block";
+  }
+
+  function _shapeTurtleFor(inst, targetClass) {
+    var rec = (inst.data && inst.data.shape_recommendations) || null;
+    if (!rec) return "";
+    var found = (rec.shapes || []).filter(function(s) { return s.targetClass === targetClass; })[0];
+    return found ? found.turtle : "";
+  }
+
+  function copyShape(id, targetClass) {
+    var inst = instances[id]; if (!inst) return;
+    var ttl = _shapeTurtleFor(inst, targetClass);
+    if (!ttl) return;
+    _copyRaw(ttl);
+    _notify(document.getElementById(id), "Shape copied to clipboard");
+  }
+
+  /**
+   * Append a suggested shape to the Edit & Validate shapes buffer.
+   *
+   * Deliberately stops there rather than writing anywhere permanent: the
+   * suggestion still has to survive the user pressing Validate before they
+   * decide to keep it.
+   */
+  function appendShapeToEditor(id, targetClass) {
+    var inst = instances[id]; if (!inst) return;
+    var ttl = _shapeTurtleFor(inst, targetClass);
+    if (!ttl) return;
+    var c = document.getElementById(id); if (!c) return;
+
+    var panel = c.querySelector(".ov-editor-panel");
+    if (panel && panel.style.display === "none") toggleEditor(id);
+
+    var area = c.querySelector(".ov-editor-shapes-textarea");
+    var cm = inst.shapeEditor || null;
+    if (!cm && !area) return;
+    var current = cm ? cm.getValue() : area.value;
+    var prefixes = "";
+    if (current.indexOf("@prefix sh:") === -1) {
+      prefixes = "@prefix sh: <http://www.w3.org/ns/shacl#> .\n" +
+                 "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n";
+    }
+    var next = current + (current && !/\n$/.test(current) ? "\n\n" : "\n") + prefixes + ttl + "\n";
+    if (cm) cm.setValue(next); else area.value = next;
+    _notify(c, "Shape added — press Validate to check it");
+  }
+
+  // ── Citation ────────────────────────────────────────────────────────────
+
+  function _bibtex(meta) {
+    var key = (_shortIri(meta.iri) || "ontology").replace(/[^A-Za-z0-9]/g, "") || "ontology";
+    var year = (meta.issued || meta.modified || "").slice(0, 4);
+    var lines = ["@misc{" + key + ","];
+    if (meta.title) lines.push("  title = {" + meta.title + "},");
+    if (meta.creators && meta.creators.length) {
+      lines.push("  author = {" + meta.creators.join(" and ") + "},");
+    }
+    if (year) lines.push("  year = {" + year + "},");
+    if (meta.publisher) lines.push("  publisher = {" + meta.publisher + "},");
+    lines.push("  howpublished = {\\url{" + (meta.versionIri || meta.iri) + "}},");
+    if (meta.version) lines.push("  note = {Version " + meta.version + "},");
+    lines.push("}");
+    return lines.join("\n");
+  }
+
+  function _renderCitation(id, inst) {
+    var meta = (inst.data && inst.data.ontologyMetadata) || null;
+    if (!meta || !meta.iri) return '<p class="ov-rec-note">This graph declares no owl:Ontology header.</p>';
+
+    var rows = [];
+    function row(label, value, isLink) {
+      if (!value) return;
+      var shown = isLink
+        ? '<a href="' + esc(value) + '" target="_blank" rel="noopener">' + esc(value) + "</a>"
+        : esc(value);
+      rows.push("<tr><th>" + esc(label) + "</th><td>" + shown + "</td></tr>");
+    }
+    row("Ontology", meta.iri, true);
+    row("Title", meta.title);
+    row("Version", meta.version);
+    row("Version IRI", meta.versionIri, true);
+    row("Creators", (meta.creators || []).join(", "));
+    row("Publisher", meta.publisher);
+    row("Issued", meta.issued);
+    row("Modified", meta.modified);
+
+    var licenseHtml = meta.license
+      ? '<a class="ov-license-badge" href="' + esc(meta.license) + '" target="_blank" rel="noopener">' +
+        esc(_shortIri(meta.license)) + "</a>"
+      : '<span class="ov-license-badge ov-license-missing">No license declared</span>';
+
+    var h = '<div class="ov-cite-license">' + licenseHtml + "</div>";
+    if (meta.description) h += '<p class="ov-cite-desc">' + esc(meta.description) + "</p>";
+    h += '<div class="ov-cq-tablewrap"><table class="ov-cite-table"><tbody>' + rows.join("") + "</tbody></table></div>";
+
+    var bib = _bibtex(meta);
+    h += '<div class="ov-rec-head">BibTeX</div><pre class="ov-rec-turtle"><code>' + esc(bib) + "</code></pre>";
+    h += '<div class="ov-rec-actions"><button class="ov-btn" data-oi-onclick="ontoink.copyCitation(\'' +
+         id + '\')">Copy BibTeX</button></div>';
+    if (meta.citation) {
+      h += '<div class="ov-rec-head">Preferred citation</div><p class="ov-cite-desc">' +
+           esc(meta.citation) + "</p>";
+    }
+    return h;
+  }
+
+  function toggleCitation(id) {
+    var c = document.getElementById(id); if (!c) return;
+    var inst = instances[id]; if (!inst) return;
+    var panel = c.querySelector(".ov-citation-panel"); if (!panel) return;
+    if (panel.style.display !== "none") { panel.style.display = "none"; return; }
+    var content = panel.querySelector(".ov-citation-content");
+    if (content) {
+      content.innerHTML = _renderCitation(id, inst);
+      try { wireHandlers(content); } catch (e) {}
+    }
+    panel.style.display = "block";
+  }
+
+  function copyCitation(id) {
+    var inst = instances[id]; if (!inst) return;
+    var meta = (inst.data && inst.data.ontologyMetadata) || null;
+    if (!meta || !meta.iri) return;
+    _copyRaw(_bibtex(meta));
+    _notify(document.getElementById(id), "BibTeX copied to clipboard");
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Shared shape induction (JS) — the browser twin of ontoink/recommend/
+  // ══════════════════════════════════════════════════════════════════════
+  //
+  // Deliberately a faithful port of ontoink/recommend/methods.py, not a second
+  // opinion — the SHACL Editor page and the Python engine must not disagree
+  // about the same file. `tests/test_recommend_parity.py` runs this code and
+  // the Python engine over identical fixtures and asserts the constraint sets
+  // match, so the two cannot drift apart silently.
+  //
+  // Why a port and not just an API call: static hosting is the default deploy.
+  // POST /recommend-shapes only exists under ONTOINK_MODE=api, so on GitHub
+  // Pages the browser has to be able to do this itself.
+
+  var _RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+  var _RDFS = "http://www.w3.org/2000/01/rdf-schema#";
+  var _OWL = "http://www.w3.org/2002/07/owl#";
+  var _XSD = "http://www.w3.org/2001/XMLSchema#";
+  var _SH_IRI = "http://www.w3.org/ns/shacl#IRI";
+  var _META_NS = [_OWL, _RDF_TYPE.substring(0, _RDF_TYPE.lastIndexOf("#") + 1),
+                  _RDFS, "http://www.w3.org/ns/shacl#"];
+
+  function _isMeta(iri) {
+    for (var i = 0; i < _META_NS.length; i++) if (iri.indexOf(_META_NS[i]) === 0) return true;
+    return false;
+  }
+  function _isDatatypeIri(iri) { return iri.indexOf(_XSD) === 0; }
+  function _isLiteralTerm(t) { return typeof t === "string" && t.charAt(0) === '"'; }
+
+  function _literalDatatype(term) {
+    var at = term.lastIndexOf("^^");
+    if (at > 0) {
+      var dt = term.substring(at + 2).trim();
+      if (dt.charAt(0) === "<") dt = dt.slice(1, -1);
+      return dt;
+    }
+    return _XSD + "string";
+  }
+
+  /** Index triples once: bySubject, byPredicate, and the type map. */
+  function _indexTriples(triples) {
+    var bySubj = {}, typesOf = {}, byPred = {};
+    triples.forEach(function (t) {
+      (bySubj[t.s] = bySubj[t.s] || []).push(t);
+      (byPred[t.p] = byPred[t.p] || []).push(t);
+      if (t.p === _RDF_TYPE) (typesOf[t.s] = typesOf[t.s] || []).push(t.o);
+    });
+    return { bySubj: bySubj, typesOf: typesOf, byPred: byPred };
+  }
+
+  /** Mirror of profiler.instantiated_classes. */
+  function _instantiatedClasses(triples) {
+    var seen = {};
+    triples.forEach(function (t) {
+      if (t.p === _RDF_TYPE && !_isLiteralTerm(t.o) && !_isMeta(t.o)) seen[t.o] = true;
+    });
+    return Object.keys(seen).sort();
+  }
+
+  /** Mirror of profiler.declared_classes. */
+  function _declaredClasses(triples) {
+    var seen = {};
+    triples.forEach(function (t) {
+      if (t.p === _RDF_TYPE && (t.o === _OWL + "Class" || t.o === _RDFS + "Class")) seen[t.s] = true;
+      if (t.p === _RDFS + "subClassOf") {
+        if (!_isLiteralTerm(t.s)) seen[t.s] = true;
+        if (!_isLiteralTerm(t.o)) seen[t.o] = true;
+      }
+    });
+    return Object.keys(seen).filter(function (c) {
+      return !_isMeta(c) && c.indexOf("_:") !== 0;
+    }).sort();
+  }
+
+  /** Mirror of profiler.profile_class. */
+  function _profileClass(idx, cls) {
+    var instances = [];
+    (idx.byPred[_RDF_TYPE] || []).forEach(function (t) {
+      if (t.o === cls && !_isLiteralTerm(t.s)) instances.push(t.s);
+    });
+    var stats = {};
+    instances.forEach(function (inst) {
+      var perPred = {};
+      (idx.bySubj[inst] || []).forEach(function (t) {
+        if (t.p === _RDF_TYPE) return;
+        (perPred[t.p] = perPred[t.p] || []).push(t.o);
+      });
+      Object.keys(perPred).forEach(function (pred) {
+        var st = stats[pred] = stats[pred] || {
+          instancesWith: 0, totalUses: 0, maxPerInstance: 0,
+          datatypes: {}, classes: {}
+        };
+        var objs = perPred[pred];
+        st.instancesWith += 1;
+        st.totalUses += objs.length;
+        st.maxPerInstance = Math.max(st.maxPerInstance, objs.length);
+        objs.forEach(function (o) {
+          if (_isLiteralTerm(o)) {
+            var dt = _literalDatatype(o);
+            st.datatypes[dt] = (st.datatypes[dt] || 0) + 1;
+          } else {
+            (idx.typesOf[o] || []).forEach(function (ot) {
+              st.classes[ot] = (st.classes[ot] || 0) + 1;
+            });
+          }
+        });
+      });
+    });
+    return { targetClass: cls, population: instances.length, propertyStats: stats };
+  }
+
+  function _constraint(cls, path, kind, value, extra) {
+    var c = {
+      targetClass: cls, path: path, kind: kind, value: String(value),
+      confidence: 1, support: 0, population: 0, method: "", message: ""
+    };
+    for (var k in (extra || {})) c[k] = extra[k];
+    c.evidence = c.population
+      ? c.support + "/" + c.population + " instances (" +
+        Math.round(100 * c.support / c.population) + "%)"
+      : "from ontology axioms";
+    return c;
+  }
+
+  function _constraintKey(c) {
+    return [c.targetClass, c.path, c.kind, c.value].join("");
+  }
+
+  /** Merge two derivations of one constraint. Mirrors types._merge. */
+  function _mergeConstraints(a, b) {
+    var methods = [];
+    [a.method, b.method].forEach(function (m) {
+      if (m) m.split(",").forEach(function (x) {
+        if (x && methods.indexOf(x) < 0) methods.push(x);
+      });
+    });
+    var out = {};
+    for (var k in a) out[k] = a[k];
+    out.method = methods.join(",");
+    out.support = Math.max(a.support, b.support);
+    out.population = Math.max(a.population, b.population);
+    out.confidence = Math.max(a.confidence, b.confidence);
+    out.message = a.message || b.message;
+    out.evidence = out.population
+      ? out.support + "/" + out.population + " instances (" +
+        Math.round(100 * out.support / out.population) + "%)"
+      : "from ontology axioms";
+    return out;
+  }
+
+  function _addConstraint(bag, order, c) {
+    var k = _constraintKey(c);
+    if (bag[k]) { bag[k] = _mergeConstraints(bag[k], c); return false; }
+    bag[k] = c; order.push(k);
+    return true;
+  }
+
+  /** Mirror of methods.induce_baseline. */
+  function _induceBaseline(idx, triples, bag, order, targets) {
+    var classes = targets || _instantiatedClasses(triples);
+    classes.forEach(function (cls) {
+      var prof = _profileClass(idx, cls);
+      var n = prof.population;
+      if (!n) return;
+      Object.keys(prof.propertyStats).forEach(function (pred) {
+        var st = prof.propertyStats[pred];
+        var support = st.instancesWith, coverage = support / n;
+        if (coverage >= 0.9) {
+          _addConstraint(bag, order, _constraint(cls, pred, "minCount", "1", {
+            confidence: coverage, support: support, population: n, method: "baseline",
+            message: support + " of " + n + " instances have this property"
+          }));
+        }
+        if (st.maxPerInstance <= 1) {
+          _addConstraint(bag, order, _constraint(cls, pred, "maxCount", "1", {
+            confidence: 1, support: support, population: n, method: "baseline",
+            message: "no instance carries more than one value"
+          }));
+        }
+        var dts = Object.keys(st.datatypes), cls2 = Object.keys(st.classes);
+        if (dts.length && !cls2.length && dts.length === 1) {
+          _addConstraint(bag, order, _constraint(cls, pred, "datatype", dts[0], {
+            confidence: 1, support: support, population: n, method: "baseline",
+            message: "every observed value carries this datatype"
+          }));
+        }
+        if (cls2.length && !dts.length && cls2.length === 1) {
+          _addConstraint(bag, order, _constraint(cls, pred, "class", cls2[0], {
+            confidence: 1, support: support, population: n, method: "baseline",
+            message: "every observed value is an instance of this class"
+          }));
+          _addConstraint(bag, order, _constraint(cls, pred, "nodeKind", _SH_IRI, {
+            confidence: 1, support: support, population: n, method: "baseline"
+          }));
+        }
+      });
+    });
+  }
+
+  /** Mirror of methods.induce_astrea — axioms only, no instance data. */
+  function _induceAstrea(idx, triples, bag, order, targets) {
+    var classes = {};
+    (targets || _declaredClasses(triples)).forEach(function (c) { classes[c] = true; });
+    var functional = {};
+    (idx.byPred[_RDF_TYPE] || []).forEach(function (t) {
+      if (t.o === _OWL + "FunctionalProperty") functional[t.s] = true;
+    });
+
+    // Domain / range pairs.
+    var domains = idx.byPred[_RDFS + "domain"] || [];
+    domains.forEach(function (dt) {
+      if (_isLiteralTerm(dt.o) || !classes[dt.o]) return;
+      var target = dt.o, prop = dt.s;
+      (idx.bySubj[prop] || []).forEach(function (rt) {
+        if (rt.p !== _RDFS + "range" || _isLiteralTerm(rt.o)) return;
+        _addConstraint(bag, order, _constraint(
+          target, prop, _isDatatypeIri(rt.o) ? "datatype" : "class", rt.o,
+          { method: "astrea", message: "rdfs:range axiom" }));
+      });
+      if (functional[prop]) {
+        _addConstraint(bag, order, _constraint(target, prop, "maxCount", "1",
+          { method: "astrea", message: "owl:FunctionalProperty axiom" }));
+      }
+    });
+
+    // owl:Restriction hung off subClassOf / equivalentClass.
+    [_RDFS + "subClassOf", _OWL + "equivalentClass"].forEach(function (pred) {
+      (idx.byPred[pred] || []).forEach(function (t) {
+        var restr = t.o, target = t.s;
+        if (_isLiteralTerm(target)) return;
+        var isRestriction = (idx.bySubj[restr] || []).some(function (x) {
+          return x.p === _RDF_TYPE && x.o === _OWL + "Restriction";
+        });
+        if (!isRestriction) return;
+        var onProp = null;
+        (idx.bySubj[restr] || []).forEach(function (x) {
+          if (x.p === _OWL + "onProperty") onProp = x.o;
+        });
+        if (!onProp || _isLiteralTerm(onProp)) return;
+
+        (idx.bySubj[restr] || []).forEach(function (x) {
+          var raw = _isLiteralTerm(x.o) ? x.o.replace(/^"|"$/g, "").split("^^")[0].replace(/"$/, "") : x.o;
+          if (x.p === _OWL + "cardinality") {
+            ["minCount", "maxCount"].forEach(function (kind) {
+              _addConstraint(bag, order, _constraint(target, onProp, kind, raw,
+                { method: "astrea", message: "owl:cardinality axiom" }));
+            });
+          } else if (x.p === _OWL + "minCardinality") {
+            _addConstraint(bag, order, _constraint(target, onProp, "minCount", raw,
+              { method: "astrea", message: "minCardinality axiom" }));
+          } else if (x.p === _OWL + "maxCardinality") {
+            _addConstraint(bag, order, _constraint(target, onProp, "maxCount", raw,
+              { method: "astrea", message: "maxCardinality axiom" }));
+          } else if (x.p === _OWL + "someValuesFrom" && !_isLiteralTerm(x.o)) {
+            _addConstraint(bag, order, _constraint(
+              target, onProp, _isDatatypeIri(x.o) ? "datatype" : "class", x.o,
+              { method: "astrea", message: "owl:someValuesFrom axiom" }));
+            _addConstraint(bag, order, _constraint(target, onProp, "minCount", "1",
+              { method: "astrea", message: "owl:someValuesFrom implies at least one value" }));
+          } else if (x.p === _OWL + "allValuesFrom" && !_isLiteralTerm(x.o)) {
+            _addConstraint(bag, order, _constraint(
+              target, onProp, _isDatatypeIri(x.o) ? "datatype" : "class", x.o,
+              { method: "astrea", message: "owl:allValuesFrom axiom" }));
+          }
+        });
+      });
+    });
+  }
+
+  var _NUMERIC_KINDS = { minCount: 1, maxCount: 1, minLength: 1, maxLength: 1,
+                         minInclusive: 1, maxInclusive: 1 };
+  var _IRI_KINDS = { datatype: 1, "class": 1, nodeKind: 1 };
+
+  function _shapeIri(cls) { return cls + "Shape"; }
+
+  function _formatValue(c) {
+    if (_IRI_KINDS[c.kind]) return "<" + c.value + ">";
+    if (_NUMERIC_KINDS[c.kind]) return c.value;
+    return '"' + String(c.value).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  }
+
+  /** Mirror of writer.write_node_shape_skeleton. */
+  function _emitShape(classIri, constraints) {
+    if (!constraints.length) {
+      return "<" + _shapeIri(classIri) + "> a sh:NodeShape ;\n" +
+             "    sh:targetClass <" + classIri + "> .";
+    }
+    var byPath = {}, pathOrder = [];
+    constraints.forEach(function (c) {
+      if (!byPath[c.path]) { byPath[c.path] = []; pathOrder.push(c.path); }
+      byPath[c.path].push(c);
+    });
+    var blocks = pathOrder.map(function (path) {
+      var lines = ["        sh:path <" + path + ">"];
+      byPath[path].slice().sort(function (a, b) {
+        return a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0;
+      }).forEach(function (c) {
+        lines.push("        sh:" + c.kind + " " + _formatValue(c));
+      });
+      return "    sh:property [\n" + lines.join(" ;\n") + "\n    ]";
+    });
+    return "<" + _shapeIri(classIri) + "> a sh:NodeShape ;\n" +
+           "    sh:targetClass <" + classIri + "> ;\n" + blocks.join(" ;\n") + " .";
+  }
+
+  function _coveredClassesFromTriples(triples) {
+    var out = {};
+    triples.forEach(function (t) {
+      if (t.p === "http://www.w3.org/ns/shacl#targetClass") out[t.o] = true;
+    });
+    return Object.keys(out).sort();
+  }
+
+  function _labelFor(idx, iri) {
+    var found = "";
+    (idx.bySubj[iri] || []).forEach(function (t) {
+      if (!found && t.p === _RDFS + "label" && _isLiteralTerm(t.o)) {
+        found = t.o.replace(/^"/, "").replace(/"(\^\^.*|@.*)?$/, "");
+      }
+    });
+    return found || _shortIri(iri);
+  }
+
+  /**
+   * Induce SHACL shapes from Turtle, in the browser.
+   *
+   * Returns the same payload shape as the Python `recommend_payload`, so any
+   * consumer can take either source.
+   *
+   * @param {string|Object} input  Turtle text, or {triples, prefixes}.
+   * @param {Object} opts  {method: "auto"|"baseline"|"astrea", shacl,
+   *                        minConfidence, onlyUncovered, maxShapes}
+   */
+  function recommendShapes(input, opts) {
+    opts = opts || {};
+    var method = (opts.method || "auto").toLowerCase();
+    var parsed = typeof input === "string" ? parseTtlMinimal(input) : input;
+    var triples = (parsed && parsed.triples) || [];
+    var idx = _indexTriples(triples);
+
+    var already = [];
+    if (opts.shacl) {
+      try { already = _coveredClassesFromTriples(parseTtlMinimal(opts.shacl).triples); }
+      catch (e) { already = []; }
+    }
+    var skip = {};
+    if (opts.onlyUncovered !== false) already.forEach(function (c) { skip[c] = true; });
+
+    var bag = {}, order = [];
+    if (method === "auto") {
+      _induceAstrea(idx, triples, bag, order, null);
+      _induceBaseline(idx, triples, bag, order, null);
+    } else if (method === "baseline") {
+      _induceBaseline(idx, triples, bag, order, null);
+    } else if (method === "astrea") {
+      _induceAstrea(idx, triples, bag, order, null);
+    } else {
+      throw new Error("unknown recommendation method: " + method);
+    }
+
+    var minConf = opts.minConfidence || 0;
+    var byClass = {}, classOrder = [];
+    order.forEach(function (k) {
+      var c = bag[k];
+      if (skip[c.targetClass]) return;
+      if (c.confidence < minConf) return;
+      if (!byClass[c.targetClass]) { byClass[c.targetClass] = []; classOrder.push(c.targetClass); }
+      byClass[c.targetClass].push(c);
+    });
+
+    var ranked = classOrder.slice().sort(function (a, b) {
+      var d = byClass[b].length - byClass[a].length;
+      return d !== 0 ? d : (a < b ? -1 : a > b ? 1 : 0);
+    });
+    var maxShapes = opts.maxShapes == null ? 50 : opts.maxShapes;
+    var truncated = ranked.length > maxShapes;
+    ranked = ranked.slice(0, maxShapes);
+
+    var shapes = ranked.map(function (cls) {
+      return {
+        targetClass: cls,
+        label: _labelFor(idx, cls),
+        shapeIri: _shapeIri(cls),
+        constraintCount: byClass[cls].length,
+        turtle: _emitShape(cls, byClass[cls])
+      };
+    });
+    var constraints = [];
+    ranked.forEach(function (cls) { constraints = constraints.concat(byClass[cls]); });
+
+    return {
+      method: method,
+      methodDescription: {
+        auto: "Axioms first, then instance-data profiling where instances exist",
+        baseline: "Frequency profiling of instance data (Mihindukulasooriya et al. 2018)",
+        astrea: "OWL axiom-driven generation, no instance data required (ASTREA-like)"
+      }[method] || "",
+      shapes: shapes,
+      constraints: constraints,
+      turtle: ["@prefix sh: <http://www.w3.org/ns/shacl#> .",
+               "@prefix xsd: <" + _XSD + "> .", ""]
+              .concat(shapes.map(function (s) { return s.turtle; })).join("\n"),
+      alreadyCovered: already,
+      truncated: truncated,
+      stats: {
+        classesWithInstances: _instantiatedClasses(triples).length,
+        classesDeclared: _declaredClasses(triples).length,
+        shapesProposed: shapes.length,
+        constraintsProposed: constraints.length
+      }
+    };
+  }
+
+  function copySmellShape(id, smellIndex, entityIndex) {
+    var inst = instances[id]; if (!inst || !inst.data) return;
+    var smell = (inst.data.smells || [])[smellIndex];
+    var entity = smell && (smell.entities || [])[entityIndex];
+    if (!entity || !entity.shape) return;
+    _copyRaw(entity.shape);
+    _notify(document.getElementById(id), "Shape skeleton copied for " + entity.label);
+  }
+
+  // ── Ghost constraints: induce a shape by clicking ───────────────────────
+  //
+  // Right-click a class → its likely constraints appear as dashed edges you can
+  // click to accept. The point is that a suggestion you can see on the diagram,
+  // with its evidence attached, is one you can judge; a wall of generated
+  // Turtle is one you either paste wholesale or ignore.
+  //
+  // Constraints come from the build-time payload when the fence enabled
+  // `recommend_shapes:`, and otherwise from a client-side pass over the graph
+  // that mirrors the Python baseline method (coverage → minCount, no instance
+  // with >1 value → maxCount, unanimous object type → sh:class).
+
+  var RDF_TYPE_IRI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+
+  function _induceFromGraph(inst, classIri) {
+    var cy = inst.cy;
+    var classNode = cy.nodes().filter(function(n) { return n.data("iri") === classIri; });
+    if (!classNode.length) return [];
+
+    // Instances = whatever points at this class with an rdf:type edge.
+    var instanceNodes = [];
+    cy.edges().forEach(function(e) {
+      if (e.data("edgeType") !== "rdf-type") return;
+      if (e.target().data("iri") !== classIri) return;
+      instanceNodes.push(e.source());
+    });
+    var population = instanceNodes.length;
+    if (!population) return [];
+
+    var byPath = {};
+    instanceNodes.forEach(function(n) {
+      var perPath = {};
+      n.outgoers("edge").forEach(function(e) {
+        var iri = e.data("iri");
+        if (!iri || iri === RDF_TYPE_IRI || e.data("edgeType") === "rdf-type") return;
+        (perPath[iri] = perPath[iri] || []).push(e.target());
+      });
+      Object.keys(perPath).forEach(function(iri) {
+        var stat = byPath[iri] = byPath[iri] || {
+          instancesWith: 0, maxPerInstance: 0, targetTypes: {}, label: "", literals: 0
+        };
+        stat.instancesWith += 1;
+        stat.maxPerInstance = Math.max(stat.maxPerInstance, perPath[iri].length);
+        perPath[iri].forEach(function(target) {
+          if (target.data("type") === "Literal") { stat.literals += 1; return; }
+          target.outgoers("edge").forEach(function(te) {
+            if (te.data("edgeType") !== "rdf-type") return;
+            var t = te.target().data("iri");
+            if (t) stat.targetTypes[t] = (stat.targetTypes[t] || 0) + 1;
+          });
+        });
+      });
+    });
+
+    var out = [];
+    Object.keys(byPath).forEach(function(path) {
+      var stat = byPath[path];
+      var coverage = stat.instancesWith / population;
+      if (coverage >= 0.9) {
+        out.push({ targetClass: classIri, path: path, kind: "minCount", value: "1",
+                   confidence: coverage, support: stat.instancesWith, population: population,
+                   evidence: stat.instancesWith + "/" + population + " instances (" +
+                             Math.round(coverage * 100) + "%)", method: "baseline (in-page)" });
+      }
+      if (stat.maxPerInstance <= 1) {
+        out.push({ targetClass: classIri, path: path, kind: "maxCount", value: "1",
+                   confidence: 1, support: stat.instancesWith, population: population,
+                   evidence: "no instance carries more than one value",
+                   method: "baseline (in-page)" });
+      }
+      var types = Object.keys(stat.targetTypes);
+      if (types.length === 1 && !stat.literals) {
+        out.push({ targetClass: classIri, path: path, kind: "class", value: types[0],
+                   confidence: 1, support: stat.instancesWith, population: population,
+                   evidence: "every observed value is an instance of this class",
+                   method: "baseline (in-page)" });
+      }
+    });
+    return out;
+  }
+
+  function _constraintsForClass(inst, classIri) {
+    var rec = (inst.data && inst.data.shape_recommendations) || null;
+    var fromBuild = rec && (rec.constraints || []).filter(function(c) {
+      return c.targetClass === classIri;
+    });
+    if (fromBuild && fromBuild.length) return fromBuild;
+    return _induceFromGraph(inst, classIri);
+  }
+
+  function _ghostTurtle(classIri, constraints) {
+    var byPath = {};
+    constraints.forEach(function(c) { (byPath[c.path] = byPath[c.path] || []).push(c); });
+    var blocks = Object.keys(byPath).map(function(path) {
+      var lines = ["        sh:path <" + path + ">"];
+      byPath[path].forEach(function(c) {
+        var v = (c.kind === "class" || c.kind === "datatype" || c.kind === "nodeKind")
+          ? "<" + c.value + ">"
+          : c.value;
+        lines.push("        sh:" + c.kind + " " + v);
+      });
+      return "    sh:property [\n" + lines.join(" ;\n") + "\n    ]";
+    });
+    return "<" + classIri + "Shape> a sh:NodeShape ;\n" +
+           "    sh:targetClass <" + classIri + "> ;\n" +
+           blocks.join(" ;\n") + " .";
+  }
+
+  /** Draw the proposed constraints for one class as dashed ghost edges. */
+  function induceShape(id, nodeId) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    var cy = inst.cy;
+    var node = nodeId ? cy.getElementById(nodeId) : _selNodes(cy)[0];
+    if (!node || !node.length) return;
+    var classIri = node.data("iri");
+    var c = document.getElementById(id);
+    if (!classIri) return;
+
+    var constraints = _constraintsForClass(inst, classIri);
+    if (!constraints.length) {
+      _notify(c, "Nothing to suggest for " + (node.data("label") || classIri) +
+                 " — no instances and no axioms to learn from.");
+      return;
+    }
+
+    clearGhosts(id);
+    inst._ghosts = { classIri: classIri, byEdge: {} };
+
+    var byPath = {};
+    constraints.forEach(function(x) { (byPath[x.path] = byPath[x.path] || []).push(x); });
+
+    Object.keys(byPath).forEach(function(path, i) {
+      var group = byPath[path];
+      var label = group.map(function(x) {
+        return "sh:" + x.kind + " " + _shortIri(x.value);
+      }).join(", ");
+      var confidence = group.reduce(function(lo, x) {
+        return Math.min(lo, x.confidence == null ? 1 : x.confidence);
+      }, 1);
+      // Self-loop on the class, exactly like the real SHACL constraint edges
+      // this will become if the user accepts it.
+      var edgeId = "ghost_" + i + "_" + Math.random().toString(36).slice(2, 6);
+      cy.add({
+        group: "edges",
+        data: {
+          id: edgeId, source: node.id(), target: node.id(),
+          label: _shortIri(path) + " · " + label,
+          iri: path, edgeType: "recommended-constraint", ghost: true,
+          confidence: confidence
+        }
+      });
+      inst._ghosts.byEdge[edgeId] = { path: path, constraints: group, classIri: classIri };
+    });
+
+    setGhostThreshold(id, inst._ghostThreshold || 0);
+    _ghostBar(id, node.data("label") || _shortIri(classIri), Object.keys(byPath).length);
+    _notify(c, Object.keys(byPath).length + " suggestion(s) — click a dashed edge to accept it");
+  }
+
+  /**
+   * The suggestion control strip: trust slider + clear.
+   *
+   * Lives with the ghosts rather than in the permanent toolbar — outside an
+   * induction there is nothing for it to filter, and a slider that does
+   * nothing 95% of the time is clutter.
+   */
+  function _ghostBar(id, className, count) {
+    var c = document.getElementById(id); if (!c) return;
+    var wrap = c.querySelector(".ov-canvas-wrap") || c;
+    var bar = c.querySelector(".ov-ghost-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "ov-ghost-bar";
+      wrap.appendChild(bar);
+    }
+    bar.innerHTML =
+      '<span class="ov-ghost-title">' + count + " suggestion" + (count === 1 ? "" : "s") +
+      " for <b>" + esc(className) + "</b></span>" +
+      '<label class="ov-ghost-trust">Trust ≥ <output class="ov-ghost-out">0%</output>' +
+      '<input type="range" min="0" max="100" step="5" value="' +
+      Math.round(instances[id]._ghostThreshold || 0) + '" ' +
+      'data-oi-oninput="ontoink.setGhostThreshold(\'' + id + "',this.value)\" " +
+      'title="Hide suggestions backed by less evidence than this"></label>' +
+      '<button class="ov-btn" data-oi-onclick="ontoink.clearGhosts(\'' + id + '\')">Clear</button>';
+    try { wireHandlers(bar); } catch (e) {}
+    bar.style.display = "flex";
+  }
+
+  function clearGhosts(id) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    inst.cy.edges("[?ghost]").remove();
+    inst._ghosts = null;
+    var c = document.getElementById(id);
+    var bar = c && c.querySelector(".ov-ghost-bar");
+    if (bar) bar.style.display = "none";
+  }
+
+  /** Hide ghost suggestions below a confidence threshold (0–100 from the slider). */
+  function setGhostThreshold(id, value) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    var threshold = Math.max(0, Math.min(100, parseFloat(value) || 0)) / 100;
+    inst._ghostThreshold = threshold * 100;
+    var hidden = 0;
+    inst.cy.edges("[?ghost]").forEach(function(e) {
+      var conf = e.data("confidence");
+      var keep = (conf == null ? 1 : conf) >= threshold;
+      e.style("display", keep ? "element" : "none");
+      if (!keep) hidden += 1;
+    });
+    var c = document.getElementById(id);
+    var out = c && c.querySelector(".ov-ghost-out");
+    if (out) {
+      out.textContent = Math.round(threshold * 100) + "%" +
+                        (hidden ? " · " + hidden + " hidden" : "");
+    }
+  }
+
+  /**
+   * Accept one ghost: it becomes a real constraint edge and its Turtle lands in
+   * the shapes editor, where Validate is one click away.
+   */
+  function solidifyGhost(id, edgeId) {
+    var inst = instances[id]; if (!inst || !inst.cy || !inst._ghosts) return;
+    var entry = inst._ghosts.byEdge[edgeId];
+    if (!entry) return;
+    var edge = inst.cy.getElementById(edgeId);
+    if (!edge || !edge.length) return;
+
+    edge.data("edgeType", "shacl-constraint");
+    edge.data("ghost", false);
+    edge.removeData("confidence");
+    delete inst._ghosts.byEdge[edgeId];
+
+    var c = document.getElementById(id);
+    var ttl = _ghostTurtle(entry.classIri, entry.constraints);
+    var panel = c && c.querySelector(".ov-editor-panel");
+    if (panel && panel.style.display === "none") toggleEditor(id);
+
+    var cm = inst.shapeEditor || null;
+    var area = c && c.querySelector(".ov-editor-shapes-textarea");
+    if (cm || area) {
+      var current = cm ? cm.getValue() : area.value;
+      var prefixes = current.indexOf("@prefix sh:") === -1
+        ? "@prefix sh: <http://www.w3.org/ns/shacl#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n"
+        : "";
+      var next = current + (current && !/\n$/.test(current) ? "\n\n" : "") + prefixes + ttl + "\n";
+      if (cm) cm.setValue(next); else area.value = next;
+    }
+    _notify(c, "Constraint accepted — press Validate to check it against the data");
+  }
+
   // Populate any reasoner dropdowns once DOM is ready
   document.addEventListener("DOMContentLoaded", function() {
     document.querySelectorAll(".ov-reasoner-select").forEach(populateReasonerSelect);
@@ -7991,7 +9345,7 @@ var ontoink = (function () {
     _oiInstallObserver();        // …and to any panels/popups created later
   });
 
-  // v0.7.4-fix — This was `return { ... };` but the giant IIFE had a
+  // This was `return { ... };` but the giant IIFE had a
   // LOT of code below this point (style presets, live-editor module,
   // auto-mount hook) that would have been dead — `return` exits early
   // and never lets those statements execute. Users reported that
@@ -8000,11 +9354,30 @@ var ontoink = (function () {
   // `var api = {...}` pattern and add `return api;` at the very end
   // of the IIFE so every subsequent statement runs.
   var api = { zoomIn:zoomIn, zoomOut:zoomOut, fit:fit, fullscreen:fullscreen, exportPNG:exportPNG, exportSVG:exportSVG, downloadTTL:downloadTTL, toggleEditor:toggleEditor, validate:validate, updateGraph:updateGraph, resetEditor:resetEditor, toggleAllNs:toggleAllNs, toggleColors:toggleColors, toggleReasoning:toggleReasoning, toggleInferredOnGraph:toggleInferredOnGraph, validateWithReasoning:validateWithReasoning, playground:playground, search:search, changeLayout:changeLayout, focusNode:focusNode, resetFocus:resetFocus, abstractView:abstractView, fullView:fullView, toggleStats:toggleStats, showCoverage:showCoverage, togglePathFinder:togglePathFinder, findPath:findPath, clearPath:clearPath, toggleSparql:toggleSparql, sparqlTemplate:sparqlTemplate, runSparql:runSparql, sparqlHighlight:sparqlHighlight, selectSparqlAC:selectSparqlAC, derefIriRemote:derefIriRemote, togglePlaygroundReasoning:togglePlaygroundReasoning, downloadInferences:downloadInferences, copyInferences:copyInferences, diagnoseReasoner:diagnoseReasoner, setInferredOverlay:setInferredOverlay,
-    // v0.7.0 Big-ontology mode — LOD / Hidden / Super / clustering runtime.
-    // These were defined in the IIFE but never surfaced to the public
-    // ``window.ontoink`` object, so every onclick/oninput in the fence
-    // template silently no-op'd. That's why the slider moved but stayed
-    // at 2 — ``ontoink.setLodLevel`` didn't exist.
+    // Explain / shapes / citation / select-by-IRI. Every one of these
+    // is reachable only from a data-oi-on* attribute, and the CSP shim
+    // dispatches nothing that isn't on this object, so an omission here is a
+    // silently dead button.
+    explainEdge: explainEdge,
+    closePopup: closePopup,
+    selectIris: selectIris,
+    selectIrisNearby: selectIrisNearby,
+    toggleRecommendations: toggleRecommendations,
+    copyShape: copyShape,
+    appendShapeToEditor: appendShapeToEditor,
+    toggleCitation: toggleCitation,
+    copyCitation: copyCitation,
+    induceShape: induceShape,
+    solidifyGhost: solidifyGhost,
+    clearGhosts: clearGhosts,
+    setGhostThreshold: setGhostThreshold,
+    copySmellShape: copySmellShape,
+    // Shared shape induction — the browser twin of ontoink/recommend/,
+    // exposed so any page (the SHACL Editor, the playground) can call one
+    // implementation instead of carrying its own.
+    recommendShapes: recommendShapes,
+
+    // Big-ontology mode — LOD / Hidden / Super / clustering runtime.
     setLodLevel: setLodLevel,
     openAtticPanel: openAtticPanel,
     closeAtticPanel: closeAtticPanel,
@@ -8016,31 +9389,31 @@ var ontoink = (function () {
     loadSideStore: loadSideStore,
     applyPredicatePolicyToElements: applyPredicatePolicyToElements,
     renderNodeBadges: renderNodeBadges,
-    // v0.7.3 — Faceted browsing (#33)
+    // Faceted browsing (#33)
     openFacetsPanel: openFacetsPanel,
     closeFacetsPanel: closeFacetsPanel,
     toggleFacet: toggleFacet,
     selectAllFacets: selectAllFacets,
     clearFacet: clearFacet,
-    // v0.7.3 — Metrics dashboard splash (#38)
+    // Metrics dashboard splash (#38)
     openMetricsSplash: openMetricsSplash,
     closeMetricsSplash: closeMetricsSplash,
     _exploreFromSplash: _exploreFromSplash,
     triplesToElements: triplesToElements,
-    // v0.7.4 — Live editor with D2-inspired DSL. See ontoink-dsl.js
+    // Live editor with D2-inspired DSL. See ontoink-dsl.js
     // for the parser and demo/docs/live-editor.md for the page.
     // NOTE: `liveEditor` (declared as `var liveEditor = (function(){})()`)
     // is only bound AFTER this object literal evaluates. Reading it
     // here would capture `undefined`. Instead we bind api.liveEditor
     // right after the IIFE assigns it below.
     // liveEditor: liveEditor,   (bound at bottom of file — see line ~end)
-    // v0.7.4 — Style presets (Chowlk / Graffoo / VOWL / UML-ODM).
+    // Style presets (Chowlk / Graffoo / VOWL / UML-ODM).
     applyStylePreset: applyStylePreset,
     listStylePresets: listStylePresets,
     // Embeddable build — CSP-safe handler wiring + programmatic mount.
     embed: embed,
     wireHandlers: wireHandlers,
-    // v0.7.5 — Size & typography (Edit Layout) and the selection/context
+    // Size & typography (Edit Layout) and the selection/context
     // menu. `ctxAction` is the single verb dispatcher the menu markup calls
     // through the CSP shim; the rest are exposed so pages can script them.
     setTypography: setTypography,
@@ -8074,7 +9447,7 @@ var ontoink = (function () {
   };
 
   // ==========================================================================
-  // v0.7.4 — Style presets.
+  // Style presets.
   //
   // A dropdown in the Edit Layout panel lets users swap ontoink's default
   // stylesheet for one of the canonical ontology-viz notations. Each preset
@@ -8385,7 +9758,7 @@ var ontoink = (function () {
       { id: "vowl",    label: "VOWL / WebVOWL (blue circles)" }
     ];
   }
-  // v0.7.4 — The inferred-overlay styling, factored out so it can be
+  // The inferred-overlay styling, factored out so it can be
   // appended to every style preset. Kept byte-compatible with the rules
   // baked into the initGraph / playground stylesheets.
   function _inferredOverlayRules() {
@@ -8403,7 +9776,7 @@ var ontoink = (function () {
     ];
   }
 
-  // v0.7.5 — Selection halo + pinned-node badge. `cy.style()` REPLACES the
+  // Selection halo + pinned-node badge. `cy.style()` REPLACES the
   // whole stylesheet, so — exactly like the inferred-overlay rules above —
   // these have to be re-appended to every preset or switching to Chowlk
   // silently makes multi-selection invisible and pins unreadable.
@@ -8425,9 +9798,15 @@ var ontoink = (function () {
       return;
     }
     var cy = inst.cy;
+    // Preset names are matched case-insensitively. The toolbar markup exists in
+    // three places (fence.py, _oiEmbedSkeleton, the demo tool pages) and one of
+    // them shipped `value="OntoInk"` against this lookup's lowercase keys, so
+    // picking "Style: Ontoink" after any other preset silently hit the
+    // unknown-preset branch instead of restoring the default.
+    presetName = String(presetName || "").toLowerCase();
     inst.stylePreset = presetName;
     if (presetName === "ontoink") {
-      // v0.7.4-fix — Restoring the original stylesheet reliably requires
+      // Restoring the original stylesheet reliably requires
       // capturing it before we swapped it. `cy.style().json()` returns a
       // normalised form that doesn't round-trip cleanly through fromJson
       // on every Cytoscape version; rather than ship a fragile restore,
@@ -8452,14 +9831,14 @@ var ontoink = (function () {
     }
     var factory = _STYLE_PRESETS[presetName];
     var stylesheet = (typeof factory === "function") ? factory() : factory;
-    // v0.7.4 — `cy.style()` REPLACES the whole stylesheet, and no preset
+    // `cy.style()` REPLACES the whole stylesheet, and no preset
     // declares the inferred-overlay selectors, so switching to Chowlk /
     // Graffoo / VOWL silently stripped the purple dotted styling from
     // "Show inferences on graph" — inferred edges became indistinguishable
     // from asserted ones. Append the overlay rules to every preset (and to
     // any preset added later) rather than duplicating them three times.
     stylesheet = (stylesheet || []).concat(_inferredOverlayRules()).concat(_selectionOverlayRules());
-    // v0.7.5 — presets hard-code their own font/padding values; patch them
+    // presets hard-code their own font/padding values; patch them
     // so a user's Size & Typography settings survive a preset switch.
     stylesheet = _typoPatch(stylesheet);
     try {
@@ -8471,7 +9850,7 @@ var ontoink = (function () {
   }
 
   // ==========================================================================
-  // v0.7.4 — Live editor. Small module that binds a <textarea> DSL editor to
+  // Live editor. Small module that binds a <textarea> DSL editor to
   // an ontoink graph + a Turtle preview. Not a full ontoink instance — no
   // clustering, no facets — just a live viz of the parsed triples.
   //
@@ -8543,7 +9922,10 @@ var ontoink = (function () {
         style: _typoPatch(_leStyle()),
         layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 },
         wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
-        hideEdgesOnViewport: true, hideLabelsOnViewport: true, textureOnViewport: true, pixelRatio: 1
+        // live editor graphs are small by construction; keep the
+        // full device pixel ratio and no motion degradation.
+        hideEdgesOnViewport: false, hideLabelsOnViewport: false,
+        textureOnViewport: false, pixelRatio: _pixelRatio(0)
       });
 
       // Register a minimal ontoink instance so LOD works.
@@ -8564,14 +9946,14 @@ var ontoink = (function () {
 
       _leState[containerId] = { editor: editor, ttlOut: ttlOut, errBox: errBox, stats: stats, cy: cy, debounce: null };
 
-      // v0.7.4 — populate the Examples dropdown with predefined templates.
+      // populate the Examples dropdown with predefined templates.
       _populateExamplesDropdown();
-      // v0.7.5 — install Ctrl+Space autocomplete on the editor textarea.
+      // install Ctrl+Space autocomplete on the editor textarea.
       _installAutocomplete(containerId, editor);
-      // v0.7.1 — install a line-number gutter so error messages that
+      // install a line-number gutter so error messages that
       // reference "line 12, column 5" are actually locatable.
       _installLineNumbers(editor);
-      // v0.7.7 — Playground-parity supernode + hull expand/collapse
+      // Playground-parity supernode + hull expand/collapse
       // taps. Same handlers as initGraph — without these, tapping a
       // clustered namespace bubble in the live editor was a dead-end.
       cy.on("tap", 'node[?isSuperNode]', function(evt) {
@@ -8589,7 +9971,7 @@ var ontoink = (function () {
         try { removePopup(graphContainer); } catch (e) {}
       });
 
-      // v0.7.7 — Playground-parity node + edge tap popups. Reuses the
+      // Playground-parity node + edge tap popups. Reuses the
       // main buildPopup / buildEdgePopup helpers so a live-editor node
       // shows the same IRI / CURIE / type-evidence panel a fence graph
       // does. Blank node (`_:` prefix) taps still show a popup — useful
@@ -8622,7 +10004,7 @@ var ontoink = (function () {
         _wireLivePopup(popup, d);
       });
       cy.on("tap", function(e) { if (e.target === cy) { try { removePopup(graphContainer); } catch (e2) {} } });
-      // v0.7.5 — the live DSL editor is the third render path; without this
+      // the live DSL editor is the third render path; without this
       // the whole selection/context-menu/typography layer was invisible here.
       try { wireSelectionUX("le-graph", cy, graphContainer, canvas); } catch (e3) {}
 
@@ -8640,7 +10022,7 @@ var ontoink = (function () {
       refresh();
     }
 
-    // v0.7.7 — Minimal popup wiring shared by node + edge popups.
+    // Minimal popup wiring shared by node + edge popups.
     // Handles close button and Copy Label / Copy IRI chips.
     function _wireLivePopup(popup, d) {
       var close = popup.querySelector(".ov-popup-close");
@@ -8674,7 +10056,7 @@ var ontoink = (function () {
       try { makePopupDraggable(popup); } catch (e) {}
     }
 
-    // v0.7.1 — Line-number gutter. Wraps the editor textarea in a flex
+    // Line-number gutter. Wraps the editor textarea in a flex
     // container and prepends a right-aligned monospace column that
     // renders "1\n2\n3…" up to the textarea's current line count. The
     // gutter's scroll offset mirrors the textarea's so long files stay
@@ -8711,11 +10093,11 @@ var ontoink = (function () {
       render();
     }
 
-    // v0.7.1 — Given a parser-error message, propose a plain-English
+    // Given a parser-error message, propose a plain-English
     // supplementary hint so non-experts learn what to fix. Returns "" if
-    // no hint applies. The core message already contains the fix in
-    // v0.7.1 (e.g. "unterminated <IRI> — expected a closing '>' before
-    // end of line"); this adds a broader teaching aid.
+    // no hint applies. The core message already contains the fix (e.g.
+    // "unterminated <IRI> — expected a closing '>' before end of line");
+    // this adds a broader teaching aid.
     function _errorHint(msg) {
       if (!msg) return "";
       msg = String(msg);
@@ -8744,7 +10126,7 @@ var ontoink = (function () {
       return "";
     }
 
-    // v0.7.5 — Ctrl+Space autocomplete popup. Wraps the editor textarea:
+    // Ctrl+Space autocomplete popup. Wraps the editor textarea:
     //  - Ctrl+Space (or Cmd+Space on Mac) opens a floating suggestions
     //    list anchored at the caret; up/down navigates; Enter/Tab picks;
     //    Esc dismisses. Typing after opening filters live.
@@ -8949,7 +10331,7 @@ var ontoink = (function () {
       var graph = window.ontoinkDsl.toGraphData(parsed);
 
       // Error + warning panel. Errors are red, warnings are amber.
-      // v0.7.1 — Each row now clickable (jumps caret to the referenced
+      // Each row now clickable (jumps caret to the referenced
       // line) and carries a plain-English hint under the message so
       // non-experts learn what's wrong instead of just where.
       if (st.errBox) {
@@ -9010,7 +10392,7 @@ var ontoink = (function () {
       if (graph.edges.length) cy.add(graph.edges);
       try { cy.layout({ name: "dagre", rankDir: "BT", animate: false, fit: true, padding: 30 }).run(); } catch (e) {}
 
-      // v0.7.5 — Run the full ontoink pipeline on the live graph so the
+      // Run the full ontoink pipeline on the live graph so the
       // playground-class toolbar works: flag blank nodes, auto-cluster
       // on big graphs, rebuild facets, then re-apply LOD.
       var inst = instances["le-graph"];
@@ -9019,7 +10401,7 @@ var ontoink = (function () {
         inst.data.edges = graph.edges;
         inst.data.prefixes = parsed.prefixes;
         inst.data.namespaces = parsed.prefixes;
-        // v0.7.7 — Filter activeNamespaces to only prefixes actually
+        // Filter activeNamespaces to only prefixes actually
         // referenced by the current graph. Without this, the Prefixes
         // overlay shows all 15 built-in prefixes even for a one-triple
         // document. Iterate all node IRIs + edge predicate IRIs and
@@ -9049,7 +10431,7 @@ var ontoink = (function () {
         try { setLodLevel("le-graph", inst.lodLevel); } catch (e5) {}
       }
 
-      // v0.7.7 — Playground-parity Legend + Prefixes overlays. The
+      // Playground-parity Legend + Prefixes overlays. The
       // graph container has `.ov-legend-overlay` and `.ov-ns-overlay`
       // divs; rebuild them from inst.data so their content stays in
       // sync with the current parse.
@@ -9080,7 +10462,7 @@ var ontoink = (function () {
       st.editor.value = window.ontoinkDsl.exampleText();
       _refresh(containerId);
     }
-    // v0.7.4 — Load one of the predefined DSL examples into the editor.
+    // Load one of the predefined DSL examples into the editor.
     // Wired to the "Examples" dropdown in demo/docs/live-editor.md.
     function loadExample(containerId, exampleId) {
       var st = _leState[containerId]; if (!st) return;
@@ -9093,7 +10475,7 @@ var ontoink = (function () {
       st.editor.value = found.text;
       _refresh(containerId);
     }
-    // v0.7.4-fix — Fill the Examples <select> with the predefined
+    // Fill the Examples <select> with the predefined
     // options at mount time. Idempotent; if the dropdown already has
     // more than the initial single option we leave it alone.
     function _populateExamplesDropdown() {
@@ -9177,14 +10559,14 @@ var ontoink = (function () {
     };
   })();
 
-  // v0.7.4-fix — Bind the liveEditor export NOW that the IIFE above has
+  // Bind the liveEditor export NOW that the IIFE above has
   // finished. The `api` object literal higher up ran BEFORE `liveEditor`
   // was assigned; putting `liveEditor: liveEditor` there captured
   // `undefined`, and `ontoink.liveEditor` was silently null for callers
   // like fence toolbars and the live-editor page.
   api.liveEditor = liveEditor;
 
-  // v0.7.4-fix — Auto-mount the live editor when the page has one.
+  // Auto-mount the live editor when the page has one.
   //
   // The user's first attempt of the live editor rendered nothing: the
   // page-side `<script>DOMContentLoaded -> mount<\/script>` fired BEFORE  // (escape the closing tag — else the HTML parser truncates the inlined JS)
@@ -9223,7 +10605,7 @@ var ontoink = (function () {
     }
   }
 
-  // v0.7.4-fix — Emit the fully-populated api object out of the IIFE
+  // Emit the fully-populated api object out of the IIFE
   // (assigned to window.ontoink at the top). This MUST be the last
   // statement in the IIFE — any code after `return` becomes dead code
   // (which is exactly the bug this commit fixes).

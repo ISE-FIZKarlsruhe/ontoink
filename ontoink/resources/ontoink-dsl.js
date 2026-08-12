@@ -1,5 +1,5 @@
 /*
- * ontoink-dsl.js — v0.7.4
+ * ontoink-dsl.js
  *
  * A D2-inspired ontology description language.  User types compact
  * arrow-notation triples; the parser emits RDF triples that ontoink
@@ -65,7 +65,7 @@
     ex:   "http://example.org/"
   };
 
-  // v0.7.5 — Well-known ontology terms for Ctrl+Space autocomplete.
+  // Well-known ontology terms for Ctrl+Space autocomplete.
   // Each entry: { curie, iri, label, kind, doc }. Kind: "class" |
   // "objectProperty" | "dataProperty" | "annotationProperty" | "datatype"
   // | "individual". The `label` is a human-readable name shown in the
@@ -255,7 +255,7 @@
     "a":     { prefix: "rdf",  local: "type" },
     "type":  { prefix: "rdf",  local: "type" },
     "isa":   { prefix: "rdfs", local: "subClassOf" },
-    // v0.7.6 — Property chain shortcut. `-chain->` emits an
+    // Property chain shortcut. `-chain->` emits an
     // owl:propertyChainAxiom whose object is the rdf:List of the given
     // property terms.  Comma-separated objects become the chain steps.
     "chain": { prefix: "owl",  local: "propertyChainAxiom" }
@@ -303,7 +303,7 @@
     return r.text.substring(start, r.pos);
   }
 
-  // v0.7.6 — Subject terms may additionally be inline blank nodes
+  // Subject terms may additionally be inline blank nodes
   // `[pred obj; pred obj]` (Turtle-style) so SHACL / OWL restriction
   // subjects can be written compactly.
   function readSubjectTerm(r) {
@@ -331,7 +331,7 @@
       if (!bn) { r.err("blank-node label expected after '_:' (e.g. _:b1)"); return null; }
       return { kind: "blank", value: bn };
     }
-    // v0.7.1 — Empty-prefix CURIE `:local` (Turtle default namespace).
+    // Empty-prefix CURIE `:local` (Turtle default namespace).
     // Users writing `:Person` expect the empty prefix (`@prefix : <…>`)
     // rather than a silent parse-drop; if the empty prefix wasn't
     // declared, `resolvePredicate` / _iriOf still fall back to the
@@ -356,7 +356,7 @@
 
   // Read an object token: literal, IRI, CURIE, blank, parenthesized
   // expression (restriction or class expression — see readExpression), or
-  // inline blank node `[pred obj; ...]` (v0.7.6).
+  // inline blank node `[pred obj; ...]`.
   function readObject(r) {
     r.skipWs();
     if (r.peek() === '"') return readString(r);
@@ -368,7 +368,7 @@
     return readCurieOrIri(r);
   }
 
-  // v0.7.6 — Inline blank-node syntax: `[predicate object; predicate object]`.
+  // Inline blank-node syntax: `[predicate object; predicate object]`.
   // Returns a synthetic term of kind "inlineBlank" carrying the inner
   // property-value pairs. The parser's expansion step (see
   // `_expandInlineBlanks`, called from _expandExpressions) mints a fresh
@@ -386,10 +386,9 @@
     while (!r.eof() && r.peek() !== "]") {
       // Read predicate: `a` shortcut (only when standalone — NOT the
       // leading char of a longer identifier like `age` or `apple`), CURIE,
-      // or bare name.  v0.7.6-fix: use a non-consuming lookahead — the
-      // previous `r.match("a")` advanced pos even when the guard failed,
-      // silently eating the leading 'a' of predicates like `age` and
-      // emitting `ex:ge` instead (adversarial review 2026-07-13).
+      // or bare name. Uses a non-consuming lookahead: `r.match("a")` would
+      // advance pos even when the guard fails, silently eating the leading
+      // 'a' of predicates like `age` and emitting `ex:ge` instead.
       var predRaw;
       if (r.peek() === "a" && !isIdentPart(r.text.charAt(r.pos + 1))) {
         r.pos++;
@@ -418,7 +417,7 @@
     return { kind: "inlineBlank", pairs: pairs };
   }
 
-  // v0.7.5 — Read a parenthesized expression: OWL restriction or class
+  // Read a parenthesized expression: OWL restriction or class
   // expression. Manchester-style syntax that emits blank-node axioms.
   //
   //  Restriction:
@@ -578,7 +577,7 @@
     return raw;
   }
 
-  // v0.7.1 — Shortcut typo detector. If the raw arrow content is a
+  // Shortcut typo detector. If the raw arrow content is a
   // bare unprefixed identifier that looks close to a known shortcut
   // (`-is-> ` for `-isa-> `, `-chian-> ` for `-chain-> `, `-A-> ` for
   // `-a-> `), emit an explanatory warning so users don't wonder why
@@ -723,7 +722,7 @@
       }
 
       // Top-level statement: <subject>[, <subject>]* ...
-      // v0.7.6 — Multi-subject lines: comma-separated subjects apply the
+      // Multi-subject lines: comma-separated subjects apply the
       // same predicate/objects to each. `ex:a, ex:b -isa-> ex:C` emits
       // two triples, one per subject.
       var subjects = [];
@@ -736,7 +735,7 @@
         r.skipWs();
         var nextSubj = readSubjectTerm(r);
         if (!nextSubj) {
-          // v0.7.6-fix (adversarial 2026-07-13, finding #4): report a
+          // report a
           // trailing comma instead of silently discarding the line.
           r.err("expected subject after ',' in multi-subject list");
           break;
@@ -788,7 +787,7 @@
   }
 
   // Find the index of a '#' that isn't inside a "..." string OR a <IRI>.
-  // v0.7.1 — Track angle-bracket depth so `<http://ex#>` isn't chopped at
+  // Track angle-bracket depth so `<http://ex#>` isn't chopped at
   // the '#'. Previously, any `#` inside a full-IRI truncated the line and
   // the closing `>` disappeared into the comment — every `@prefix` line
   // with a hash-terminated namespace ("…/rdf-schema#>", "…#>") wrongly
@@ -813,7 +812,7 @@
 
   // ---- Serializers --------------------------------------------------------
 
-  // v0.7.5 / v0.7.6 — Expand expression objects, inline blank nodes, and
+  // Expand expression objects, inline blank nodes, and
   // owl:propertyChainAxiom lists into standards-compliant blank-node
   // axioms BEFORE serialization / graph emission. Returns a NEW list of
   // triples where every synthetic term (expr / inlineBlank / chain) has
@@ -828,7 +827,7 @@
     // in a term position for a fresh blank node, and emit the equivalent
     // axioms into `out`. Returns the substituted term.
     //
-    // v0.7.6-fix (adversarial 2026-07-13): memoize by term-object
+    // memoize by term-object
     // identity so multi-object lines and subject blocks that reuse the
     // SAME inline-blank term across N triples resolve to ONE blank node
     // with the pair axioms emitted once — not N separate blanks each
@@ -862,7 +861,7 @@
       var line = t.line;
       // Materialize subject (only inline blank nodes are legal here).
       var s = materializeTerm(t.s, line);
-      // v0.7.6 — Property chain: when predicate is owl:propertyChainAxiom
+      // Property chain: when predicate is owl:propertyChainAxiom
       // and there are multiple objects (comma-separated), emit as
       // rdf:List instead of separate triples per object. Since the
       // parser already flattens comma-separated objects into N triples
@@ -885,15 +884,14 @@
   // triple whose object is an rdf:List of the collected property terms.
   // Non-chain triples pass through unchanged.
   //
-  // v0.7.6-fix (adversarial 2026-07-13):
-  //   1. Also require t2.line === t.line so two SEPARATE `-chain->`
+  //   1. Also requires t2.line === t.line so two SEPARATE `-chain->`
   //      statements on the same subject don't merge into one 4-element
-  //      list (finding #2). Each DSL statement becomes its own axiom.
-  //   2. Group non-adjacent triples of the same (s, chain, line) too —
+  //      list. Each DSL statement becomes its own axiom.
+  //   2. Groups non-adjacent triples of the same (s, chain, line) too —
   //      because a chain statement with N comma-separated objects emits
   //      N consecutive triples, but if any other triple sneaks in
-  //      between (rare) the run-based collection would emit multiple
-  //      length-1 lists (finding #6). Bucket-then-emit instead.
+  //      between (rare) a run-based collection would emit multiple
+  //      length-1 lists. Bucket-then-emit instead.
   function _coalescePropertyChain(triples, nextBn) {
     // First pass: identify chain triples and bucket by (subject, line).
     var chainKeys = []; // preserve first-seen order for stable output
@@ -1053,7 +1051,7 @@
   // Nodes deduplicated by their canonical IRI; edge types inferred from the
   // predicate (rdf:type → 'rdf-type', rdfs:subClassOf → 'subclass', literal
   // object → 'data-property', otherwise 'object-property').
-  // v0.7.7 — Vocabulary-driven type inference. Given the parsed triples,
+  // Vocabulary-driven type inference. Given the parsed triples,
   // apply well-known RDF/RDFS/OWL predicate semantics to conclude that
   // certain IRIs are Classes, ObjectProperties, DataProperties, or
   // NamedIndividuals, WITHOUT the user having to type them explicitly.
@@ -1179,7 +1177,7 @@
 
     function record(id, kind, source, strength) {
       if (!id) return;
-      // v0.7.7 — Never record inferences for RDF vocabulary sentinels
+      // Never record inferences for RDF vocabulary sentinels
       // that show up as list terminators / metaclass markers. rdf:nil
       // is a leaf of every rdf:List and would otherwise be typed as
       // Individual, cluttering the graph.
@@ -1337,7 +1335,7 @@
       if (p === sh + "node")               { record(o, "Class", why("sh:node"), STRENGTH_POSITION); return; }
       if (p === sh + "property")           { record(s, "Class", why("carries sh:property"), STRENGTH_POSITION); return; }
 
-      // v0.7.7 — Skip STRUCTURAL RDF/OWL predicates that appear in
+      // Skip STRUCTURAL RDF/OWL predicates that appear in
       // list / set encodings (rdf:first, rdf:rest, owl:intersectionOf,
       // owl:unionOf). These wire blank nodes together and shouldn't be
       // treated as domain object-property assertions. The list-walker
@@ -1360,7 +1358,7 @@
       record(p, "ObjectProperty", why("used as a predicate"), STRENGTH_PRED_FALLBACK);
     });
 
-    // v0.7.7 — List-walker post-pass. Trace `owl:propertyChainAxiom`,
+    // List-walker post-pass. Trace `owl:propertyChainAxiom`,
     // `owl:intersectionOf`, `owl:unionOf`, `owl:members` targets down
     // the rdf:List and type each first-position element in the
     // context of the outer axiom (chain members = ObjectProperty,
@@ -1477,11 +1475,11 @@
   function toGraphData(parsed) {
     if (!parsed) return { nodes: [], edges: [], warnings: [] };
     // Expand expressions BEFORE materialising the graph so restrictions
-    // and class expressions render as blank-node axiom stars (v0.7.5).
+    // and class expressions render as blank-node axiom stars.
     var expanded = _expandExpressions(parsed.triples);
     parsed = { prefixes: parsed.prefixes, triples: expanded, errors: parsed.errors };
 
-    // v0.7.7 — Vocabulary-driven type inference pre-pass.
+    // Vocabulary-driven type inference pre-pass.
     var inferred = _inferTypesAndWarnings(expanded, parsed.prefixes);
 
     var nodesById = {};
@@ -1568,7 +1566,7 @@
         if (isType) edgeType = "rdf-type";
         else if (isSubClassOf) edgeType = "subclass";
         else if (isSubPropOf) edgeType = "subclass";
-        // v0.7.7 — If the predicate is inferred to be a DataProperty,
+        // If the predicate is inferred to be a DataProperty,
         // upgrade the edgeType so the styling matches.
         if (!isType && !isSubClassOf && !isSubPropOf) {
           var predType = inferred.primaryOf[predIri];
@@ -1587,7 +1585,7 @@
       }
     });
 
-    // v0.7.7 — Collapse rdf:List scaffolding so property chains,
+    // Collapse rdf:List scaffolding so property chains,
     // owl:intersectionOf, and owl:unionOf render as clean fan-outs
     // instead of exposing rdf:first/rdf:rest cells:
     //
@@ -1756,7 +1754,7 @@
     ].join("\n");
   }
 
-  // v0.7.4 — Predefined templates for the "Examples" dropdown. Each entry
+  // Predefined templates for the "Examples" dropdown. Each entry
   // is a fresh scenario the user can drop into the editor with one click.
   // First entry is the tutorial from exampleText(); others show narrower
   // idioms so users learn one concept at a time.
@@ -1957,7 +1955,7 @@
     ];
   }
 
-  // v0.7.5 — Simple fuzzy search over WELL_KNOWN_TERMS + optional
+  // Simple fuzzy search over WELL_KNOWN_TERMS + optional
   // user-supplied terms. Scores each entry by a mix of prefix / substring
   // / label match, returns top N sorted by score descending.
   function autocompleteSearch(query, opts) {

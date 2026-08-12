@@ -264,4 +264,4 @@ https://ise-fizkarlsruhe.github.io/ontoink/playground/?data=https://raw.githubus
 !!! info "Limitations"
     - **No OWL reasoning** — reasoning requires Python (HermiT via owlready2), which is only available when using the MkDocs plugin
     - **Full SHACL Core** validation runs in the browser (`rdf-validate-shacl`) — `sh:datatype`, `sh:class`, `sh:pattern`, value ranges, `sh:in`, logical/shape-based constraints, property paths, etc. SHACL-SPARQL constraints (`sh:sparql`) and SHACL-AF rules (`sh:rule`) require the server/build-time pyshacl
-    - For production use with reasoning and full SHACL, [install ontoink](getting-started.md) as a MkDocs plugin
+    - For production use with reasoning and full SHACL, [install OntoInk](getting-started.md) as a MkDocs plugin

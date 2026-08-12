@@ -10,7 +10,7 @@
   --ov-fail: #dc2626;
   --ov-radius: 8px;
 
-  /* v0.7.0 — Big-ontology mode accents.
+  /* Big-ontology mode accents.
      Attic panel uses slate so it stays visually distinct from the five
      existing panels (editor cyan, reasoning purple, stats indigo,
      pathfinder amber, sparql green). Super-node & badge tokens live here
@@ -518,7 +518,7 @@
 
 .ov-error { color: var(--ov-fail); background: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: var(--ov-radius); margin: 1em 0; font-family: var(--ov-font); font-size: 13px; }
 
-/* ── v0.7.0 Big-ontology mode ─────────────────────────────────────
+/* ── Big-ontology mode ────────────────────────────────────────────
    LOD slider, Attic panel, super-node overlay, node badges, close btn.
    All new components consume the --ov-* tokens from :root so themes and
    the isolation:isolate contract on .ontoink-container are preserved. */
@@ -538,8 +538,8 @@
   user-select: none;
   white-space: nowrap;
 }
-/* v0.7.4 — LOD dropdown. Replaces the slider that was slipping onto
-   its own line at medium widths and made picking L1 fiddly. */
+/* LOD dropdown: precise at narrow widths, where a slider would slip onto its
+   own line and make picking L1 fiddly. */
 .ov-lod-select {
   font-family: inherit;
   font-size: 12px;
@@ -697,7 +697,7 @@
 }
 .ov-attic-row-pin:hover { background: var(--ov-attic-row-hover); }
 
-/* Reusable close button — used by Attic head and other v0.7 panels. */
+/* Reusable close button — used by the Attic head and other side panels. */
 .ov-btn-close {
   background: transparent;
   border: none;
@@ -836,9 +836,9 @@
   .ov-lod-slider { width: 90px; }
 }
 
-/* v0.7.3 — Facets panel (#33). Reuses the .ov-attic-panel drawer chrome
-   so it docks in the same spot with the same z-order; the rows here are
-   compact checkboxes with a name and a count on the right. */
+/* Facets panel. Reuses the .ov-attic-panel drawer chrome so it docks in the
+   same spot with the same z-order; the rows here are compact checkboxes with
+   a name and a count on the right. */
 .ov-facet-section-head {
   font-size: 12px;
   font-weight: 600;
@@ -886,8 +886,8 @@
   font-size: 11px;
 }
 
-/* v0.7.3 — Metrics dashboard splash (#38). Full-container overlay
-   with a centered card. Sits above canvas + panels but below popups. */
+/* Metrics dashboard splash. Full-container overlay with a centered card.
+   Sits above canvas + panels but below popups. */
 .ov-metrics-splash {
   position: absolute;
   inset: 0;
@@ -1014,3 +1014,264 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Suggested shapes, citation, proof trees, competency questions
+   ═══════════════════════════════════════════════════════════════════════
+   Each of these panels reuses the existing .ov-*-panel geometry and only
+   sets what makes it recognisable: a distinct accent stripe (violet for
+   suggestions, amber for citation) so a reader can tell at a glance which
+   drawer is open, matching the convention the editor/reasoning/stats
+   panels already follow. */
+
+:root {
+  --ov-suggest-accent: #7c3aed;   /* violet — proposed, not yet accepted */
+  --ov-cite-accent:    #b45309;   /* amber  — provenance & licensing */
+}
+
+.ov-recommend-panel,
+.ov-citation-panel {
+  border: 1px solid var(--ov-border);
+  border-top: 3px solid var(--ov-suggest-accent);
+  border-radius: 0 0 var(--ov-radius) var(--ov-radius);
+  background: #fff;
+  font-family: var(--ov-font);
+  max-height: 420px;
+  overflow-y: auto;
+}
+.ov-citation-panel { border-top-color: var(--ov-cite-accent); }
+
+.ov-recommend-content,
+.ov-citation-content { padding: 10px 14px 14px; }
+
+.ov-rec-head {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin: 12px 0 6px;
+}
+.ov-rec-head:first-child { margin-top: 0; }
+.ov-rec-method { font-weight: 400; color: #6b7280; font-size: 11px; }
+.ov-rec-note { font-size: 12px; color: #6b7280; margin: 4px 0; }
+
+.ov-rec-shape { margin: 6px 0; font-size: 12px; }
+.ov-rec-shape > summary { cursor: pointer; color: var(--ov-suggest-accent); font-weight: 600; }
+.ov-rec-count { color: #9ca3af; font-weight: 400; font-size: 11px; }
+
+.ov-rec-constraints { list-style: none; margin: 6px 0; padding: 0 0 0 14px; }
+.ov-rec-constraint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 11.5px;
+  color: #374151;
+}
+.ov-rec-constraint code {
+  background: #f5f3ff;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.ov-rec-stale code { background: #fef2f2; }
+.ov-rec-evidence { color: #6b7280; font-size: 11px; }
+
+/* Confidence chip — the same number the edge opacity encodes, spelled out
+   for anyone who cannot read a 30%-opacity difference. */
+.ov-rec-conf {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.ov-conf-high { background: #dcfce7; color: #15803d; }
+.ov-conf-mid  { background: #fef3c7; color: #a16207; }
+.ov-conf-low  { background: #fee2e2; color: #b91c1c; }
+
+.ov-rec-turtle {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.ov-rec-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+
+/* Citation */
+.ov-cite-license { margin-bottom: 8px; }
+.ov-license-badge {
+  display: inline-block;
+  background: #ecfccb;
+  color: #3f6212;
+  border: 1px solid #d9f99d;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.ov-license-missing { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.ov-cite-desc { font-size: 12px; color: #4b5563; margin: 6px 0; }
+.ov-cite-table { border-collapse: collapse; width: 100%; font-size: 11.5px; }
+.ov-cite-table th {
+  text-align: left;
+  color: #6b7280;
+  font-weight: 600;
+  padding: 3px 10px 3px 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.ov-cite-table td { padding: 3px 0; color: #374151; word-break: break-all; }
+
+/* Proof tree — indentation carries the derivation depth, so the nesting is
+   the explanation and needs no connector graphics. */
+.ov-proof-popup { max-width: 460px; }
+.ov-proof-list { list-style: none; margin: 4px 0; padding-left: 14px; }
+.ov-proof-root { padding-left: 0; }
+.ov-proof-list li { margin: 4px 0; font-size: 12px; }
+.ov-proof-triple { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.ov-proof-rule { font-size: 11px; color: #6b7280; margin: 2px 0 2px 2px; }
+.ov-proof-rule code { background: #f3e8ff; color: #6b21a8; border-radius: 3px; padding: 0 4px; }
+.ov-proof-why { color: #9ca3af; font-size: 11px; }
+.ov-proof-asserted .ov-proof-triple { color: #15803d; }
+.ov-proof-none { font-size: 12px; color: #6b7280; margin: 0; }
+
+/* Smell chips gain actions — select the term, copy its generated shape. */
+.ov-smell-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  background: #f3f4f6;
+  padding: 1px 4px 1px 6px;
+  border-radius: 3px;
+  margin: 1px;
+  color: #374151;
+}
+.ov-chip-btn {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 1px 2px;
+  color: #6b7280;
+  border-radius: 2px;
+}
+.ov-chip-btn:hover { background: #e5e7eb; color: #111827; }
+.ov-chip-btn:focus-visible { outline: 2px solid var(--ov-accent); outline-offset: 1px; }
+
+/* Transient confirmation for actions with no visible result of their own
+   (clipboard writes, appends into a collapsed editor). */
+.ov-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  background: #111827;
+  color: #f9fafb;
+  font-family: var(--ov-font);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  z-index: 40;
+  max-width: 90%;
+  text-align: center;
+}
+
+/* ── Competency questions ──────────────────────────────────────────────
+   Rendered by ontoink/cq.py. Pass/fail is carried by a left stripe plus the
+   mark, never by colour alone. */
+.ov-cq-block {
+  font-family: var(--ov-font);
+  border: 1px solid var(--ov-border);
+  border-radius: var(--ov-radius);
+  margin: 16px 0;
+  overflow: hidden;
+}
+.ov-cq-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--ov-bg-toolbar);
+  border-bottom: 1px solid var(--ov-border);
+}
+.ov-cq-title { font-weight: 600; font-size: 13px; color: #374151; }
+.ov-cq-counts { font-size: 11.5px; color: #6b7280; font-variant-numeric: tabular-nums; }
+
+.ov-cq-card { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; border-left: 3px solid transparent; }
+.ov-cq-card:last-child { border-bottom: 0; }
+.ov-cq-pass { border-left-color: var(--ov-pass); }
+.ov-cq-fail { border-left-color: var(--ov-fail); background: #fffafa; }
+
+.ov-cq-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.ov-cq-mark { font-weight: 700; }
+.ov-cq-pass .ov-cq-mark { color: var(--ov-pass); }
+.ov-cq-fail .ov-cq-mark { color: var(--ov-fail); }
+.ov-cq-q { font-size: 13px; color: #1f2937; flex: 1 1 240px; }
+.ov-cq-detail { font-size: 11.5px; color: #6b7280; font-variant-numeric: tabular-nums; }
+.ov-cq-note { font-size: 11.5px; color: #6b7280; margin: 4px 0; }
+
+.ov-cq-details { margin: 6px 0 0; }
+.ov-cq-details > summary { cursor: pointer; font-size: 11.5px; color: var(--ov-accent); }
+.ov-cq-query {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.ov-cq-tablewrap { overflow-x: auto; margin: 6px 0; }
+.ov-cq-table { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+.ov-cq-table th, .ov-cq-table td {
+  border-bottom: 1px solid #f3f4f6;
+  padding: 3px 10px 3px 0;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-all;
+}
+.ov-cq-table th { color: #6b7280; font-weight: 600; }
+.ov-cq-show { margin-top: 6px; }
+
+/* Suggestion control strip — appears with the ghost constraints, hidden the
+   rest of the time. Anchored bottom-centre so it never covers the legend
+   (bottom-left) or the namespace box (bottom-right). */
+.ov-ghost-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--ov-suggest-accent);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-family: var(--ov-font);
+  font-size: 12px;
+  color: #374151;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.12);
+  z-index: 30;
+  max-width: 92%;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ov-ghost-title { color: var(--ov-suggest-accent); }
+.ov-ghost-trust { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #6b7280; }
+.ov-ghost-trust input[type="range"] { width: 110px; accent-color: var(--ov-suggest-accent); }
+.ov-ghost-out { font-variant-numeric: tabular-nums; min-width: 3.5em; color: #374151; }

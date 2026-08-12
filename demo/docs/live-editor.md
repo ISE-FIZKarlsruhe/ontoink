@@ -5,21 +5,11 @@ hide:
 
 # Live Editor
 
-Type ontology triples in a small text notation on the left, and see the
-graph render live on the right. The generated Turtle sits at the bottom
-so you can copy it into your project or save it as a file.
+Write triples in a shorthand notation, watch the graph redraw as you type, and copy the generated Turtle from the panel below. `-a->` is `rdf:type`, `-isa->` is `rdfs:subClassOf`; everything round-trips to standard Turtle.
 
-**"DSL"** stands for **Domain-Specific Language** — a tiny language
-purpose-built for one job (here: writing RDF triples). It's a shorthand
-for Turtle: `-a->` means `rdf:type`, `-isa->` means `rdfs:subClassOf`,
-and every triple round-trips into standard Turtle. Pick an example from
-the dropdown to see the shorthand in action, or open
-[Syntax](live-editor-syntax.md) for the full reference.
+`Ctrl+Space` (`Cmd+Space` on macOS) opens autocomplete over 144 terms from RDF, RDFS, OWL, XSD, SKOS, FOAF, Dublin Core, PROV, schema.org, BFO, RO, IAO, SIO and SHACL — picking one inserts its `@prefix` line for you.
 
-**Press `Ctrl+Space`** (or `Cmd+Space` on Mac) anywhere in the editor to
-open **autocomplete**: 144 well-known terms from RDF, RDFS, OWL, XSD,
-SKOS, FOAF, Dublin Core, PROV, schema.org, BFO, RO, IAO, SIO, and SHACL.
-Pick one and its `@prefix` line is auto-inserted at the top.
+[Syntax reference :octicons-arrow-right-24:](live-editor-syntax.md){ .md-button }
 
 <div id="live-editor-app" class="ontoink-container">
   <div class="le-toolbar">
@@ -70,7 +60,7 @@ Pick one and its `@prefix` line is auto-inserted at the top.
             <label class="ov-super-toggle" title="Group by namespace — collapse each namespace into one hexagon super-node."><input type="checkbox" checked onchange="ontoink.toggleSuperNodes('le-graph',this.checked)"> Group</label>
             <button class="ov-btn" onclick="ontoink.openFacetsPanel('le-graph')" title="Facets — narrow the view">Facets</button>
             <select class="ov-lod-select" onchange="ontoink.applyStylePreset('le-graph',this.value)" title="Ontology visualization style preset">
-              <option value="ontoink" selected>Style: Ontoink</option>
+              <option value="OntoInk" selected>Style: Ontoink</option>
               <option value="chowlk">Style: Chowlk</option>
               <option value="graffoo">Style: Graffoo</option>
               <option value="vowl">Style: VOWL</option>
@@ -105,11 +95,7 @@ Pick one and its `@prefix` line is auto-inserted at the top.
 </div>
 
 <!--
-  ontoink.js + ontoink-dsl.js are both inlined by the mkdocs ontoink
-  plugin's on_post_page hook (triggered by "ontoink.liveEditor" appearing
-  on this page). The plugin script also calls liveEditor.mount() itself
-  once its IIFE has finished exporting — no page-side <script> needed.
--->
+  ontoink.js + ontoink-dsl.js are both inlined by the mkdocs OntoInk plugin's on_post_page hook (triggered by "ontoink.liveEditor" appearing on this page). The plugin script also calls liveEditor.mount() itself once its IIFE has finished exporting — no page-side <script> needed. -->
 
 <style>
 /* v0.7.1 — Widen the MkDocs Material content column ONLY on this page.

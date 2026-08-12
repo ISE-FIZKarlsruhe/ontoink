@@ -1,6 +1,6 @@
 """LLM-backed titling for super-nodes produced by :mod:`ontoink.cluster`.
 
-New in v0.7.0. Given a list of ``clusters`` and their ``side_store`` (as
+Given a list of ``clusters`` and their ``side_store`` (as
 returned by :func:`ontoink.cluster.detect_clusters`), replace the raw
 ``cluster_N`` placeholder title with a short, human-readable phrase that
 summarises what the community is about.

@@ -1,6 +1,6 @@
 """Community detection and super-node collapse for large ontology graphs.
 
-New in v0.7.0. Reads the Cytoscape.js payload produced by
+Reads the Cytoscape.js payload produced by
 :func:`ontoink.ttl_parser.parse_ttl_to_cytoscape` and folds each detected
 community into a single super-node, keeping the interior sub-graph in a
 side-store the client can restore on expand.
@@ -179,11 +179,10 @@ def detect_clusters(
 
     # Precompute member-side edges for each cluster.
     per_cluster_edges: Dict[str, List[dict]] = {cid: [] for cid, _m in collapsed_communities}
-    # v0.7.3-fix (round-3 finding #5): stash the pristine raw boundary
-    # edges per cluster so the browser can rebuild real member↔outer
-    # connections after expand+collapse. Without this the JS-side
-    # `_rebuildClusterBoundary` has nothing to work with when the
-    # user re-collapses a cluster whose members were expanded.
+    # Stash the pristine raw boundary edges per cluster so the browser can
+    # rebuild real member<->outer connections after expand+collapse. Without
+    # this the JS-side `_rebuildClusterBoundary` has nothing to work with when
+    # the user re-collapses a cluster whose members were expanded.
     per_cluster_boundary_edges: Dict[str, List[dict]] = {cid: [] for cid, _m in collapsed_communities}
     cross_edges: Dict[Tuple[str, str], int] = {}
     top_level_edges: List[dict] = []
@@ -250,10 +249,10 @@ def detect_clusters(
         side_store[cluster_id] = {
             "nodes": interior_nodes,
             "edges": interior_edges,
-            # v0.7.3-fix (round-3 finding #5): pristine raw boundary edges
-            # (member↔outer, and member↔other-cluster's member) so the
-            # browser-side rebuild has enough data to reconnect cross-cluster
-            # relationships on expand+collapse cycles.
+            # Pristine raw boundary edges (member<->outer, and member<->
+            # other-cluster's member) so the browser-side rebuild has enough
+            # data to reconnect cross-cluster relationships on expand+collapse
+            # cycles.
             "boundary_edges": per_cluster_boundary_edges.get(cluster_id, []),
             "node_badges": interior_badges,
         }

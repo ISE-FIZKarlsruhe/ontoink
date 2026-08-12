@@ -1,26 +1,144 @@
 # Changelog
 
-All notable changes to ontoink are documented here.
-This project follows [Semantic Versioning](https://semver.org/).
+All notable changes to OntoInk are documented here. This project follows [Semantic Versioning](https://semver.org/).
 
-[:fontawesome-brands-python: View all releases on PyPI](https://pypi.org/project/ontoink/#history){ .md-button }
-[:fontawesome-brands-github: View all tags on GitHub](https://github.com/ISE-FIZKarlsruhe/ontoink/tags){ .md-button }
+[:fontawesome-brands-python: View all releases on PyPI](https://pypi.org/project/ontoink/#history){ .md-button } [:fontawesome-brands-github: View all tags on GitHub](https://github.com/ISE-FIZKarlsruhe/ontoink/tags){ .md-button }
+
+---
+
+## [0.7.7] — 2026-08-11
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.7/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.7)
+
+### Added — SHACL shape recommendation
+
+- **OntoInk can now propose the shapes you haven't written.** `recommend_shapes: true` on a fence adds a **Shapes** panel listing a `sh:NodeShape` for every class with no coverage, each constraint shown with the evidence behind it, plus Copy and *Add to editor* buttons. It runs at build time, so it works on GitHub Pages.
+- Two induction methods, folded in from a benchmark of eight: **`baseline`** profiles instance data (Mihindukulasooriya et al. 2018), **`astrea`** derives constraints from OWL axioms alone — the only one that says anything about a documentation ontology that ships no individuals. **`auto`** runs both and merges them, recording which method proposed each constraint. The other six either over-predicted, produced output identical to the baseline on real ontologies, or were never fully implemented.
+- **Confidence survives serialisation.** Emitted shapes carry `sh:description` plus `oi:confidence` / `oi:support` / `oi:population` / `oi:method`. They are annotations, so the file still validates with `pyshacl` unchanged.
+- **Right-click a class → *Induce shape from this class*.** Proposals appear as dashed edges whose opacity is mapped from their confidence, with a trust slider that fades out the weakly-evidenced ones. Clicking a ghost edge accepts it: it becomes a real constraint edge and its Turtle lands in the **Edit & Validate** buffer, where Validate is one click away.
+- **The `no-shacl-coverage` smell now generates the shape it asks for** — a ready-to-paste skeleton per uncovered class, with a copy button, instead of prose pointing at another tool.
+- New `POST /recommend-shapes` endpoint in the API mode, so the fence, the SHACL editor and the graph context menu all run one implementation.
+
+### Added — closing the loop back into CI
+
+- **`shape_drift: warn`** compares committed shapes against what the data implies today: constraints the data supports that the file omits, committed constraints almost nothing satisfies (with a concrete relaxation), and classes with no shape. Findings go through the MkDocs logger, so `mkdocs build --strict` fails the build.
+- **Competency questions are executable.** A new `ontoink-cq` fence pairs each question with SPARQL and an expectation and renders pass/fail cards with the query and bindings; `reasoning: true` merges inferred triples first, so a question can assert what the ontology *entails*. **Show on graph** selects a question's bound terms on the nearest diagram, without needing to know its id.
+- **`ontoink-report.json` and README badges** are written on every build — SHACL conformance, the OntoSniff score, consistency, drift and CQ results in one machine-readable artefact. Badges are rendered locally, with no request to an external badge service. A `quality_gate:` config block fails the build on score regressions, new violations, inconsistency or drift.
+
+### Added — trust and provenance
+
+- **"Explain this inference."** Right-click an inferred edge for a proof tree: which OWL-RL rule fired, on which premises, down to asserted facts. Only the in-page reasoner can do this — Konclude, HermiT and the server backends return proof-free triples, and the panel says so rather than inventing a derivation.
+- **Cite this ontology** — license badge, version, creators and a generated BibTeX block read from the `owl:Ontology` header.
+- **Deprecated terms read as retired** (dimmed, dashed border) and the deprecation smell now names the successor declared via IAO:0100001 or `dcterms:isReplacedBy`.
+- **Findings are actionable**: quality-smell chips and competency-question results can select their terms on the canvas, revealing anything the current LOD level had hidden.
+
+### Fixed
+
+- **Literal node ids are stable across builds.** They were `abs(hash(str)) % 999999`, and Python salts string hashing per process, so the same literal got a new id on every build.
+- **Build-time SHACL validation failures are no longer silent.** A bare `except` turned a broken or missing shapes file into an unvalidated diagram with nothing in the build log.
+- **`/reason`'s reasoner override no longer mutates the environment**, which two concurrent requests could race on.
+- **Build-time and server validation agreed to disagree** — `none` versus `rdfs` inference, so the same file could conform on the page and fail in CI. Both now share one default, with `validation_inference:` to opt in.
+- **The `predicates:` policy is reachable at last** — `hide_predicates` / `fold_into_badge` / `badge_predicates` have been implemented since 0.7.0 but nothing ever passed them from the fence YAML.
+- **Style presets are matched case-insensitively**, so choosing "Style: Ontoink" after another preset restores the default instead of warning about an unknown preset.
+- **One version, everywhere.** `pyproject.toml` reads it from `ontoink/__init__.py`, the API reports it instead of a hard-coded `0.7.2`, and the page exposes `window.ONTOINK_VERSION` in place of a header comment that had been stale since 0.7.4.
+- **The wheel shipped the entire repository** — `tests/`, `scripts/`, the shape-recommender research project and the paper draft were all installed as top-level packages, because package discovery defaulted to namespace mode.
+- **Three buttons were silently dead.** The no-eval attribute shim understood strings and numbers but not lists, and split argument lists at commas inside brackets — so any button passing a set of IRIs was mangled before it ran. That covered "Show class", the select action on OntoSniff chips, and "Show on graph" on competency-question results. Lists now parse, and a new test runs the real shim under Node against every call shape the plugin emits.
+- **An apostrophe in a label broke its button** — *Alzheimer's disease* closed the single-quoted attribute argument early.
+- **The axiom-driven method found nothing on an ontology with no instances** — the one case it exists for. It discovered properties by looking at which ones were *used* in the data; in a documentation ontology a property appears as the subject of `rdfs:domain` and is never used, so the whole domain/range branch silently produced nothing. None of the five research benchmarks could catch this, because every one of them ships instance data that exercises its properties.
+- **`auto` mode threw away evidence it had already found**: when both induction methods derived the same constraint, the axiom-derived one won and its empty instance counts were what got serialised. Colliding derivations now merge.
+
+---
+
+## [0.7.6] — 2026-08-06
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.6/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.6)
+
+### Fixed — rendering and export resolution
+
+- **Diagrams rendered at half resolution on HiDPI screens.** `pixelRatio: 1` arrived in 0.7.4 as a large-ontology optimization but was applied to every graph, pinning the canvas to one device pixel per CSS pixel — on a retina or 4K display the whole diagram was drawn at half the available resolution. The ratio now follows the display (capped at 2) and drops to 1 only for graphs of 500+ nodes; the motion optimizations became conditional for the same reason. `pixel_ratio: N` in the fence YAML overrides the choice either way.
+- **PNG exports are sized for print.** The fixed `scale: 2` meant a compact diagram exported at ~1400 px on its long edge; the scale is now derived so the result lands near 3000 px, clamped to the browser's canvas limits. `ontoink.exportPNG(id, 4)` still forces an explicit scale.
+
+### Changed — documentation
+
+- The site is branded **OntoInk** (the package, module and fence name stay `ontoink`), the navigation collapsed from thirteen tabs to five, and the tab bar stays visible while scrolling.
+- The landing page leads with the live diagram rather than prose; new **Architecture** and **Docker & self-hosting** pages carry the material that used to sit in the README.
+
+---
+
+## [0.7.5] — 2026-08-06
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.5/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.5)
+
+### Added — Size & Typography in Edit Layout
+
+- **Edit Layout can now change how big the shapes are and which font they use.** A master **Scale** slider (40–300 %) moves shape size, node labels and edge labels together; below it sit explicit px boxes for each, a **font family** picker (Inter, Helvetica/Arial, Verdana, Georgia, Times, Mono), a **weight** picker and an **italic** toggle. Each node-type row also gained per-type **size** and **font** boxes that override the global values.
+- Size is expressed as **padding around the label** rather than a fixed width/height, because every OntoInk stylesheet sizes nodes with `width/height: "label"` — so shapes grow with the scale and labels never clip.
+- Typography values live in **element data** and are read through function mappers installed on every stylesheet — the fence, the playground, the live editor **and all four style presets** — so the settings survive layout changes, LOD sweeps, element re-creation and a switch to Chowlk/Graffoo/VOWL, and they are baked into PNG/SVG exports.
+- New API: `ontoink.setTypography(id, key, value, scope)`, `applyTypography(id)`, `resetTypography(id)`, `getInstance(id)`.
+
+### Added — Multi-selection and a right-click context menu
+
+- **Ctrl/Cmd+click and Shift+click extend the selection**, Ctrl/Shift+drag rubber-bands, and dragging any selected node moves the whole selection. The node popup no longer fires during a multi-select gesture, and the selection renders with a cyan halo.
+- **Right-click opens a context menu** with inline-SVG icons: align left/centre/right/top/middle/bottom; distribute horizontally/vertically with equal gaps; arrange as a grid or circle; snap to a 20 px grid; **tidy as taxonomy** (rows derived from `rdfs:subClassOf` depth); bigger/smaller/match size; pin & unpin (layout runs skip pinned nodes); colour the selection.
+- **Ontology-specific verbs** beyond the drawing ones: select same type · same namespace · grow to neighbours · sub-class tree · super-classes · instances of the selected classes · SHACL shapes constraining them · connected component; isolate / hide / show hidden; path between exactly two selected nodes; copy IRIs, labels, the selection as TTL or as a Markdown table; download the selection as `.ttl`; export the selection as PNG.
+- **Edge menu** — select both endpoints, select every use of this predicate, hide all edges of this type, copy the predicate IRI, copy the triple. **Cluster menu** — expand/collapse and select members.
+- **Undo/redo** (`Ctrl+Z` / `Ctrl+Shift+Z`, 25 steps) for every position, size, pin and visibility verb.
+- **Keyboard**: `Ctrl+A`, `Escape` (close menu, then clear selection), `Delete` hides the selection, arrow keys nudge it (`Shift` = 10×), `Shift+F10` / the Context-Menu key opens the menu with roving-tabindex arrow navigation and `role="menu"` semantics. Shortcuts are scoped to the graph under the pointer or keyboard focus, never stolen from the TTL editor.
+
+### Fixed
+
+- **The fonts never actually applied.** Every stylesheet asked for `"'Inter','Segoe UI',system-ui,sans-serif"` in CSS syntax, but Cytoscape validates `font-family` against a regex that forbids quotes — a quoted stack fails silently and falls back to the Cytoscape default (Helvetica Neue). All 25 declarations are now unquoted, so diagrams finally render in the font they always asked for.
+- **The Konclude WASM reasoner bundle now actually ships in the wheel.** The package-data glob pointed at `resources/reasoner/*` while the vendored files live in `resources/assets/reasoner/*`, so `bundle.mjs`, `konclude.mjs`, `konclude.wasm` and `worker.js` were absent from every distribution and the plugin's `on_files` hook found an empty directory — every `pip install ontoink` site kept 404-ing on `/assets/reasoner/bundle.mjs`, the exact failure 0.7.4 set out to fix (it only ever worked from a source checkout).
+- **SVG export cropped anything outside the viewport** — precisely what the new align/distribute verbs encourage. It now fits first when the graph extends past the viewport, then restores your zoom and pan.
+- **"Copy selection as TTL" dropped `rdfs:subClassOf`** whenever the parent wasn't selected. It now emits every triple asserted by a selected subject, skips overlay-only edges (inferred / SHACL) and quotes literal objects.
+- Selection and pinned-node styling is re-appended to every style preset instead of vanishing on a preset switch; manual arrangements are saved to the position cache (programmatic moves never fire `dragfree`); geometry verbs run inside `cy.batch()`.
+- The live DSL editor had no selection layer at all — it is now wired like the fence and playground paths.
+
+---
+
+## [0.7.4] — 2026-07-21
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.4/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.4)
+
+### Added — Plugin auto-installs the browser reasoner bundle
+
+- **The plugin ships a pre-built vendored `rdf-reasoner-konclude` bundle** (`bundle.mjs`, `konclude.mjs`, `konclude.wasm`, `worker.js`) and copies it to `<site>/assets/reasoner/` at build time. OntoInk's browser reasoner imports it same-origin — browsers reject cross-origin module Workers even with COEP credentialless, so without a same-origin copy the WASM Worker refused to spawn and the panel died with "Worker error — the WASM worker died during init". (See 0.7.5: a packaging glob bug meant this only worked from a source checkout until then.)
+- **`coi-serviceworker.js` is copied to the site root** and injected at the top of every OntoInk page, so `SharedArrayBuffer` is available for the WASM reasoner on static hosts (GitHub Pages) that cannot send COOP/COEP headers.
+
+### Added — Style presets
+
+- **Chowlk, Graffoo and VOWL stylesheets** are selectable from the toolbar, alongside the OntoInk default. Presets approximate the canonical notations where Cytoscape can express them.
+
+### Fixed
+
+- **Blank nodes are styled as blank nodes** — rdflib emits blank subjects as `_:bN…`, which the parser tagged as Individuals; they now render as small dashed grey diamonds.
+- **Exported figures explain their purple dotted edges** — overlay edge types that live only in Cytoscape (the inferred overlay) are now seeded into the export legend.
+- **Viewport optimizations for large ontologies** — edges and labels hide during pan/zoom and the scene is bitmap-cached, with finer-grained wheel zoom.
+
+---
+
+## [0.7.3] — 2026-07-20
+
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.3/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.3)
+
+### Fixed — Reasoning panel
+
+- **"0 inferences from a successful build-time reasoner" no longer falls through to the runtime reasoner.** When owlready2/HermiT runs in the build container, reports `consistent`, and returns an empty inferred list — typical for pure SHACL shape files with no OWL-DL entailments — the panel used to punt to the runtime reasoner, which on a static host has no `/reason` endpoint and errored with "No reasoner available". The panel now distinguishes the two cases via `data.consistency.status`: a reasoner that ran gets a "Build-time OWL reasoning: 0 new triples inferred" panel with a consistency badge and a re-run link, while `status: "unknown"` keeps the old fall-through so a local server or a `crossOriginIsolated` browser can still pick up the work.
 
 ---
 
 ## [0.7.2] — 2026-07-15
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.2/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.2)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.2/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.2)
 
 ### Added — Embeddable, CSP-safe build
 
-- **`ontoink.embed(el, {ttl, shape, layout, height, editor, reasoning})`** — mount an interactive ontoink diagram from a Turtle string into any element on any page, no MkDocs required. It builds the toolbar/canvas/panels, parses the TTL client-side (the same path as `ontoink.playground`), and returns the container id. `shape` overlays SHACL constraints; `layout` sets the initial layout. See the new [Embedding](embedding.md) guide.
-- **`scripts/build_embed_bundle.py`** — bundles the vendored libraries + the ontoink runtime into a single self-contained `dist/ontoink.embed.js` (+ `dist/ontoink.embed.css`). Drop the two files next to your page, add a `<div class="ontoink-embed">`, and call `ontoink.embed()`.
+- **`ontoink.embed(el, {ttl, shape, layout, height, editor, reasoning})`** — mount an interactive OntoInk diagram from a Turtle string into any element on any page, no MkDocs required. It builds the toolbar/canvas/panels, parses the TTL client-side (the same path as `ontoink.playground`), and returns the container id. `shape` overlays SHACL constraints; `layout` sets the initial layout. See the new [Embedding](embedding.md) guide.
+- **`scripts/build_embed_bundle.py`** — bundles the vendored libraries + the OntoInk runtime into a single self-contained `dist/ontoink.embed.js` (+ `dist/ontoink.embed.css`). Drop the two files next to your page, add a `<div class="ontoink-embed">`, and call `ontoink.embed()`.
 
 ### Changed — CSP-safe by default (no inline handlers, no CDN)
 
-- **Every event handler is now CSP-safe.** All inline `on*=` handlers — in the fence toolbar and the runtime-generated panels/popups — are emitted as `data-oi-on*` attributes and attached with `addEventListener` by a small, eval-free interpreter (plus a `MutationObserver` for dynamically-created UI). ontoink now runs under a strict `Content-Security-Policy` (`script-src 'self'`, no `'unsafe-inline'`), both embedded and on its own MkDocs pages.
+- **Every event handler is now CSP-safe.** All inline `on*=` handlers — in the fence toolbar and the runtime-generated panels/popups — are emitted as `data-oi-on*` attributes and attached with `addEventListener` by a small, eval-free interpreter (plus a `MutationObserver` for dynamically-created UI). OntoInk now runs under a strict `Content-Security-Policy` (`script-src 'self'`, no `'unsafe-inline'`), both embedded and on its own MkDocs pages.
 - **Third-party libraries are self-hosted, not loaded from a CDN.** Cytoscape, dagre, cytoscape-dagre, cytoscape-svg and CodeMirror (+ turtle mode) are vendored under `ontoink/resources/vendor/`; the plugin copies them into the built site (`on_files` → `<site>/vendor/`) and injects local `<script>` tags. Pages now build and run fully offline and behind strict CSPs.
 
 ### Fixed
@@ -31,8 +149,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.7.1] — 2026-07-10
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.1/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.1)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.1/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.1)
 
 ### Fixed — Live-editor DSL parser
 
@@ -68,12 +185,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.7.0] — 2026-07-09
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.0/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.0)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.7.0/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.7.0)
 
 ### Added
 
-- **Big-ontology mode — Semantic-Tile bundle** — a coordinated set of build-time + runtime knobs that lets one ontoink diagram scale from a tiny example to a 100 000-triple ontology without swamping the browser. Opt-in: a fence with no YAML config still renders exactly the same graph 0.6.1 rendered.
+- **Big-ontology mode — Semantic-Tile bundle** — a coordinated set of build-time + runtime knobs that lets one OntoInk diagram scale from a tiny example to a 100 000-triple ontology without swamping the browser. Opt-in: a fence with no YAML config still renders exactly the same graph 0.6.1 rendered.
     - **Build-time literal-fold + predicate-policy YAML config** — `predicates: { hide_predicates, fold_into_badge, badge_predicates }` (CURIEs resolve against the source graph's own prefixes; `prov:*` wildcards match by namespace URI). Folded literals migrate into `node_badges`; hidden predicates are dropped wholesale.
     - **Leiden clustering with LLM-titled super-nodes and JSON side-store** — needs `ontoink[cluster]` (python-igraph + leidenalg). `ontoink[topic]` (anthropic + openai) additionally names each community; a missing library or missing API key falls back to a deterministic synthetic title.
     - **Element-removing semantic zoom (L0..L6) slider** — new toolbar slider, default L2. L0 = super-nodes + top-K central classes only, L6 = everything (SHACL + inferred).
@@ -96,8 +212,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.6.3] — 2026-06-10
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.3/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.3)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.3/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.3)
 
 ### Added
 
@@ -114,8 +229,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.6.2] — 2026-06-08
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.2/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.2)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.2/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.2)
 
 ### Fixed
 
@@ -137,8 +251,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.6.1] — 2026-06-04
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.1/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.1)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.6.1/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.6.1)
 
 ### Added
 
@@ -189,8 +302,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.5.2] — 2026-04-17
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.2/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.2)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.2/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.2)
 
 ### Fixed
 
@@ -201,8 +313,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.5.1] — 2026-04-17
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.1/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.1)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.1/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.1)
 
 ### Fixed
 
@@ -212,12 +323,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [0.5.0] — 2026-04-10
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.0/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.0)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.5.0/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.5.0)
 
 ### Highlight: Automatic Ontology Label Resolution
 
-ontoink now **automatically fetches and resolves human-readable labels** from referenced ontologies. When your shape graph uses IRIs from nfdicore, BFO, IAO, or other ontologies, ontoink fetches the ontology source files and extracts `rdfs:label`, `rdfs:comment`, type information, and more — so you see `"contributor role"` instead of `NFDI_0000118` everywhere.
+OntoInk now **automatically fetches and resolves human-readable labels** from referenced ontologies. When your shape graph uses IRIs from nfdicore, BFO, IAO, or other ontologies, OntoInk fetches the ontology source files and extracts `rdfs:label`, `rdfs:comment`, type information, and more — so you see `"contributor role"` instead of `NFDI_0000118` everywhere.
 
 This works across:
 
@@ -254,8 +364,7 @@ This works across:
 
 ## [0.3.0] — 2026-04-09
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.3.0/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.3.0)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.3.0/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.3.0)
 
 ### Added
 
@@ -281,8 +390,7 @@ This works across:
 
 ## [0.2.0] — 2026-04-08
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.2.0/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.2.0)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.2.0/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.2.0)
 
 ### Added
 
@@ -309,8 +417,7 @@ This works across:
 
 ## [0.1.0] — 2026-04-07
 
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.1.0/)
- &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.1.0)
+[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/0.1.0/) &middot; [:fontawesome-brands-github: Release](https://github.com/ISE-FIZKarlsruhe/ontoink/releases/tag/v0.1.0)
 
 Initial public release.
 

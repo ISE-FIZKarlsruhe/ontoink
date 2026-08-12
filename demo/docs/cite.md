@@ -1,6 +1,6 @@
-# Cite ontoink
+# Cite OntoInk
 
-If you use ontoink in your research, documentation, or publications, please cite it.
+If you use OntoInk in your research, documentation, or publications, please cite it.
 
 ---
 
@@ -9,17 +9,26 @@ If you use ontoink in your research, documentation, or publications, please cite
 ```bibtex
 @software{norouzi2026ontoink,
   author       = {Norouzi, Ebrahim},
-  title        = {ontoink: Interactive Ontology Visualization, SHACL Validation, and Live TTL Editing for MkDocs},
+  title        = {OntoInk: Interactive Ontology Visualization, SHACL Validation, and Live TTL Editing for MkDocs},
   year         = {2026},
+  version      = {0.7.7},
   publisher    = {GitHub},
   url          = {https://github.com/ISE-FIZKarlsruhe/ontoink},
   note         = {Python package available at \url{https://pypi.org/project/ontoink/}}
 }
 ```
 
+Machine-readable metadata lives in [`CITATION.cff`](https://github.com/ISE-FIZKarlsruhe/ontoink/blob/main/CITATION.cff), which GitHub reads for its "Cite this repository" button.
+
 ## APA
 
-> Norouzi, E. (2026). *ontoink: Interactive Ontology Visualization, SHACL Validation, and Live TTL Editing for MkDocs* [Computer software]. GitHub. https://github.com/ISE-FIZKarlsruhe/ontoink
+> Norouzi, E. (2026). *OntoInk: Interactive Ontology Visualization, SHACL Validation, and Live TTL Editing for MkDocs* (Version 0.7.7) [Computer software]. GitHub. https://github.com/ISE-FIZKarlsruhe/ontoink
+
+---
+
+## Citing an ontology you rendered
+
+Every diagram carries a **Cite** button when its source declares an `owl:Ontology` header. It reads the license, version, version IRI and creators straight out of that header and generates a BibTeX entry for the *ontology* — not for OntoInk — so a reader can cite what they are looking at without leaving the page. The button is hidden when the graph has no ontology declaration, which is itself a useful signal: an ontology published without header metadata cannot be cited properly by anyone.
 
 ---
 
@@ -49,9 +58,7 @@ https://pypi.org/project/ontoink/
 
 ## Acknowledgments
 
-ontoink is developed by [Ebrahim Norouzi](https://ebrahimnorouzi.github.io/) at the
-[Information Service Engineering (ISE)](https://www.fiz-karlsruhe.de/en/forschung/information-service-engineering) group,
-[FIZ Karlsruhe — Leibniz Institute for Information Infrastructure](https://www.fiz-karlsruhe.de/).
+OntoInk is developed by [Ebrahim Norouzi](https://ebrahimnorouzi.github.io/) at the [Information Service Engineering (ISE)](https://www.fiz-karlsruhe.de/en/forschung/information-service-engineering) group, [FIZ Karlsruhe — Leibniz Institute for Information Infrastructure](https://www.fiz-karlsruhe.de/).
 
 This work is carried out in the context of:
 
@@ -60,7 +67,7 @@ This work is carried out in the context of:
 
 ### Open-Source Libraries
 
-ontoink is powered by these excellent open-source projects:
+OntoInk is powered by these excellent open-source projects:
 
 | Library | Role |
 |:--------|:-----|

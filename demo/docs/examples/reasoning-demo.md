@@ -1,25 +1,14 @@
 # Reasoning & Inference
 
-This page is a guided tour of the **reasoning features** ontoink can visualise —
-from basic RDFS up to OWL 2 — each with a *small, self-contained* example.
+This page is a guided tour of the **reasoning features** OntoInk can visualise — from basic RDFS up to OWL 2 — each with a *small, self-contained* example.
 
-**How to use each diagram:** click **Reasoning**, then read the inferred triples in
-the panel. Tick **"Show on graph"** to overlay them as purple edges. Every diagram
-below defaults its reasoner dropdown to **Server: OWL-RL**, which materialises the
-full RDFS + OWL-RL closure and surfaces every inference listed. Switch to
-**HermiT (owlready2)** or **Konclude** to compare an OWL-DL reasoner.
+**How to use each diagram:** click **Reasoning**, then read the inferred triples in the panel. Tick **"Show on graph"** to overlay them as purple edges. Every diagram below defaults its reasoner dropdown to **Server: OWL-RL**, which materialises the full RDFS + OWL-RL closure and surfaces every inference listed. Switch to **HermiT (owlready2)** or **Konclude** to compare an OWL-DL reasoner.
 
 !!! note "Reasoner backends"
-    - **OWL-RL** (default here) — pure-Python; the most complete *materialiser* of
-      RDFS/OWL inferences, including class subsumptions like `Novel ⊑ Book ⟹ ∃reads.Novel ⊑ ∃reads.Book`.
-    - **HermiT / Konclude** — OWL-DL tableau reasoners; strongest on
-      classification & consistency.
-    - **Browser: Konclude WASM** — runs in your browser (no server), but only
-      classifies the T-box (class subsumptions), so it shows fewer instance-level facts.
-    - **Browser: OWL-RL (JS)** — a built-in, dependency-free materialiser that runs
-      in every browser with no server and no special headers. It covers the RDFS +
-      OWL-RL rules used on this page and is also the automatic fallback whenever
-      another backend is unavailable.
+    - **OWL-RL** (default here) — pure-Python; the most complete *materialiser* of RDFS/OWL inferences, including class subsumptions like `Novel ⊑ Book ⟹ ∃reads.Novel ⊑ ∃reads.Book`.
+    - **HermiT / Konclude** — OWL-DL tableau reasoners; strongest on classification & consistency.
+    - **Browser: Konclude WASM** — runs in your browser (no server), but only classifies the T-box (class subsumptions), so it shows fewer instance-level facts.
+    - **Browser: OWL-RL (JS)** — a built-in, dependency-free materialiser that runs in every browser with no server and no special headers. It covers the RDFS + OWL-RL rules used on this page and is also the automatic fallback whenever another backend is unavailable.
     - Server backends need the API (`ONTOINK_MODE=all`/`api`); the browser ones work on static hosts.
 
 ---
@@ -100,8 +89,7 @@ height: 440px
 
 ### 5a. Existential — `owl:someValuesFrom` (∃)
 
-`Reader ≡ ∃reads.Book`, `NovelReader ≡ ∃reads.Novel`. Because every `Novel` is a
-`Book`, the reasoner derives a class subsumption **and** classifies the reader.
+`Reader ≡ ∃reads.Book`, `NovelReader ≡ ∃reads.Novel`. Because every `Novel` is a `Book`, the reasoner derives a class subsumption **and** classifies the reader.
 
 ```ontoink
 source: shapes/reasoning-demo/some-values.ttl
@@ -181,9 +169,7 @@ Inferred: `anna hasGrandparent carl`.
 
 ## 8. Necessary vs. definition — `rdfs:subClassOf` vs `owl:equivalentClass`
 
-The **same** restriction body, `∃reads.Book`, attached two ways. ontoink draws them
-differently — `⊑` (solid triangle) for the necessary condition, `≡` (hollow diamond)
-for the definition — and the reasoner treats them differently.
+The **same** restriction body, `∃reads.Book`, attached two ways. OntoInk draws them differently — `⊑` (solid triangle) for the necessary condition, `≡` (hollow diamond) for the definition — and the reasoner treats them differently.
 
 ```ontoink
 source: shapes/reasoning-demo/subclass-vs-equivalent.ttl
@@ -200,9 +186,7 @@ Inferred: `alice a BookLover` and `Subscriber ⊑ BookLover` — but **not** `al
 
 ## 9. Reasoning + SHACL together
 
-A small ontology with an inverse property, a symmetric property and a subclass.
-The `Person` shape requires two things of every person: an `rdfs:label`, and at
-least one `ex:knows`.
+A small ontology with an inverse property, a symmetric property and a subclass. The `Person` shape requires two things of every person: an `rdfs:label`, and at least one `ex:knows`.
 
 ```ontoink
 source: shapes/reasoning-demo/shape-data.ttl
@@ -215,16 +199,10 @@ Inferred: `rex isPetOf alice` (inverse), `bob knows alice` (symmetric), `rex a A
 
 **Try it — reasoning changes the validation result:**
 
-1. Open **Edit & Validate** and press **Validate**. The graph *as stated* fails:
-   `ex:bob` has a label but no `ex:knows`, so SHACL reports
-   *"Every person must know at least one other person."*
-2. Now press **Reasoning**, then **Validate with Inferences**. Because
-   `ex:knows` is an `owl:SymmetricProperty`, `alice knows bob` entails
-   `bob knows alice` — the reasoned graph **conforms**.
+1. Open **Edit & Validate** and press **Validate**. The graph *as stated* fails: `ex:bob` has a label but no `ex:knows`, so SHACL reports *"Every person must know at least one other person."*
+2. Now press **Reasoning**, then **Validate with Inferences**. Because `ex:knows` is an `owl:SymmetricProperty`, `alice knows bob` entails `bob knows alice` — the reasoned graph **conforms**.
 
-That difference is the whole point of validating over a reasoned graph: the
-data satisfies the constraint *implicitly*, and only reasoning makes the
-implicit fact visible to the validator.
+That difference is the whole point of validating over a reasoned graph: the data satisfies the constraint *implicitly*, and only reasoning makes the implicit fact visible to the validator.
 
 ---
 

@@ -97,3 +97,65 @@ def test_reason_persists_output_when_dir_set(client, tmp_path, monkeypatch):
 def test_validate_requires_shacl(client):
     r = client.post("/validate", json={"ttl": "ex: a <http://example.org/Test> ."})
     assert r.status_code == 400
+
+
+def test_validate_reports_the_inference_mode_it_used(client):
+    shapes = (
+        "@prefix sh: <http://www.w3.org/ns/shacl#> .\n"
+        "@prefix ex: <http://example.org/> .\n"
+        "ex:S a sh:NodeShape ; sh:targetClass ex:Dog ;\n"
+        "  sh:property [ sh:path ex:name ; sh:minCount 1 ] .\n"
+    )
+    r = client.post("/validate", json={**SAMPLE, "shacl": shapes})
+    assert r.status_code == 200
+    body = r.json()
+    # Build-time, server and browser validation must agree by default; the mode
+    # is echoed so a disagreement is diagnosable instead of mysterious.
+    assert body["inference"] == "none"
+    assert "conforms" in body and "violations" in body
+
+
+# ── shape recommendation ──────────────────────────────────────────────────
+
+RECOMMEND_TTL = (
+    "@prefix ex: <http://example.org/> .\n"
+    "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+    "ex:Person a owl:Class .\n"
+    'ex:alice a ex:Person ; ex:name "Alice" .\n'
+    'ex:bob a ex:Person ; ex:name "Bob" .\n'
+)
+
+
+def test_recommend_shapes_returns_a_payload(client):
+    r = client.post("/recommend-shapes", json={"ttl": RECOMMEND_TTL})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["shapes"], "expected a proposal for ex:Person"
+    assert body["shapes"][0]["targetClass"] == "http://example.org/Person"
+    assert any(c["kind"] == "minCount" for c in body["constraints"])
+    # Evidence travels with the suggestion — that is the point of the endpoint.
+    assert all("confidence" in c and "evidence" in c for c in body["constraints"])
+
+
+def test_recommend_shapes_skips_classes_already_covered(client):
+    shapes = (
+        "@prefix sh: <http://www.w3.org/ns/shacl#> .\n"
+        "@prefix ex: <http://example.org/> .\n"
+        "ex:PersonShape a sh:NodeShape ; sh:targetClass ex:Person .\n"
+    )
+    r = client.post("/recommend-shapes", json={"ttl": RECOMMEND_TTL, "shacl": shapes})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["shapes"] == []
+    assert "http://example.org/Person" in body["alreadyCovered"]
+
+
+def test_recommend_shapes_rejects_an_unknown_method(client):
+    r = client.post("/recommend-shapes", json={"ttl": RECOMMEND_TTL, "method": "magic"})
+    assert r.status_code == 400
+    assert "unknown method" in r.json()["detail"]
+
+
+def test_recommend_shapes_rejects_invalid_ttl(client):
+    r = client.post("/recommend-shapes", json={"ttl": "not turtle <<>>"})
+    assert r.status_code == 400

@@ -108,3 +108,49 @@
   max-width: 480px;
   margin: 1.5rem auto 0;
 }
+
+/* Caption above the live figure. The demo sits directly under the hero, so
+   it needs one line telling the reader it is a live graph, not an image. */
+.ov-demo-caption {
+  max-width: 620px;
+  margin: 2.5rem auto 0.9rem;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--md-default-fg-color--light);
+}
+
+/* Three-step quick start: tabbed, so the page shows one snippet at a time
+   instead of a wall of code. */
+.ov-steps {
+  max-width: 720px;
+  margin: 1.2rem auto 1.6rem;
+}
+.ov-steps .tabbed-set > label { font-size: 0.82rem; }
+
+/* Tool links row */
+.ov-links {
+  max-width: 780px;
+  margin: 0 auto;
+  text-align: center;
+  line-height: 2;
+  font-size: 0.92rem;
+}
+
+/* Colophon */
+.ov-colophon {
+  text-align: center;
+  padding: 1rem 0 2rem;
+  font-size: 0.85rem;
+  color: var(--md-default-fg-color--light);
+}
+.ov-colophon .md-button { margin: 0.4rem 0.2rem 0; font-size: 0.75rem; padding: 0.35em 0.9em; }
+
+/* The tab bar is sticky (navigation.tabs.sticky); give it a hairline so it
+   reads as a bar and not as page content sliding under the header. */
+.md-tabs {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+[data-md-color-scheme="slate"] .md-tabs {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}

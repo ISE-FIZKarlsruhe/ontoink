@@ -13,6 +13,9 @@ authors:
 url: "https://github.com/ISE-FIZKarlsruhe/ontoink"
 repository-code: "https://github.com/ISE-FIZKarlsruhe/ontoink"
 license: MIT
+type: software
+version: 0.7.7
+date-released: "2026-08-11"
 keywords:
   - ontology
   - visualization

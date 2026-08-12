@@ -6,11 +6,10 @@ hide:
 
 <div class="ov-hero" markdown>
 
-# ontoink
+# OntoInk
 
 <p class="ov-tagline">
-Turn RDF/Turtle into interactive, publication-ready ontology diagrams —
-with SHACL constraint visualization and live editing — right inside MkDocs.
+A MkDocs plugin that renders RDF/Turtle as interactive, publication-ready ontology diagrams — with SHACL constraints, OWL reasoning and live editing on the page.
 </p>
 
 <div class="ov-badges">
@@ -22,7 +21,7 @@ with SHACL constraint visualization and live editing — right inside MkDocs.
 </div>
 
 <div class="ov-cta">
-  <a href="playground/" class="ov-primary">Try Playground</a>
+  <a href="playground/" class="ov-primary">Open the Playground</a>
   <a href="getting-started/" class="ov-secondary">Get Started</a>
 </div>
 
@@ -36,117 +35,114 @@ pip install ontoink
 
 </div>
 
----
-
-## Why ontoink?
-
-Ontology documentation should be **visual**, **interactive**, and **verifiable**.
-ontoink embeds live ontology diagrams directly into your MkDocs site — no screenshots, no external tools, no manual drawing.
-
-<div class="ov-features" markdown>
-
-<div class="ov-feature-card" markdown>
-### :material-graph-outline: Interactive Graphs
-Pan, zoom, drag, search, switch layouts (dagre, force, circle, tree).
-Click any node or edge for details with IRI dereferencing.
-</div>
-
-<div class="ov-feature-card" markdown>
-### :material-tag-text-outline: Automatic Label Resolution { .ov-feature-new }
-Fetches human-readable labels from referenced ontologies (nfdicore, BFO, IAO, FOAF, etc.) — see `"contributor role"` instead of `NFDI_0000118` in popups, SPARQL autocomplete, and query results.
-</div>
-
-<div class="ov-feature-card" markdown>
-### :material-shield-check-outline: SHACL Validation
-Constraints overlaid with cardinality badges. Visual coverage map.
-[SHACL Editor](shacl-editor.md) for building shapes without code.
-</div>
-
-<div class="ov-feature-card" markdown>
-### :material-brain: OWL Reasoning
-HermiT reasoner infers subclass chains, inverse properties,
-transitive closures. Consistency check with green/red badge.
-</div>
-
-<div class="ov-feature-card" markdown>
-### :material-chart-bar: Analytics & SPARQL
-Graph statistics, ontology metrics, LOD cloud links, path finder.
-[SPARQL Explorer](sparql-explorer.md) and [OntoSniff](ontosniff.md) quality checker.
-</div>
-
-<div class="ov-feature-card" markdown>
-### :material-palette-outline: Customizable Layout
-Change node colors, shapes, edge styles, and arrow types
-per element type — all from the toolbar.
-</div>
-
-<div class="ov-feature-card" markdown>
-### :material-rocket-launch-outline: Playground & Editor
-[Playground](playground.md): paste TTL and visualize instantly — no install.
-[SHACL Editor](shacl-editor.md): build shapes visually with templates.
-</div>
-
-</div>
-
----
-
-## Live Demo
-
-Here is a FOAF Person ontology with SHACL constraints — click nodes and edges, try editing the TTL, change shapes in **Edit Layout**:
+<p class="ov-demo-caption">
+Not a screenshot. Click a node, drag it, right-click for align and selection tools, edit the Turtle below the canvas — the figure is generated from the source file at build time.
+</p>
 
 ```ontoink
 source: shapes/foaf-person/shape-data.ttl
 shape: shapes/foaf-person/shape.ttl
-height: 500px
+height: 520px
 ```
+
+<div class="ov-features" markdown>
+
+<div class="ov-feature-card" markdown>
+### :material-graph-outline: Graphs that hold up
+Six layouts, level-of-detail and clustering for large ontologies, minimap, search, path finder.
+</div>
+
+<div class="ov-feature-card" markdown>
+### :material-shield-check-outline: SHACL, in place
+Constraints drawn on the graph with cardinality badges, validated at build time with pySHACL, re-validated as you edit. [Shape editor](shacl-editor.md)
+</div>
+
+<div class="ov-feature-card" markdown>
+### :material-lightbulb-outline: Shapes, suggested
+Classes with no SHACL coverage get a proposed `sh:NodeShape` from their instances and axioms — each constraint shown with the evidence behind it. [See it work](examples/shape-recommendation.md)
+</div>
+
+<div class="ov-feature-card" markdown>
+### :material-brain: OWL reasoning
+HermiT, Konclude (native or WASM) or owlrl. Inferred triples overlay the asserted ones; consistency is reported, not assumed — and any inference the in-page reasoner made can show its proof.
+</div>
+
+<div class="ov-feature-card" markdown>
+### :material-check-decagram-outline: Gates for CI
+Competency questions run at build time as red/green cards; shape drift and quality scores land in `ontoink-report.json` and README badges.
+</div>
+
+<div class="ov-feature-card" markdown>
+### :material-tag-text-outline: Labels resolved
+`NFDI_0000118` reads as *contributor role* — labels are fetched from the referenced ontologies and reused in popups, autocomplete and results.
+</div>
+
+<div class="ov-feature-card" markdown>
+### :material-cursor-default-click-outline: Arrange it yourself
+Ctrl+click to multi-select, right-click to align, distribute and pin. Size, font and colour per node type. Undo included.
+</div>
+
+<div class="ov-feature-card" markdown>
+### :material-file-export-outline: Figures you can publish
+PNG and SVG with legend and prefixes, TTL export, and a CSP-safe embed bundle for pages outside MkDocs.
+</div>
+
+</div>
 
 ---
 
-## Quick Start
+## Three steps
 
-**1.** Install from PyPI:
+<div class="ov-steps" markdown>
 
-```bash
-pip install ontoink
-```
+=== "1 · Install"
 
-**2.** Add to your `mkdocs.yml`:
+    ```bash
+    pip install ontoink
+    ```
 
-```yaml
-plugins:
-  - search
-  - ontoink
+=== "2 · Enable"
 
-markdown_extensions:
-  - pymdownx.superfences:
-      preserve_tabs: true
-```
+    ```yaml
+    # mkdocs.yml
+    plugins:
+      - search
+      - ontoink
 
-**3.** Use in any markdown page:
+    markdown_extensions:
+      - pymdownx.superfences:
+          preserve_tabs: true
+    ```
 
-````markdown
-```ontoink
-source: path/to/data.ttl
-shape: path/to/shape.ttl
-```
-````
+=== "3 · Write a block"
 
-**4.** Serve and explore:
+    ````markdown
+    ```ontoink
+    source: path/to/data.ttl
+    shape: path/to/shape.ttl
+    ```
+    ````
 
-```bash
-mkdocs serve
-```
+</div>
 
-[:octicons-arrow-right-24: Full Getting Started Guide](getting-started.md)
+[Full guide, fence options and deployment :octicons-arrow-right-24:](getting-started.md){ .md-button }
 
 ---
 
-<div style="text-align:center; padding: 1rem 0;" markdown>
+## Also in the browser, no install
 
-**Built by [ISE — FIZ Karlsruhe](https://www.fiz-karlsruhe.de/en/forschung/information-service-engineering)**
-in the context of [NFDI](https://www.nfdi.de/) and [NFDI-MatWerk](https://nfdi-matwerk.de/)
+<div class="ov-links" markdown>
 
-[:fontawesome-brands-github: GitHub](https://github.com/ISE-FIZKarlsruhe/ontoink){ .md-button }
-[:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/){ .md-button }
+[**Playground**](playground.md) — paste Turtle, get a diagram · [**Live Editor**](live-editor.md) — a compact DSL that compiles to Turtle · [**SHACL Editor**](shacl-editor.md) — build shapes from templates · [**SPARQL Explorer**](sparql-explorer.md) — query an endpoint and plot the result · [**OntoSniff**](ontosniff.md) — anti-pattern report with a 0–100 score
+
+</div>
+
+---
+
+<div class="ov-colophon" markdown>
+
+Built at [ISE — FIZ Karlsruhe](https://www.fiz-karlsruhe.de/en/forschung/information-service-engineering) in the context of [NFDI](https://www.nfdi.de/) and [NFDI-MatWerk](https://nfdi-matwerk.de/). Rendering by [Cytoscape.js](https://js.cytoscape.org/) · MIT licensed.
+
+[:fontawesome-brands-github: Source](https://github.com/ISE-FIZKarlsruhe/ontoink){ .md-button } [:fontawesome-brands-python: PyPI](https://pypi.org/project/ontoink/){ .md-button } [:material-format-quote-close: Cite](cite.md){ .md-button }
 
 </div>

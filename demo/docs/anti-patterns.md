@@ -1,8 +1,6 @@
 # Ontology Anti-Patterns — Modelling Mistakes Catalogued
 
-This page collects the **modelling mistakes** that ontoink's `OntoSniff` detector flags.
-Each entry is a small worked example: the ontology drawn by ontoink so you can see the
-pattern, an explanation of why it is harmful, and a corrected version.
+This page collects the **modelling mistakes** that OntoInk's `OntoSniff` detector flags. Each entry is a small worked example: the ontology drawn by OntoInk so you can see the pattern, an explanation of why it is harmful, and a corrected version.
 
 The catalogue is grounded in published ontology-quality research:
 
@@ -26,10 +24,7 @@ The catalogue is grounded in published ontology-quality research:
 
 > A class is **declared** but has no instances and no subclasses. Either the class is unused (dead weight) or its instances were forgotten (data gap).
 
-**Why it is a mistake.** Every class adds vocabulary that downstream users must learn. A class
-without instances cannot be used for validation; a class with no subclasses cannot be
-specialised. Both signals usually mean the modeller wanted something more concrete and
-stopped halfway.
+**Why it is a mistake.** Every class adds vocabulary that downstream users must learn. A class without instances cannot be used for validation; a class with no subclasses cannot be specialised. Both signals usually mean the modeller wanted something more concrete and stopped halfway.
 
 ```ontoink
 source: anti-patterns/lazy-class.ttl
@@ -37,8 +32,7 @@ height: 360px
 legend: true
 ```
 
-In the picture, `:UnusedConcept` floats with no `rdf:type` link from anywhere and no
-`rdfs:subClassOf` edge below it.
+In the picture, `:UnusedConcept` floats with no `rdf:type` link from anywhere and no `rdfs:subClassOf` edge below it.
 
 **Fix.** Either delete the class, or commit at least one instance / subclass.
 
@@ -48,10 +42,7 @@ In the picture, `:UnusedConcept` floats with no `rdf:type` link from anywhere an
 
 > An entity (class or property) has no `rdfs:label`.
 
-**Why it is a mistake.** Human-readable labels are what every tool — Protégé, ontoink,
-SPARQL editors — uses to render entities. An IRI like `ex:R0042` is opaque; with a label,
-it becomes "Sample Preparation Step". Missing labels make the ontology unusable for
-non-experts and unsearchable by full-text tools.
+**Why it is a mistake.** Human-readable labels are what every tool — Protégé, OntoInk, SPARQL editors — uses to render entities. An IRI like `ex:R0042` is opaque; with a label, it becomes "Sample Preparation Step". Missing labels make the ontology unusable for non-experts and unsearchable by full-text tools.
 
 ```ontoink
 source: anti-patterns/missing-label.ttl
@@ -59,9 +50,7 @@ height: 360px
 legend: true
 ```
 
-Notice how `:R0042` renders as its local name because no `rdfs:label` is provided. Click
-the node — the popup shows the empty label slot. Compare with `:Researcher` which has a
-proper label.
+Notice how `:R0042` renders as its local name because no `rdfs:label` is provided. Click the node — the popup shows the empty label slot. Compare with `:Researcher` which has a proper label.
 
 **Fix.** Always add `rdfs:label "Human-readable name"@en .` to every class and property.
 
@@ -71,10 +60,7 @@ proper label.
 
 > An `owl:ObjectProperty` or `owl:DatatypeProperty` is declared without `rdfs:domain` or `rdfs:range`.
 
-**Why it is a mistake.** Domain and range carry the property's **type signature**.
-Without them, reasoners cannot infer the type of subjects and objects, SHACL shape
-recommenders have no axiomatic baseline to lean on, and IDE-style autocomplete has no
-hints. The property becomes a syntactic placeholder rather than a semantic statement.
+**Why it is a mistake.** Domain and range carry the property's **type signature**. Without them, reasoners cannot infer the type of subjects and objects, SHACL shape recommenders have no axiomatic baseline to lean on, and IDE-style autocomplete has no hints. The property becomes a syntactic placeholder rather than a semantic statement.
 
 ```ontoink
 source: anti-patterns/missing-domain-range.ttl
@@ -82,9 +68,7 @@ height: 360px
 legend: true
 ```
 
-`:knows` has no domain/range — ontoink shows it as a stand-alone object-property edge
-between two anonymous-looking individuals. Add the axioms and the typing constraints
-become visible everywhere.
+`:knows` has no domain/range — OntoInk shows it as a stand-alone object-property edge between two anonymous-looking individuals. Add the axioms and the typing constraints become visible everywhere.
 
 **Fix.**
 
@@ -100,11 +84,7 @@ become visible everywhere.
 
 > A class has **no `rdfs:subClassOf` parent** and is itself **never a parent** to anything.
 
-**Why it is a mistake.** Ontologies are taxonomies first. A class disconnected from the
-hierarchy cannot be reached by ancestor / descendant queries, never inherits constraints,
-and is invisible to subsumption-based reasoning. Most of the time, an orphan class is a
-sign that the modeller forgot the top-level link to a foundational concept like
-`bfo:Entity`, `schema:Thing`, or `owl:Thing`.
+**Why it is a mistake.** Ontologies are taxonomies first. A class disconnected from the hierarchy cannot be reached by ancestor / descendant queries, never inherits constraints, and is invisible to subsumption-based reasoning. Most of the time, an orphan class is a sign that the modeller forgot the top-level link to a foundational concept like `bfo:Entity`, `schema:Thing`, or `owl:Thing`.
 
 ```ontoink
 source: anti-patterns/orphan-class.ttl
@@ -112,8 +92,7 @@ height: 360px
 legend: true
 ```
 
-`:Sensor` sits alone — no superclass, no subclasses. Compare with `:Person` which is
-properly anchored under `schema:Thing`.
+`:Sensor` sits alone — no superclass, no subclasses. Compare with `:Person` which is properly anchored under `schema:Thing`.
 
 **Fix.** Anchor every domain class to at least one parent: `:Sensor rdfs:subClassOf bfo:MaterialEntity .`
 
@@ -123,12 +102,7 @@ properly anchored under `schema:Thing`.
 
 > A class has **more than ~15 direct properties**.
 
-**Why it is a mistake.** A "property soup" class is doing too many jobs at once. The
-modelling concept it represents is rarely that monolithic in reality — it is usually a
-hub that combines several distinct sub-concepts (a `Person`'s identity attributes,
-their employment attributes, their authorship attributes, …). Splitting them into
-sub-classes or related classes (`Employment`, `AuthoredWork`) keeps each class focused
-and SHACL shapes manageable.
+**Why it is a mistake.** A "property soup" class is doing too many jobs at once. The modelling concept it represents is rarely that monolithic in reality — it is usually a hub that combines several distinct sub-concepts (a `Person`'s identity attributes, their employment attributes, their authorship attributes, …). Splitting them into sub-classes or related classes (`Employment`, `AuthoredWork`) keeps each class focused and SHACL shapes manageable.
 
 ```ontoink
 source: anti-patterns/property-soup.ttl
@@ -136,8 +110,7 @@ height: 460px
 legend: true
 ```
 
-The visualisation makes the imbalance obvious: one super-node with a fan of properties,
-versus the right column where the same information is decomposed.
+The visualisation makes the imbalance obvious: one super-node with a fan of properties, versus the right column where the same information is decomposed.
 
 **Fix.** Identify natural sub-clusters of properties and lift them into related classes:
 
@@ -152,12 +125,7 @@ versus the right column where the same information is decomposed.
 
 > `A rdfs:subClassOf B` and (directly or transitively) `B rdfs:subClassOf A`.
 
-**Why it is a mistake.** A cycle in `rdfs:subClassOf` makes the two classes
-**equivalent** under OWL semantics — but the modeller almost certainly did not intend
-that. Cycles often arise after a refactor that renamed a class and accidentally pointed
-both names at each other. They are caught by OWL DL consistency checks but only at
-reasoning time, by which point downstream data has already been built on the broken
-hierarchy.
+**Why it is a mistake.** A cycle in `rdfs:subClassOf` makes the two classes **equivalent** under OWL semantics — but the modeller almost certainly did not intend that. Cycles often arise after a refactor that renamed a class and accidentally pointed both names at each other. They are caught by OWL DL consistency checks but only at reasoning time, by which point downstream data has already been built on the broken hierarchy.
 
 ```ontoink
 source: anti-patterns/cyclic-subclass.ttl
@@ -165,9 +133,7 @@ height: 360px
 legend: true
 ```
 
-The graph shows the cycle directly — follow the `rdfs:subClassOf` arrows from `:A` to
-`:B` to `:C` back to `:A`. Run an OWL-DL reasoner on this and every member of the cycle
-collapses into one equivalence class.
+The graph shows the cycle directly — follow the `rdfs:subClassOf` arrows from `:A` to `:B` to `:C` back to `:A`. Run an OWL-DL reasoner on this and every member of the cycle collapses into one equivalence class.
 
 **Fix.** Break the cycle. Decide which class is the real parent and remove the back-edge.
 
@@ -175,11 +141,7 @@ collapses into one equivalence class.
 
 ## 7. The complete catalogue
 
-OntoSniff now ships 50+ anti-pattern definitions drawn from the published
-literature. Most have an automatic detector that runs on every graph; a few
-require modelling annotations (OntoClean meta-properties, OntoUML stereotypes)
-that plain OWL does not carry, so they appear as documentation-only entries
-that you can reference manually.
+OntoSniff now ships 50+ anti-pattern definitions drawn from the published literature. Most have an automatic detector that runs on every graph; a few require modelling annotations (OntoClean meta-properties, OntoUML stereotypes) that plain OWL does not carry, so they appear as documentation-only entries that you can reference manually.
 
 In the legend column:
 - **detector** — an automatic check fires when the pattern is observed
@@ -212,8 +174,7 @@ In the legend column:
 
 ### 7.2 Additional OOPS! pitfalls
 
-Source: Poveda-Villalón, M., Suárez-Figueroa, M. C., & Gómez-Pérez, A. (2014).
-*Did you validate your ontology? OOPS!* The full pitfall catalogue is at
+Source: Poveda-Villalón, M., Suárez-Figueroa, M. C., & Gómez-Pérez, A. (2014). *Did you validate your ontology? OOPS!* The full pitfall catalogue is at
 <https://oops.linkeddata.es/catalogue.jsp>.
 
 | ID | Name | Severity | Mode |
@@ -250,14 +211,7 @@ Source: Poveda-Villalón, M., Suárez-Figueroa, M. C., & Gómez-Pérez, A. (2014
 
 Source paper: [Catalogue of Anti-Patterns for formal Ontology debugging](https://liris.cnrs.fr/Documents/Liris-4441.pdf) (IC 2009).
 
-The base 5 patterns and the inheritance/property/inverse-property variants
-from the paper are now catalogued individually. Each detectable one has its
-own folder under
-[`anti-pattern-shapes/<slug>/`](anti-pattern-shapes/) carrying a
-`shape.ttl` (SHACL detector) and a `data.ttl` (worked example), plus a
-dedicated documentation page. A single aggregate
-[`anti-patterns/shacl-shapes.ttl`](anti-patterns/shacl-shapes.ttl) bundles
-all 18 detectors for one-shot validation.
+The base 5 patterns and the inheritance/property/inverse-property variants from the paper are now catalogued individually. Each detectable one has its own folder under [`anti-pattern-shapes/<slug>/`](anti-pattern-shapes/) carrying a `shape.ttl` (SHACL detector) and a `data.ttl` (worked example), plus a dedicated documentation page. A single aggregate [`anti-patterns/shacl-shapes.ttl`](anti-patterns/shacl-shapes.ttl) bundles all 18 detectors for one-shot validation.
 
 #### Base logical anti-patterns
 
@@ -304,8 +258,7 @@ all 18 detectors for one-shot validation.
 
 ### 7.4 OntoClean meta-property violations (Guarino & Welty)
 
-Source: Guarino, N. & Welty, C. *An Overview of OntoClean.* Detection requires
-the class-level annotations defined by OntoClean (`+R` / `~R`, `+O`, `+U`, `+D`).
+Source: Guarino, N. & Welty, C. *An Overview of OntoClean.* Detection requires the class-level annotations defined by OntoClean (`+R` / `~R`, `+O`, `+U`, `+D`).
 
 | ID | Name | Severity | Mode |
 |----|------|----------|------|
@@ -316,12 +269,9 @@ the class-level annotations defined by OntoClean (`+R` / `~R`, `+O`, `+U`, `+D`)
 
 ### 7.5 OntoUML anti-patterns (Guizzardi et al.)
 
-Source: Sales, T. P., Guizzardi, G. *Ontological anti-patterns: empirically uncovered
-error-prone structures in ontology-driven conceptual models.* The OntoUML AP
-catalog is at <https://ontouml.readthedocs.io/en/latest/anti-patterns/>.
+Source: Sales, T. P., Guizzardi, G. *Ontological anti-patterns: empirically uncovered error-prone structures in ontology-driven conceptual models.* The OntoUML AP catalog is at <https://ontouml.readthedocs.io/en/latest/anti-patterns/>.
 
-These are model-level patterns; detecting them needs OntoUML stereotypes on
-your classes and relations (`«kind»`, `«role»`, `«relator»`, etc.).
+These are model-level patterns; detecting them needs OntoUML stereotypes on your classes and relations (`«kind»`, `«role»`, `«relator»`, etc.).
 
 | ID | Name | Severity | Mode |
 |----|------|----------|------|
@@ -340,9 +290,7 @@ your classes and relations (`«kind»`, `«role»`, `«relator»`, etc.).
 
 ### 7.6 Enterprise / operational anti-patterns
 
-Source: [Palantir Foundry — Ontology Best Practices](https://palantir.com/docs/foundry/ontology/ontology-best-practices-and-anti-patterns/).
-These describe deployment-time mistakes; detection is contextual to the
-operational platform, so all are doc-only.
+Source: [Palantir Foundry — Ontology Best Practices](https://palantir.com/docs/foundry/ontology/ontology-best-practices-and-anti-patterns/). These describe deployment-time mistakes; detection is contextual to the operational platform, so all are doc-only.
 
 | ID | Name | Severity |
 |----|------|----------|
@@ -353,8 +301,7 @@ operational platform, so all are doc-only.
 
 ### 7.7 SHACL-specific anti-patterns
 
-Sources: W3C SHACL Recommendation; SHACLEval (CEUR Vol-4064); Acosta et al.
-PVLDB 2024; SHACL2FOL (arXiv 2406.08018).
+Sources: W3C SHACL Recommendation; SHACLEval (CEUR Vol-4064); Acosta et al. PVLDB 2024; SHACL2FOL (arXiv 2406.08018).
 
 | ID | Name | Severity | Mode |
 |----|------|----------|------|
@@ -379,17 +326,12 @@ PVLDB 2024; SHACL2FOL (arXiv 2406.08018).
 | SHACL (W3C / SHACL2FOL / Acosta) | 5 | 4 | 2 |
 | **Grand total** | **94** | **35** | **18** |
 
-Every catalogue entry now carries a clickable reference URL (paper, W3C
-document, or upstream catalogue), and every SHACL-shape entry links to a
-runnable shape in [`anti-patterns/shacl-shapes.ttl`](anti-patterns/shacl-shapes.ttl)
-plus a minimal example TTL in [`anti-patterns/`](anti-patterns/).
+Every catalogue entry now carries a clickable reference URL (paper, W3C document, or upstream catalogue), and every SHACL-shape entry links to a runnable shape in [`anti-patterns/shacl-shapes.ttl`](anti-patterns/shacl-shapes.ttl) plus a minimal example TTL in [`anti-patterns/`](anti-patterns/).
 
-Run **OntoSniff** on your own TTL through the [OntoSniff page](ontosniff.md) — it
-returns a quality score (0–100) plus an annotated list of every smell found.
+Run **OntoSniff** on your own TTL through the [OntoSniff page](ontosniff.md) — it returns a quality score (0–100) plus an annotated list of every smell found.
 
 ## 8. Further reading
 
 - **Pitfall Scanner Catalogue** — [OOPS! online tool](https://oops.linkeddata.es/)
 - **Ontology design patterns** — [ontologydesignpatterns.org](http://ontologydesignpatterns.org/)
-- The **Shape Recommender** companion project, available [here](https://github.com/ISE-FIZKarlsruhe/ontoink/tree/main/shape-recommender), turns
-  many of these anti-patterns into constraints automatically.
+- The **Shape Recommender** companion project, available [here](https://github.com/ISE-FIZKarlsruhe/ontoink/tree/main/shape-recommender), turns many of these anti-patterns into constraints automatically.
