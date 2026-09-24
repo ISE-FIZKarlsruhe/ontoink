@@ -10,12 +10,23 @@ authors:
     given-names: Ebrahim
     email: ebrahim.norouzi@fiz-karlsruhe.de
     affiliation: "FIZ Karlsruhe -- Leibniz Institute for Information Infrastructure"
+    orcid: "https://orcid.org/0000-0002-2691-6995"
+  - family-names: Waitelonis
+    given-names: Jörg
+    email: joerg.waitelonis@fiz-karlsruhe.de
+    affiliation: "FIZ Karlsruhe -- Leibniz Institute for Information Infrastructure"
+    orcid: "https://orcid.org/0000-0001-7192-7143"
+  - family-names: Sack
+    given-names: Harald
+    email: harald.sack@fiz-karlsruhe.de
+    affiliation: "FIZ Karlsruhe -- Leibniz Institute for Information Infrastructure"
+    orcid: "https://orcid.org/0000-0001-7069-9804"
 url: "https://github.com/ISE-FIZKarlsruhe/ontoink"
 repository-code: "https://github.com/ISE-FIZKarlsruhe/ontoink"
 license: MIT
 type: software
-version: 0.7.7
-date-released: "2026-08-11"
+version: 0.7.8
+date-released: "2026-09-24"
 keywords:
   - ontology
   - visualization
@@ -28,13 +39,11 @@ references:
   - type: article
     title: "Konclude: System Description"
     authors:
+      - family-names: Steigmiller
+        given-names: Andreas
       - family-names: Liebig
         given-names: Thorsten
-      - family-names: Jaeger
-        given-names: Marian
-      - family-names: Möller
-        given-names: Ralf
-      - family-names: Möller
+      - family-names: Glimm
         given-names: Birte
     journal: "Journal of Web Semantics"
     year: 2014

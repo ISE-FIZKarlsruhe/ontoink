@@ -2989,114 +2989,7 @@ var ontoink = (function () {
       // _typoPatch: every font/padding value below stays the default, but
       // becomes overridable per element via oi* data keys (Edit Layout →
       // Size & Typography). See the typography section above.
-      style: _typoPatch([
-        { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"Inter, Segoe UI, system-ui, sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
-        { selector: 'node[type="Class"]', style: { "font-weight":"600","border-width":2,"border-color":"#666","shape":"rectangle" }},
-        { selector: 'node[type="Individual"]', style: { "shape":"ellipse" }},
-        { selector: 'node[type="Literal"]', style: { "shape":"ellipse","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#6a9" }},
-        { selector: 'node[type="Datatype"]', style: { "shape":"diamond" }},
-        { selector: 'node[type="SHACL Shape"]', style: { "shape":"round-rectangle","border-color":"#0891b2" }},
-        // SuperNode gets a chunkier hexagon + double border so
-        // it reads as a "container" node. Label mapper appends the member
-        // count (e.g. "People and Addresses  ·  42") so the cluster size
-        // is legible without a hover.
-        { selector: 'node[?isSuperNode]', style: {
-            "label": function(ele) {
-              var n = ele.data("memberCount");
-              var lab = ele.data("label") || "";
-              return n ? (lab + "  ·  " + n) : lab;
-            },
-            "shape":"hexagon",
-            // honour a per-node colour when set (distinct cluster hues); the
-            // light default keeps legacy build-time super-nodes looking the same.
-            "background-color": function(ele) { return ele.data("color") || "#e0f2fe"; },
-            "border-width":3,
-            "border-color":"#0891b2",
-            "border-style":"double",
-            "font-weight":"700",
-            "font-size":"13px",
-            "text-outline-width":2,
-            "text-outline-color":"#fff",
-            "padding":"18px",
-            "text-max-width":"200px"
-        }},
-        { selector: 'node[?isSuperNode]:selected', style: { "border-color":"#0e7490","border-width":4 }},
-        // ClusterHull compound parent for expanded clusters.
-        // Dashed rounded rectangle that visually contains its members;
-        // header label at top says "<title> · N · click header to
-        // collapse". Draggable as a whole (Cytoscape's built-in
-        // compound behavior), and tappable on border/header to trigger
-        // collapse (see the tap wiring at ~line 2260).
-        { selector: 'node[?isClusterHull]', style: {
-          "shape":"round-rectangle","background-color":"#f0f9ff","background-opacity":0.35,
-          "border-width":2,"border-style":"dashed","border-color":"#0891b2",
-          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-6,
-          "font-weight":"700","font-size":"12px","color":"#0e7490",
-          "text-background-color":"#e0f2fe","text-background-opacity":0.95,"text-background-padding":"4px",
-          "text-background-shape":"round-rectangle","padding":"22px",
-          "compound-sizing-wrt-labels":"include"
-        }},
-        { selector: 'node[?isClusterHull]:selected', style: { "border-color":"#0e7490","border-width":3,"background-color":"#dbeafe" }},
-        // Nested compound box inside a cluster (e.g. a category holding its
-        // instances). Coloured, labelled container; label sits at the top so it
-        // doesn't overlap the members. Colour comes from data(color).
-        { selector: 'node[?isCategoryBox]', style: {
-          "shape":"round-rectangle",
-          "background-color": function(ele) { return ele.data("color") || "#94a3b8"; },
-          "background-opacity":0.10,
-          "border-width":2,"border-style":"dashed",
-          "border-color": function(ele) { return ele.data("color") || "#64748b"; },
-          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-4,
-          "font-weight":"700","font-size":"12px",
-          "color": function(ele) { return ele.data("color") || "#334155"; },
-          "text-background-color":"#ffffff","text-background-opacity":0.9,
-          "text-background-padding":"3px","text-background-shape":"round-rectangle",
-          "padding":"16px","compound-sizing-wrt-labels":"include"
-        }},
-        // Blank-node styling. rdflib emits blank subjects as
-        // "_:bN..." — they aren't real Individuals no matter what
-        // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
-        // on init; the style below matches that flag reliably (avoiding
-        // the escape-sensitive `[id ^= "_:"]` attribute-prefix selector).
-        { selector: 'node[?isBlankNode]', style: {
-          "background-color":"#f3f4f6","border-style":"dashed","border-color":"#9ca3af",
-          "color":"#6b7280","font-style":"italic","opacity":0.7,
-          "shape":"round-diamond","width":24,"height":24
-        }},
-        // Fanned super-edges: when multiple originals collapse
-        // into one boundary edge, `data.weight > 1`. Widen the line
-        // proportionally (mapData → 3..12 px) and paint it a distinct
-        // "bundle" purple so users can tell "45 relations" apart from
-        // a single relation. The `data.fan` array powers the hover
-        // popup at buildEdgePopup.
-        { selector: 'edge[?clusterManaged][weight > 1]', style: {
-          "width": "mapData(weight, 1, 40, 3, 12)",
-          "line-color":"#7c3aed","target-arrow-color":"#7c3aed","source-arrow-color":"#7c3aed",
-          "color":"#5b21b6","font-weight":"700","font-size":"12px",
-          "text-background-color":"#ede9fe","text-background-opacity":0.95,"text-background-padding":"3px"
-        }},
-        { selector: "node:selected", style: { "border-width":3,"border-color":"#0891b2" }},
-        { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
-        { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","source-arrow-shape":"circle","source-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","source-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
-        { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
-        { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
-        { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
-        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
-        { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
-        { selector: "edge[edgeType='owl-restriction'][source = target]", style: { "curve-style":"bezier","control-point-step-size":40 }},
-        // proposed (not yet accepted) SHACL constraints. Opacity is
-        // mapped from the constraint's own confidence, so a weakly-evidenced
-        // suggestion literally looks fainter than a near-certain one. The value
-        // lives in element data rather than a style bypass, so LOD sweeps and
-        // style-preset swaps don't wipe it.
-        { selector: "edge[edgeType='recommended-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-dash-pattern":[4,4],"line-color":"#7c3aed","target-arrow-color":"#7c3aed","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-12,"color":"#7c3aed","text-background-color":"#fff","text-background-opacity":0.92,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":"mapData(confidence, 0.5, 1, 0.28, 0.92)" }},
-        { selector: "edge[edgeType='recommended-constraint'][source = target]", style: { "curve-style":"bezier","control-point-step-size":55 }},
-        // Deprecated terms stay visible but read as retired. Cytoscape cannot
-        // strike a label through, so dimming plus a dashed border carries it.
-        { selector: "node[?deprecated]", style: { "opacity":0.45,"border-style":"dashed","border-width":2,"border-color":"#9ca3af" }},
-        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":0.75 }},
-        { selector: "node[?inferred]", style: { "opacity":0.7,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
-      ]),
+      style: _appearancePatch(_typoPatch(_baseStyleRules())),
       layout: { name:"dagre", rankDir:"BT", nodeSep:60, rankSep:80, edgeSep:20, animate:false, fit:true, padding:30 },
       // the 0.7.4 motion optimizations now apply only to big graphs,
       // and pixelRatio follows the display instead of being pinned to 1 (which
@@ -3827,16 +3720,52 @@ var ontoink = (function () {
       overridable("padding", "oiPad", "px");
       overridable("text-max-width", "oiTextMaxWidth", "px");
     }
-    // The base `node` rule declares neither font-weight nor font-style, so
-    // there is nothing for `overridable` to wrap — install the mappers with
-    // Cytoscape's own defaults so "Bold" and "Italic" have something to
-    // hook into. Only on the base rule: more specific rules (e.g. the
-    // 600-weight Class rule) keep their own value as the fallback.
-    if (sel === "node") {
-      if (!Object.prototype.hasOwnProperty.call(st, "font-weight"))
-        out["font-weight"] = function (ele) { var v = ele.data("oiFontWeight"); return (v === undefined || v === null || v === "") ? "normal" : v; };
-      if (!Object.prototype.hasOwnProperty.call(st, "font-style"))
-        out["font-style"] = function (ele) { var v = ele.data("oiFontStyle"); return (v === undefined || v === null || v === "") ? "normal" : v; };
+    // A rule can only be wrapped where it declares the property, so a
+    // stylesheet that never mentions one leaves that control dead. VOWL's base
+    // `node` rule declares no padding at all, which made "Shape size" a no-op
+    // for every node type VOWL does not name explicitly. Install the missing
+    // mappers on the BASE rule with Cytoscape's own defaults as the fallback:
+    // nothing renders differently until the user actually overrides, but the
+    // control now has something to drive under every preset. Only on the base
+    // rule — a specific rule (e.g. the 600-weight Class rule) keeps its own
+    // value as the fallback.
+    var BASE_DEFAULTS = isEdge
+      ? { "font-size": "16px", "font-family": "Helvetica Neue, Helvetica, sans-serif" }
+      : { "font-size": "16px", "font-family": "Helvetica Neue, Helvetica, sans-serif",
+          "font-weight": "normal", "font-style": "normal", "padding": "0px" };
+    var BASE_KEYS = isEdge
+      ? { "font-size": "oiEdgeFontSize", "font-family": "oiFontFamily" }
+      : { "font-size": "oiFontSize", "font-family": "oiFontFamily",
+          "font-weight": "oiFontWeight", "font-style": "oiFontStyle", "padding": "oiPad" };
+    if (sel === "node" || sel === "edge") {
+      for (var bp in BASE_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(BASE_KEYS, bp)) continue;
+        if (Object.prototype.hasOwnProperty.call(st, bp)) continue;
+        out[bp] = (function (dataKey, dflt, unit) {
+          return function (ele) {
+            var v = ele.data(dataKey);
+            if (v === undefined || v === null || v === "") return dflt;
+            return unit ? (v + unit) : v;
+          };
+        })(BASE_KEYS[bp], BASE_DEFAULTS[bp], (bp === "font-size" || bp === "padding") ? "px" : "");
+      }
+    }
+    // VOWL and Graffoo size some shapes with fixed pixel width/height instead
+    // of `width:"label"`, so padding cannot grow them and "Shape size" did
+    // nothing to a VOWL class circle or a Graffoo individual dot. Scale those
+    // fixed dimensions by the same factor the user asked for.
+    if (!isEdge) {
+      ["width", "height"].forEach(function (dim) {
+        if (!Object.prototype.hasOwnProperty.call(st, dim)) return;
+        var base = st[dim];
+        if (typeof base !== "number") return;      // "label" and mappers stay as they are
+        out[dim] = function (ele) {
+          var p = ele.data("oiPad");
+          if (p === undefined || p === null || p === "") return base;
+          var f = parseFloat(p) / TYPO_BASE.pad;
+          return (isFinite(f) && f > 0) ? Math.round(base * f) : base;
+        };
+      });
     }
     return { selector: rule.selector, style: out };
   }
@@ -3845,6 +3774,123 @@ var ontoink = (function () {
     if (!styleArr || typeof styleArr.map !== "function") return styleArr;
     try { return styleArr.map(_typoPatchRule); }
     catch (e) { console.warn("[ontoink] _typoPatch failed; using raw stylesheet", e); return styleArr; }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Appearance overrides (colour / shape / edge style)
+  //
+  // Same idea as `_typoPatch`, for the properties Edit Layout's colour
+  // pickers and shape/line/arrow selects control. It exists because the
+  // notation presets hard-code their palette: `_chowlkStyle` says
+  // `"background-color": "#ffffff"`, Graffoo says `"#FFFF00"`. The base
+  // stylesheet reads `data(color)`, so before this the colour picker worked
+  // in Ontoink and was a silent no-op in Chowlk / Graffoo / VOWL — while the
+  // swatch still moved, and the legend (which reads the RENDERED style)
+  // disagreed with the panel (which read element data).
+  //
+  // Every stylesheet is patched so a user override in `oi*` element data wins
+  // over whatever the rule declared, and the rule's own value is the fallback
+  // when the user has not overridden. Presets therefore keep their own look
+  // out of the box and still honour an explicit edit.
+  //
+  // Element DATA, not a style bypass, for the same reason typography uses it:
+  // the LOD sweep round-trips elements through `inst.attic` as JSON and
+  // resetEditor rebuilds from `inst.data`, both of which drop bypasses.
+  // ══════════════════════════════════════════════════════════════════════
+
+  // Turn a rule's existing declaration into a fallback function.
+  // `data(field)` has to be re-read by hand: returning the *string*
+  // "data(color)" out of a function mapper would be parsed as a colour, not as
+  // a mapper, so the fallback resolves the field itself.
+  function _appearanceFallback(base, dflt) {
+    if (typeof base === "function") return base;
+    var m = (typeof base === "string") && base.match(/^\s*data\s*\(\s*([\w.$-]+)\s*\)\s*$/);
+    if (m) {
+      var field = m[1];
+      return function (ele) { var v = ele.data(field); return (v === undefined || v === null || v === "") ? dflt : v; };
+    }
+    if (base === undefined || base === null || base === "") return function () { return dflt; };
+    return function () { return base; };
+  }
+
+  // property → override data key, per element kind. Edge colour drives all
+  // three arrow/line colours together, matching what the panel always did.
+  var _APPEARANCE_NODE = { "background-color": "oiColor", "shape": "oiShape" };
+  var _APPEARANCE_EDGE = {
+    "line-color": "oiEdgeColor", "target-arrow-color": "oiEdgeColor",
+    "source-arrow-color": "oiEdgeColor", "line-style": "oiEdgeLineStyle",
+    "target-arrow-shape": "oiEdgeArrow"
+  };
+  // Cytoscape's own defaults, used when a rule declares nothing to fall back to.
+  var _APPEARANCE_DEFAULTS = {
+    "background-color": "#999999", "shape": "ellipse",
+    "line-color": "#999999", "target-arrow-color": "#999999",
+    "source-arrow-color": "#999999", "line-style": "solid",
+    "target-arrow-shape": "none"
+  };
+
+  function _appearancePatchRule(rule) {
+    if (!rule || !rule.selector || !rule.style) return rule;
+    var sel = String(rule.selector);
+    var isEdge = sel.indexOf("edge") === 0;
+    var map = isEdge ? _APPEARANCE_EDGE : _APPEARANCE_NODE;
+    var st = rule.style, out = {}, k;
+    for (k in st) if (Object.prototype.hasOwnProperty.call(st, k)) out[k] = st[k];
+    // Wrap on the BASE rule even when it declares nothing, so an override
+    // still lands on elements no specific rule matches. On specific rules,
+    // wrap only what they declare — adding e.g. `line-color` to
+    // `edge[edgeType='subclass']` would otherwise override the base rule for
+    // every edge of that type with a default the preset never asked for.
+    var isBase = (sel === "node" || sel === "edge");
+    for (var prop in map) {
+      if (!Object.prototype.hasOwnProperty.call(map, prop)) continue;
+      var declared = Object.prototype.hasOwnProperty.call(st, prop);
+      if (!declared && !isBase) continue;
+      out[prop] = (function (dataKey, fallback) {
+        return function (ele) {
+          var v = ele.data(dataKey);
+          if (v === undefined || v === null || v === "") return fallback(ele);
+          return v;
+        };
+      })(map[prop], _appearanceFallback(declared ? st[prop] : undefined, _APPEARANCE_DEFAULTS[prop]));
+    }
+    return { selector: rule.selector, style: out };
+  }
+
+  // A rule carrying nothing but the override mappers, used when a stylesheet
+  // has no bare `node` / `edge` rule to hang them on. The Ontoink default is
+  // exactly that case for edges: every edge rule is `edge[edgeType='…']` and
+  // none of them declares `line-style`, so without this the Edit Layout line
+  // style select had no mapper to drive. Cytoscape applies contexts in
+  // declaration order, so prepending keeps every real rule's precedence.
+  function _appearanceBaseRule(kind) {
+    var map = kind === "edge" ? _APPEARANCE_EDGE : _APPEARANCE_NODE, style = {};
+    for (var prop in map) {
+      if (!Object.prototype.hasOwnProperty.call(map, prop)) continue;
+      style[prop] = (function (dataKey, dflt) {
+        return function (ele) {
+          var v = ele.data(dataKey);
+          return (v === undefined || v === null || v === "") ? dflt : v;
+        };
+      })(map[prop], _APPEARANCE_DEFAULTS[prop]);
+    }
+    return { selector: kind, style: style };
+  }
+
+  function _appearancePatch(styleArr) {
+    if (!styleArr || typeof styleArr.map !== "function") return styleArr;
+    try {
+      var out = styleArr.map(_appearancePatchRule);
+      var head = [];
+      ["node", "edge"].forEach(function (kind) {
+        var has = styleArr.some(function (r) { return r && String(r.selector) === kind; });
+        if (!has) head.push(_appearanceBaseRule(kind));
+      });
+      return head.length ? head.concat(out) : out;
+    } catch (e) {
+      console.warn("[ontoink] _appearancePatch failed; using raw stylesheet", e);
+      return styleArr;
+    }
   }
 
   // Per-instance typography state.
@@ -3953,6 +3999,115 @@ var ontoink = (function () {
     var c = document.getElementById(id);
     var panel = c && c.querySelector(".ov-color-panel");
     if (panel) { toggleColors(id); toggleColors(id); }   // rebuild with defaults
+  }
+
+  // ── Appearance overrides (colour / shape / edge style) ──────────────────
+  //
+  // The Edit Layout colour, shape, line-style and arrow controls. Same shape
+  // as the typography state above and for the same reasons: the choices live
+  // as instance state so they can be re-applied to elements that arrive later
+  // (LOD restore, cluster expansion, the inferred overlay), and reach the
+  // graph as ELEMENT DATA so they survive the attic round-trip and
+  // resetEditor. `_appearancePatch` is what makes every stylesheet — Ontoink,
+  // Chowlk, Graffoo, VOWL — read those data keys.
+  //
+  // Node colour can be chosen per TYPE or per NAMESPACE, and a node can match
+  // both. Before this state existed each control wrote `data.color` directly,
+  // so the most recent edit won; `seq` preserves exactly that.
+  var _appearSeq = 0;
+  function _appear(inst) {
+    if (!inst._appear) {
+      inst._appear = { nodeColor: {}, typeShape: {},
+                       edgeColor: {}, edgeLine: {}, edgeArrow: {} };
+    }
+    return inst._appear;
+  }
+
+  // "#abc" / "#aabbcc" / "rgb(r,g,b)" → "#aabbcc", which is the only form
+  // <input type="color"> accepts. Cytoscape reports computed colours as
+  // `rgb(...)`, so reading the rendered style needs this — without it the
+  // swatch silently falls back to black.
+  function _toHexColor(v, fallback) {
+    fallback = fallback || "#999999";
+    if (v === undefined || v === null || v === "") return fallback;
+    v = String(v).trim();
+    if (v.charAt(0) === "#") {
+      if (v.length === 4) return "#" + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+      return v.length >= 7 ? v.slice(0, 7) : fallback;
+    }
+    var m = v.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+    if (!m) return fallback;
+    function h(x) {
+      var n = Math.max(0, Math.min(255, Math.round(parseFloat(x))));
+      return (n < 16 ? "0" : "") + n.toString(16);
+    }
+    return "#" + h(m[1]) + h(m[2]) + h(m[3]);
+  }
+
+  // Push the appearance state onto every element (live cy + inst.data mirror).
+  function applyAppearance(id) {
+    var inst = instances[id]; if (!inst || !inst.cy) return;
+    var st = _appear(inst), cy = inst.cy;
+    var dataById = {}, edgeById = {};
+    (inst.data && inst.data.nodes || []).forEach(function (n) { if (n.data) dataById[n.data.id] = n; });
+    (inst.data && inst.data.edges || []).forEach(function (e) { if (e.data) edgeById[e.data.id] = e; });
+
+    cy.nodes().forEach(function (n) {
+      var t = n.data("type"), src = n.data("source");
+      var byType = t ? st.nodeColor["type:" + t] : null;
+      var bySrc = src ? st.nodeColor["source:" + src] : null;
+      var pick = (!byType) ? bySrc : (!bySrc) ? byType : (bySrc.seq > byType.seq ? bySrc : byType);
+      var col = pick ? pick.value : null;
+      var shp = t ? st.typeShape[t] : null;
+      _setEleData(n, "oiColor", col);
+      _setEleData(n, "oiShape", shp);
+      var j = dataById[n.id()];
+      if (j) { _setJsonData(j, "oiColor", col); _setJsonData(j, "oiShape", shp); }
+    });
+    cy.edges().forEach(function (e) {
+      var et = e.data("edgeType");
+      var col = et ? st.edgeColor[et] : null;
+      var ls = et ? st.edgeLine[et] : null;
+      var ar = et ? st.edgeArrow[et] : null;
+      _setEleData(e, "oiEdgeColor", col);
+      _setEleData(e, "oiEdgeLineStyle", ls);
+      _setEleData(e, "oiEdgeArrow", ar);
+      var j = edgeById[e.id()];
+      if (j) {
+        _setJsonData(j, "oiEdgeColor", col); _setJsonData(j, "oiEdgeLineStyle", ls);
+        _setJsonData(j, "oiEdgeArrow", ar);
+      }
+    });
+    try { cy.style().update(); } catch (e2) {}
+  }
+
+  // Public setter.
+  //   kind: type | source | node-shape | edge-color | edge-line | edge-arrow
+  //   key:  the node type, namespace prefix or edgeType the choice applies to
+  function setAppearance(id, kind, key, value) {
+    var inst = instances[id]; if (!inst || !key) return;
+    var st = _appear(inst);
+    var blank = (value === null || value === undefined || value === "");
+    if (kind === "type" || kind === "source") {
+      var slot = (kind === "type" ? "type:" : "source:") + key;
+      if (blank) delete st.nodeColor[slot];
+      else st.nodeColor[slot] = { value: value, seq: ++_appearSeq };
+    } else {
+      var bucket = { "node-shape": "typeShape", "edge-color": "edgeColor",
+                     "edge-line": "edgeLine", "edge-arrow": "edgeArrow" }[kind];
+      if (!bucket) return;
+      if (blank) delete st[bucket][key];
+      else st[bucket][key] = value;
+    }
+    applyAppearance(id);
+  }
+
+  function resetAppearance(id) {
+    var inst = instances[id]; if (!inst) return;
+    inst._appear = null;
+    applyAppearance(id);              // clears every override data key
+    var c = document.getElementById(id);
+    if (c && c.querySelector(".ov-color-panel")) { toggleColors(id); toggleColors(id); }
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -4943,12 +5098,18 @@ var ontoink = (function () {
       st.update();
     } catch (e) {}
 
-    // Re-apply typography to elements that arrive later (LOD restores,
-    // cluster expansion, inferred overlay).
+    // Re-apply typography AND the colour/shape/edge overrides to elements that
+    // arrive later (LOD restores, cluster expansion, inferred overlay).
+    // Elements come back out of `inst.attic` as the JSON they were stowed as,
+    // so anything the user changed while they were away has to be replayed.
     var pending = false;
     cy.on("add", function () {
       if (pending) return; pending = true;
-      requestAnimationFrame(function () { pending = false; try { applyTypography(containerId); } catch (e) {} });
+      requestAnimationFrame(function () {
+        pending = false;
+        try { applyTypography(containerId); } catch (e) {}
+        try { applyAppearance(containerId); } catch (e) {}
+      });
     });
   }
 
@@ -4969,15 +5130,28 @@ var ontoink = (function () {
   function toggleColors(id){
     var c=document.getElementById(id),ex=c.querySelector(".ov-color-panel");if(ex){ex.remove();return;}
     var inst=instances[id];if(!inst)return;
+    // Every control is seeded from the RENDERED style, which is the only
+    // thing that is true under all four style presets. Reading `d.color`
+    // instead meant that under Chowlk / Graffoo / VOWL — which paint from
+    // their own palette, not from `data(color)` — the swatch showed the
+    // Ontoink colour while the node on screen was white, and disagreed with
+    // the legend, which has always read the rendered style (getLiveStyles).
+    // `_toHexColor` is needed because Cytoscape reports `rgb(...)` and
+    // <input type="color"> only accepts `#rrggbb`.
     var sources={},types={},typeShapes={};
-    inst.cy.nodes().forEach(function(n){var d=n.data();if(d.source&&(sources[d.source]===undefined||d.type==="Class"))sources[d.source]=d.color;types[d.type]=d.color;typeShapes[d.type]=n.style("shape");});
+    inst.cy.nodes().forEach(function(n){
+      var d=n.data(), col=_toHexColor(n.style("background-color"), d.color);
+      if(d.source&&(sources[d.source]===undefined||d.type==="Class"))sources[d.source]=col;
+      types[d.type]=col;
+      typeShapes[d.type]=n.style("shape");
+    });
 
     // Collect edge type styles
     var edgeStyles={};
     var edgeTypeLabels={"object-property":"Object Property","data-property":"Data Property","rdf-type":"rdf:type","subclass":"rdfs:subClassOf","shacl-constraint":"SHACL Constraint","owl-restriction":"OWL Restriction","inferred":"Inferred (overlay)"};
     inst.cy.edges().forEach(function(e){
       var et=e.data("edgeType");
-      if(et&&!edgeStyles[et])edgeStyles[et]={color:e.style("line-color"),lineStyle:e.style("line-style"),arrowShape:e.style("target-arrow-shape")};
+      if(et&&!edgeStyles[et])edgeStyles[et]={color:_toHexColor(e.style("line-color"),"#999999"),lineStyle:e.style("line-style"),arrowShape:e.style("target-arrow-shape")};
     });
     // Also surface "inferred" even when no overlay is currently on the graph,
     // so the user can pre-style the color before toggling the overlay on.
@@ -5029,7 +5203,12 @@ var ontoink = (function () {
     h+='</select></div>';
     h+='<div class="ov-color-row"><label class="ov-typo-lbl">Weight</label><select class="ov-shape-select" data-typo="weight">';
     h+='<option value=""'+(typo.weight?'':' selected')+'>Default</option>';
-    OI_FONT_WEIGHTS.forEach(function(w){h+='<option value="'+w.value+'"'+(typo.weight===w.value?' selected':'')+'>'+esc(w.label)+'</option>';});
+    // String(...) on both sides: setTypography stores a numeric weight as a
+    // NUMBER (Cytoscape rejects "700" but honours 700), while these option
+    // values are strings — so a strict compare never matched and the select
+    // redisplayed as "Default" every time the panel was rebuilt, even though
+    // the labels on the graph were still bold.
+    OI_FONT_WEIGHTS.forEach(function(w){h+='<option value="'+w.value+'"'+(String(typo.weight)===String(w.value)?' selected':'')+'>'+esc(w.label)+'</option>';});
     h+='</select>';
     h+='<label class="ov-typo-check" title="Italic labels"><input type="checkbox" data-typo="italic"'+(typo.italic?' checked':'')+'> <i>Italic</i></label></div>';
     h+='<div class="ov-color-row"><button class="ov-chip ov-typo-reset" title="Back to the stylesheet defaults for size and font">Reset size &amp; font</button></div>';
@@ -5074,27 +5253,21 @@ var ontoink = (function () {
     // Re-render legend & namespace overlay after each Edit Layout change
     function refreshLegend() { buildLegendOverlay(c, inst.data); buildNsOverlay(c, inst.data); }
 
-    // Color inputs
+    // Color inputs. Everything funnels through setAppearance → applyAppearance,
+    // which writes the override into element data and mirrors it into
+    // inst.data. Previously node colour went to `data.color` (which only the
+    // Ontoink stylesheet reads) while edge colour went to a style bypass
+    // (which the attic round-trip drops) — so the same panel behaved
+    // differently per control and per preset.
     panel.querySelectorAll(".ov-color-input").forEach(function(inp){inp.addEventListener("input",function(){
-      var kind=inp.dataset.kind,key=inp.dataset.key,col=inp.value;
-      if(kind==="type") inst.cy.nodes().forEach(function(n){if(n.data("type")===key)n.data("color",col);});
-      if(kind==="source") inst.cy.nodes().forEach(function(n){if(n.data("source")===key)n.data("color",col);});
-      if(kind==="edge-color") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key){e.style({"line-color":col,"target-arrow-color":col,"source-arrow-color":col});}});
-      // Also propagate to inst.data so exports + future legend re-renders pick it up
-      if(kind==="type") inst.data.nodes.forEach(function(n){if(n.data.type===key)n.data.color=col;});
-      if(kind==="source") inst.data.nodes.forEach(function(n){if(n.data.source===key)n.data.color=col;});
+      setAppearance(id, inp.dataset.kind, inp.dataset.key, inp.value);
       refreshLegend();
     });});
 
-    // Shape selects
+    // Shape / line-style / arrow selects
     panel.querySelectorAll(".ov-shape-select").forEach(function(sel){sel.addEventListener("change",function(){
-      var kind=sel.dataset.kind,key=sel.dataset.key,val=sel.value;
-      if(kind==="node-shape") {
-        inst.cy.nodes().forEach(function(n){if(n.data("type")===key){n.data("shape",val);n.style("shape",val);}});
-        inst.data.nodes.forEach(function(n){if(n.data.type===key)n.data.shape=val;});
-      }
-      if(kind==="edge-line") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("line-style",val);});
-      if(kind==="edge-arrow") inst.cy.edges().forEach(function(e){if(e.data("edgeType")===key)e.style("target-arrow-shape",val);});
+      if(!sel.dataset.kind)return;                       // the typography selects carry data-typo
+      setAppearance(id, sel.dataset.kind, sel.dataset.key, sel.value);
       refreshLegend();
     });});
 
@@ -5483,6 +5656,11 @@ var ontoink = (function () {
     //   - status "unknown" + "owlready2 not installed" → no build-time
     //     reasoner, and the runtime path (browser/server) is the only
     //     way to get results. Fall through.
+    //   - status "skipped" → the check was disabled for this build
+    //     (ONTOINK_CONSISTENCY=off, or ONTOINK_REASONER=none), so it
+    //     tells us nothing about whether a reasoner was available.
+    //     Fall through as well: claiming "0 triples inferred" here
+    //     would report a result no reasoner actually produced.
     //   - any other status (consistent / inconsistent / …) → reasoning
     //     ran successfully; an empty `inferred` list means the graph
     //     genuinely has no new OWL-DL entailments (common for pure
@@ -5490,7 +5668,9 @@ var ontoink = (function () {
     //     silently punting to a runtime reasoner that isn't there.
     var pre = inst.data.inferred || [];
     var cons = inst.data.consistency || {};
-    var buildReasonerRan = cons.status && cons.status !== "unknown";
+    var buildReasonerRan = cons.status
+      && cons.status !== "unknown"
+      && cons.status !== "skipped";
     panel.style.display = "block";
     if (pre.length) {
       var rows = pre.map(function(t) {
@@ -5755,9 +5935,10 @@ var ontoink = (function () {
     var cy = cytoscape({
       container: canvas,
       elements: { nodes: nodeList, edges: edges },
-      // _typoPatch — see the fence-side init; keeps Edit Layout's size/font
-      // controls working in the playground and the embed API too.
-      style: _typoPatch([
+      // _typoPatch / _appearancePatch — see the fence-side init; keeps Edit
+      // Layout's size/font/colour/shape controls working in the playground and
+      // the embed API too.
+      style: _appearancePatch(_typoPatch([
         { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"Inter, Segoe UI, system-ui, sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
         { selector: 'node[type="Class"]', style: { "font-weight":"600","border-width":2,"border-color":"#666","shape":"rectangle" }},
         { selector: 'node[type="Individual"]', style: { "shape":"ellipse" }},
@@ -5843,7 +6024,7 @@ var ontoink = (function () {
           "color":"#5b21b6","font-weight":"700","font-size":"12px",
           "text-background-color":"#ede9fe","text-background-opacity":0.95,"text-background-padding":"3px"
         }},
-      ]),
+      ])),
       layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, edgeSep: 20, animate: false, fit: true, padding: 30 },
       // the 0.7.4 motion optimizations now apply only to big graphs,
       // and pixelRatio follows the display instead of being pinned to 1 (which
@@ -8457,15 +8638,110 @@ var ontoink = (function () {
       '<span class="ov-rec-evidence">' + esc(c.evidence || "") + "</span></li>";
   }
 
+  /**
+   * The method picker and its hyperparameter menu.
+   *
+   * Which algorithm produced a suggestion is not a detail — it decides whether
+   * the suggestion is evidence about the data (baseline, sheXer) or a restatement
+   * of what the ontology already asserts (astrea). So the method is named, its
+   * paper is cited inline, and both are changeable without leaving the panel.
+   *
+   * Only the knobs a method actually reads are drawn. The list comes from the
+   * engine's own catalogue rather than being written out here, so a knob added
+   * in one place cannot go missing in the other.
+   */
+  function _renderMethodPicker(id, rec) {
+    var current = (rec && rec.method) || "auto";
+    var catalogue = (rec && rec.methods && rec.methods.length)
+      ? rec.methods : methodCatalogue();
+    var chosen = catalogue.filter(function (m) { return m.name === current; })[0] || {};
+    var params = (rec && rec.params) || {};
+
+    var h = '<div class="ov-rec-method-bar">';
+    h += '<label class="ov-rec-method-pick">Method ' +
+         '<select data-oi-onchange="ontoink.setRecommendMethod(\'' + id + "',this.value)\">";
+    catalogue.forEach(function (m) {
+      h += '<option value="' + esc(m.name) + '"' +
+           (m.name === current ? " selected" : "") +
+           (m.available === false ? " disabled" : "") + ">" +
+           esc(m.label || m.name) +
+           (m.available === false ? " (needs the server)" : "") + "</option>";
+    });
+    h += "</select></label>";
+
+    if (chosen.summary) {
+      h += '<p class="ov-rec-method-summary">' + esc(chosen.summary) + "</p>";
+    }
+    if (chosen.reference && chosen.reference.citation) {
+      var doi = chosen.reference.doi;
+      h += '<p class="ov-rec-cite">' + esc(chosen.reference.citation) +
+           (doi ? ' <a href="https://doi.org/' + esc(doi) +
+                  '" target="_blank" rel="noopener">doi:' + esc(doi) + "</a>" : "") +
+           "</p>";
+    }
+    if (rec && rec.notice) {
+      h += '<p class="ov-rec-note ov-rec-notice">' + esc(rec.notice) + "</p>";
+    }
+
+    // `auto` declares no knobs of its own — it is a composition. Showing none
+    // would be misleading, though: it runs baseline, and baseline's coverage
+    // threshold decides most of what `auto` proposes. So borrow the knobs of
+    // the methods it composes, tagged with which one they belong to, matching
+    // the nested `{baseline: {...}, astrea: {...}}` shape the Python side takes.
+    var knobs = (chosen.params || []).slice();
+    if (current === "auto") {
+      catalogue.forEach(function (m) {
+        if (m.name === "auto" || m.available === false) return;
+        if (m.needs === "instances" && m.name !== "baseline") return;
+        (m.params || []).forEach(function (p) {
+          var copy = { group: m.name };
+          Object.keys(p).forEach(function (k) { copy[k] = p[k]; });
+          copy.label = (m.label || m.name).split(" — ")[0] + ": " + (p.label || p.name);
+          knobs.push(copy);
+        });
+      });
+    }
+
+    if (knobs.length) {
+      h += '<details class="ov-rec-params"><summary>Hyperparameters</summary>';
+      knobs.forEach(function (p) {
+        var scope = p.group ? params[p.group] || {} : params;
+        var value = scope[p.name] != null ? scope[p.name] : p["default"];
+        var attr = "data-oi-onchange=\"ontoink.setRecommendParam('" + id + "','" +
+                   _oiStr(p.name) + "',this" + (p.type === "bool" ? ".checked" : ".value") +
+                   (p.group ? ",'" + _oiStr(p.group) + "'" : "") + ")\"";
+        h += '<label class="ov-rec-param" title="' + esc(p.doc || "") + '">' +
+             "<span>" + esc(p.label || p.name) + "</span>";
+        if (p.type === "bool") {
+          h += '<input type="checkbox" ' + (value ? "checked " : "") + attr + ">";
+        } else {
+          h += '<input type="number" value="' + esc(String(value)) + '"' +
+               (p.min != null ? ' min="' + esc(String(p.min)) + '"' : "") +
+               (p.max != null ? ' max="' + esc(String(p.max)) + '"' : "") +
+               (p.step != null ? ' step="' + esc(String(p.step)) + '"' : "") +
+               " " + attr + ">";
+        }
+        h += '<em class="ov-rec-param-doc">' + esc(p.doc || "") + "</em></label>";
+      });
+      h += '<button class="ov-btn" data-oi-onclick="ontoink.resetRecommendParams(\'' +
+           id + '\')">Reset to defaults</button>';
+      h += "</details>";
+    }
+    return h + "</div>";
+  }
+
   function _renderRecommendations(id, inst) {
     var rec = (inst.data && inst.data.shape_recommendations) || null;
     var drift = (inst.data && inst.data.shape_drift) || null;
+    // The picker renders whether or not there are results, so "nothing to show"
+    // is measured on the body alone — otherwise changing the method to one that
+    // finds nothing would leave the panel looking like it had simply failed.
+    var head = _renderMethodPicker(id, rec);
     var h = "";
 
     if (rec && rec.shapes && rec.shapes.length) {
       h += '<div class="ov-rec-head">' + rec.shapes.length + " shape" +
            (rec.shapes.length === 1 ? "" : "s") + " suggested for classes with no SHACL coverage" +
-           (rec.methodDescription ? ' <span class="ov-rec-method">' + esc(rec.methodDescription) + "</span>" : "") +
            "</div>";
       if (rec.truncated) {
         h += '<p class="ov-rec-note">Showing the ' + rec.shapes.length +
@@ -8519,7 +8795,71 @@ var ontoink = (function () {
       }
     }
 
-    return h || '<p class="ov-rec-note">No shape suggestions for this diagram.</p>';
+    return head + (h ||
+      '<p class="ov-rec-note">No shape suggestions for this diagram with this ' +
+      'method. Astrea needs OWL axioms; the data-driven methods need instances.</p>');
+  }
+
+  /**
+   * Re-run induction with a different method and repaint the panel.
+   *
+   * Runs in the browser off the diagram's own Turtle, so this works on a static
+   * host. `recommendShapes` reports methods it cannot run rather than silently
+   * substituting one, and the notice it sets is rendered above the results.
+   */
+  function _rerunRecommendation(id) {
+    var inst = instances[id]; if (!inst) return;
+    var ttl = (inst.data && inst.data.rawTtl) || inst.originalTtl || "";
+    var c = document.getElementById(id);
+    if (!ttl) {
+      _notify(c, "This diagram carries no Turtle source to re-run induction on.");
+      return;
+    }
+    var prev = (inst.data && inst.data.shape_recommendations) || {};
+    try {
+      inst.data.shape_recommendations = recommendShapes(ttl, {
+        method: inst._recMethod || prev.method || "auto",
+        params: inst._recParams || {},
+        shacl: (inst.data && inst.data.shapeTtl) || "",
+        onlyUncovered: true
+      });
+    } catch (e) {
+      _notify(c, "Could not re-run induction: " + (e && e.message ? e.message : e));
+      return;
+    }
+    var content = c && c.querySelector(".ov-recommend-content");
+    if (content) {
+      content.innerHTML = _renderRecommendations(id, inst);
+      try { wireHandlers(content); } catch (e2) {}
+    }
+  }
+
+  function setRecommendMethod(id, method) {
+    var inst = instances[id]; if (!inst) return;
+    // Each method has its own knobs, so carrying the previous method's values
+    // over would either be ignored or, worse, coincidentally match a name and
+    // mean something different. Start from that method's defaults.
+    inst._recMethod = String(method || "auto");
+    inst._recParams = {};
+    _rerunRecommendation(id);
+  }
+
+  function setRecommendParam(id, name, value, group) {
+    var inst = instances[id]; if (!inst) return;
+    inst._recParams = inst._recParams || {};
+    if (group) {
+      inst._recParams[group] = inst._recParams[group] || {};
+      inst._recParams[group][name] = value;
+    } else {
+      inst._recParams[name] = value;
+    }
+    _rerunRecommendation(id);
+  }
+
+  function resetRecommendParams(id) {
+    var inst = instances[id]; if (!inst) return;
+    inst._recParams = {};
+    _rerunRecommendation(id);
   }
 
   function toggleRecommendations(id) {
@@ -8819,7 +9159,9 @@ var ontoink = (function () {
   }
 
   /** Mirror of methods.induce_baseline. */
-  function _induceBaseline(idx, triples, bag, order, targets) {
+  function _induceBaseline(idx, triples, bag, order, targets, params) {
+    var minCount = (params && params.min_count_threshold != null)
+      ? params.min_count_threshold : 0.9;
     var classes = targets || _instantiatedClasses(triples);
     classes.forEach(function (cls) {
       var prof = _profileClass(idx, cls);
@@ -8828,7 +9170,7 @@ var ontoink = (function () {
       Object.keys(prof.propertyStats).forEach(function (pred) {
         var st = prof.propertyStats[pred];
         var support = st.instancesWith, coverage = support / n;
-        if (coverage >= 0.9) {
+        if (coverage >= minCount) {
           _addConstraint(bag, order, _constraint(cls, pred, "minCount", "1", {
             confidence: coverage, support: support, population: n, method: "baseline",
             message: support + " of " + n + " instances have this property"
@@ -8984,6 +9326,128 @@ var ontoink = (function () {
     return found || _shortIri(iri);
   }
 
+  // Mirror of recommend.methods.METHOD_SPECS. Every method ontoink offers is
+  // one somebody published and can be cited; the citation travels with the
+  // method so the panel can show whose algorithm produced a suggestion.
+  //
+  // `browser` records whether this engine can run the method at all. sheXer is
+  // the authors' own Python library — the honest options were to reimplement it
+  // in JS (which would not be sheXer) or to say it needs the server. It says so.
+  //
+  // tests/test_recommend_parity.py asserts this table matches the Python one,
+  // name for name and knob for knob, so the two cannot drift apart unnoticed.
+  var _METHOD_SPECS = {
+    auto: {
+      label: "Auto — axioms, then data",
+      summary: "Runs astrea and baseline and merges them, recording which " +
+               "method proposed each constraint.",
+      reference: null, needs: "either", browser: true, params: []
+    },
+    baseline: {
+      label: "Baseline — frequency profiling",
+      summary: "Profiles how instances actually use each property. Best " +
+               "F1-to-complexity ratio of the methods benchmarked.",
+      reference: {
+        citation: "Mihindukulasooriya, N., Rashid, M. R. A., Rizzo, G., " +
+                  "García-Castro, R., Corcho, O., & Torchiano, M. (2018). " +
+                  "RDF Shape Induction Using Knowledge Base Profiling. SAC 2018.",
+        doi: "10.1145/3167132.3167341"
+      },
+      needs: "instances", browser: true,
+      params: [
+        { name: "min_count_threshold", type: "float", "default": 0.9,
+          min: 0, max: 1, step: 0.05, label: "Required coverage",
+          doc: "Emit sh:minCount 1 when at least this fraction of a class's " +
+               "instances carry the property. Lower proposes more and is " +
+               "wrong more often." }
+      ]
+    },
+    astrea: {
+      label: "Astrea — OWL axiom-driven",
+      summary: "Derives constraints from the T-Box alone, so it works on an " +
+               "ontology that ships no individuals at all.",
+      reference: {
+        citation: "Cimmino, A., Fernández-Izquierdo, A., & García-Castro, R. " +
+                  "(2020). Astrea: Automatic Generation of SHACL Shapes from " +
+                  "Ontologies. ESWC 2020.",
+        doi: "10.1007/978-3-030-49461-2_29"
+      },
+      needs: "axioms", browser: true, params: []
+    },
+    shexer: {
+      label: "sheXer — original implementation",
+      summary: "Runs the sheXer library itself and projects its SHACL output. " +
+               "Contributes sh:pattern and length constraints the other " +
+               "methods do not derive.",
+      reference: {
+        citation: "Fernández-Álvarez, D., Labra-Gayo, J. E., & Gayo-Avello, D. " +
+                  "(2022). Automatic extraction of shapes using sheXer. " +
+                  "Knowledge-Based Systems, 238, 107975.",
+        doi: "10.1016/j.knosys.2021.107975",
+        software: "https://github.com/DaniFdezAlvarez/shexer"
+      },
+      needs: "instances", browser: false,
+      params: [
+        { name: "acceptance_threshold", type: "float", "default": 0,
+          min: 0, max: 1, step: 0.05, label: "Acceptance threshold",
+          doc: "sheXer keeps a constraint when its observed conformance is at " +
+               "least this. 0 keeps everything it inferred." },
+        { name: "instances_cap", type: "int", "default": -1,
+          min: -1, max: 100000, step: 100,
+          label: "Instances examined per class",
+          doc: "Stop after this many instances of a class. -1 examines every " +
+               "one; a cap trades fidelity for speed on graphs too large to " +
+               "profile whole." },
+        { name: "detect_minimal_iri", type: "bool", "default": true,
+          label: "Detect minimal IRI",
+          doc: "Let sheXer shorten IRIs against the declared prefixes." },
+        { name: "infer_numeric_types", type: "bool", "default": true,
+          label: "Infer numeric datatypes",
+          doc: "Type untyped literals that look numeric." }
+      ]
+    }
+  };
+
+  /** Mirror of methods.coerce_params — drop unknown keys, coerce, clamp. */
+  function _coerceParams(method, params) {
+    var declared = ((_METHOD_SPECS[method] || {}).params) || [];
+    var byName = {};
+    declared.forEach(function (p) { byName[p.name] = p; });
+    var out = {};
+    Object.keys(params || {}).forEach(function (key) {
+      var meta = byName[key];
+      if (!meta) return;
+      var v = params[key];
+      if (meta.type === "float" || meta.type === "int") {
+        v = meta.type === "int" ? parseInt(v, 10) : parseFloat(v);
+        if (isNaN(v)) return;
+        if (meta.min != null) v = Math.max(meta.min, v);
+        if (meta.max != null) v = Math.min(meta.max, v);
+      } else if (meta.type === "bool") {
+        v = typeof v === "boolean" ? v
+          : ["1", "true", "yes", "on"].indexOf(String(v).trim().toLowerCase()) >= 0;
+      }
+      out[key] = v;
+    });
+    return out;
+  }
+
+  /** The method list a UI renders, with browser availability resolved. */
+  function methodCatalogue() {
+    return Object.keys(_METHOD_SPECS).map(function (name) {
+      var spec = _METHOD_SPECS[name];
+      var entry = { name: name, available: spec.browser !== false };
+      Object.keys(spec).forEach(function (k) { entry[k] = spec[k]; });
+      entry.available = spec.browser !== false;
+      if (!entry.available) {
+        entry.unavailable_reason =
+          "sheXer is a Python library — it runs at build time or against the " +
+          "ontoink API, not in the browser";
+      }
+      return entry;
+    });
+  }
+
   /**
    * Induce SHACL shapes from Turtle, in the browser.
    *
@@ -8991,8 +9455,8 @@ var ontoink = (function () {
    * consumer can take either source.
    *
    * @param {string|Object} input  Turtle text, or {triples, prefixes}.
-   * @param {Object} opts  {method: "auto"|"baseline"|"astrea", shacl,
-   *                        minConfidence, onlyUncovered, maxShapes}
+   * @param {Object} opts  {method: "auto"|"baseline"|"astrea"|"shexer", shacl,
+   *                        minConfidence, onlyUncovered, maxShapes, params}
    */
   function recommendShapes(input, opts) {
     opts = opts || {};
@@ -9009,14 +9473,30 @@ var ontoink = (function () {
     var skip = {};
     if (opts.onlyUncovered !== false) already.forEach(function (c) { skip[c] = true; });
 
+    // Same degradation the Python side performs when sheXer is not installed:
+    // fall back to the default method and put the reason on the payload, so a
+    // page that asks for an unrunnable method still shows suggestions and an
+    // explanation instead of an empty panel.
+    var notice = null;
+    if (_METHOD_SPECS[method] && _METHOD_SPECS[method].browser === false) {
+      notice = "'" + method + "' runs in Python, not in the browser — showing " +
+               "'auto' instead. Enable it at build time with " +
+               "`recommend_shapes: {method: " + method + "}`, or point the page " +
+               "at an ontoink API server.";
+      method = "auto";
+    }
+
     var bag = {}, order = [];
     if (method === "auto") {
-      _induceAstrea(idx, triples, bag, order, null);
-      _induceBaseline(idx, triples, bag, order, null);
+      // `auto` composes two methods, so it takes each one's parameters under
+      // its own key rather than a flat namespace they would collide in.
+      var nested = opts.params || {};
+      _induceAstrea(idx, triples, bag, order, null, _coerceParams("astrea", nested.astrea));
+      _induceBaseline(idx, triples, bag, order, null, _coerceParams("baseline", nested.baseline));
     } else if (method === "baseline") {
-      _induceBaseline(idx, triples, bag, order, null);
+      _induceBaseline(idx, triples, bag, order, null, _coerceParams("baseline", opts.params));
     } else if (method === "astrea") {
-      _induceAstrea(idx, triples, bag, order, null);
+      _induceAstrea(idx, triples, bag, order, null, _coerceParams("astrea", opts.params));
     } else {
       throw new Error("unknown recommendation method: " + method);
     }
@@ -9051,13 +9531,13 @@ var ontoink = (function () {
     var constraints = [];
     ranked.forEach(function (cls) { constraints = constraints.concat(byClass[cls]); });
 
-    return {
+    var out = {
       method: method,
-      methodDescription: {
-        auto: "Axioms first, then instance-data profiling where instances exist",
-        baseline: "Frequency profiling of instance data (Mihindukulasooriya et al. 2018)",
-        astrea: "OWL axiom-driven generation, no instance data required (ASTREA-like)"
-      }[method] || "",
+      methodDescription: (_METHOD_SPECS[method] || {}).summary || "",
+      params: method === "auto"
+        ? (opts.params || {})
+        : _coerceParams(method, opts.params),
+      methods: methodCatalogue(),
       shapes: shapes,
       constraints: constraints,
       turtle: ["@prefix sh: <http://www.w3.org/ns/shacl#> .",
@@ -9072,6 +9552,8 @@ var ontoink = (function () {
         constraintsProposed: constraints.length
       }
     };
+    if (notice) out.notice = notice;
+    return out;
   }
 
   function copySmellShape(id, smellIndex, entityIndex) {
@@ -9376,6 +9858,10 @@ var ontoink = (function () {
     // exposed so any page (the SHACL Editor, the playground) can call one
     // implementation instead of carrying its own.
     recommendShapes: recommendShapes,
+    recommendMethods: methodCatalogue,
+    setRecommendMethod: setRecommendMethod,
+    setRecommendParam: setRecommendParam,
+    resetRecommendParams: resetRecommendParams,
 
     // Big-ontology mode — LOD / Hidden / Super / clustering runtime.
     setLodLevel: setLodLevel,
@@ -9419,6 +9905,10 @@ var ontoink = (function () {
     setTypography: setTypography,
     applyTypography: applyTypography,
     resetTypography: resetTypography,
+    // Colour / shape / edge-style overrides — the other half of Edit Layout.
+    setAppearance: setAppearance,
+    applyAppearance: applyAppearance,
+    resetAppearance: resetAppearance,
     ctxAction: ctxAction,
     openContextMenu: openContextMenu,
     closeContextMenu: closeContextMenu,
@@ -9451,9 +9941,16 @@ var ontoink = (function () {
   //
   // A dropdown in the Edit Layout panel lets users swap ontoink's default
   // stylesheet for one of the canonical ontology-viz notations. Each preset
-  // is a Cytoscape.js style array; on first apply we snapshot cy.style()
-  // to `inst._originalStyle` so the "Ontoink default" option can revert
-  // faithfully.
+  // is a Cytoscape.js style array, and "Ontoink default" is just another one
+  // of them — `_baseStyleRules()`. Reverting REBUILDS that array rather than
+  // restoring a `cy.style().json()` snapshot, because Cytoscape cannot
+  // serialise the function mappers `_typoPatch` / `_appearancePatch` install
+  // (see `_baseStyleRules`), so the snapshot was corrupt at capture time.
+  //
+  // Every preset is run through `_typoPatch` and `_appearancePatch` so the
+  // Edit Layout controls keep working whichever notation is on screen: the
+  // user's `oi*` overrides win, and the preset's own literals are the
+  // fallback, so each notation still looks like itself until you edit it.
   //
   // The presets are approximations — not every OWL construct maps 1:1 to
   // Cytoscape.js shape/color, and the source tools (drawio, yEd, WebVOWL)
@@ -9461,6 +9958,129 @@ var ontoink = (function () {
   // matched (Chowlk's underlined individuals, VOWL's edge-midpoint
   // property chips), we use the closest Cytoscape idiom and note the
   // compromise inline.
+
+  // The Ontoink default stylesheet, factored out of initGraph so
+  // `applyStylePreset('ontoink')` can rebuild it EXACTLY rather than replay a
+  // `cy.style().json()` snapshot. Cytoscape serialises a function mapper as the
+  // literal string "fn" (parse(): `strValue:"fn"`; json(): `a[s.name]=s.strValue`),
+  // and `_typoPatch` makes every font/padding value a function mapper — so the old
+  // snapshot round-trip replayed `font-size: fn` (dropped as invalid), `padding: fn`
+  // (dropped -> 0px) and `font-family: fn` (accepted as a bogus family). Returning
+  // the live array keeps the function references intact.
+  function _baseStyleRules() {
+    return [
+        { selector: "node", style: { "label":"data(label)","background-color":"data(color)","shape":"data(shape)","text-valign":"center","text-halign":"center","width":"label","height":"label","padding":"14px","font-size":"12px","font-family":"Inter, Segoe UI, system-ui, sans-serif","text-wrap":"wrap","text-max-width":"160px","border-width":1,"border-color":"#aaa","border-opacity":0.6,"color":"#222" }},
+        { selector: 'node[type="Class"]', style: { "font-weight":"600","border-width":2,"border-color":"#666","shape":"rectangle" }},
+        { selector: 'node[type="Individual"]', style: { "shape":"ellipse" }},
+        { selector: 'node[type="Literal"]', style: { "shape":"ellipse","font-style":"italic","font-size":"11px","border-style":"dashed","border-color":"#6a9" }},
+        { selector: 'node[type="Datatype"]', style: { "shape":"diamond" }},
+        { selector: 'node[type="SHACL Shape"]', style: { "shape":"round-rectangle","border-color":"#0891b2" }},
+        // SuperNode gets a chunkier hexagon + double border so
+        // it reads as a "container" node. Label mapper appends the member
+        // count (e.g. "People and Addresses  ·  42") so the cluster size
+        // is legible without a hover.
+        { selector: 'node[?isSuperNode]', style: {
+            "label": function(ele) {
+              var n = ele.data("memberCount");
+              var lab = ele.data("label") || "";
+              return n ? (lab + "  ·  " + n) : lab;
+            },
+            "shape":"hexagon",
+            // honour a per-node colour when set (distinct cluster hues); the
+            // light default keeps legacy build-time super-nodes looking the same.
+            "background-color": function(ele) { return ele.data("color") || "#e0f2fe"; },
+            "border-width":3,
+            "border-color":"#0891b2",
+            "border-style":"double",
+            "font-weight":"700",
+            "font-size":"13px",
+            "text-outline-width":2,
+            "text-outline-color":"#fff",
+            "padding":"18px",
+            "text-max-width":"200px"
+        }},
+        { selector: 'node[?isSuperNode]:selected', style: { "border-color":"#0e7490","border-width":4 }},
+        // ClusterHull compound parent for expanded clusters.
+        // Dashed rounded rectangle that visually contains its members;
+        // header label at top says "<title> · N · click header to
+        // collapse". Draggable as a whole (Cytoscape's built-in
+        // compound behavior), and tappable on border/header to trigger
+        // collapse (see the tap wiring at ~line 2260).
+        { selector: 'node[?isClusterHull]', style: {
+          "shape":"round-rectangle","background-color":"#f0f9ff","background-opacity":0.35,
+          "border-width":2,"border-style":"dashed","border-color":"#0891b2",
+          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-6,
+          "font-weight":"700","font-size":"12px","color":"#0e7490",
+          "text-background-color":"#e0f2fe","text-background-opacity":0.95,"text-background-padding":"4px",
+          "text-background-shape":"round-rectangle","padding":"22px",
+          "compound-sizing-wrt-labels":"include"
+        }},
+        { selector: 'node[?isClusterHull]:selected', style: { "border-color":"#0e7490","border-width":3,"background-color":"#dbeafe" }},
+        // Nested compound box inside a cluster (e.g. a category holding its
+        // instances). Coloured, labelled container; label sits at the top so it
+        // doesn't overlap the members. Colour comes from data(color).
+        { selector: 'node[?isCategoryBox]', style: {
+          "shape":"round-rectangle",
+          "background-color": function(ele) { return ele.data("color") || "#94a3b8"; },
+          "background-opacity":0.10,
+          "border-width":2,"border-style":"dashed",
+          "border-color": function(ele) { return ele.data("color") || "#64748b"; },
+          "label":"data(label)","text-valign":"top","text-halign":"center","text-margin-y":-4,
+          "font-weight":"700","font-size":"12px",
+          "color": function(ele) { return ele.data("color") || "#334155"; },
+          "text-background-color":"#ffffff","text-background-opacity":0.9,
+          "text-background-padding":"3px","text-background-shape":"round-rectangle",
+          "padding":"16px","compound-sizing-wrt-labels":"include"
+        }},
+        // Blank-node styling. rdflib emits blank subjects as
+        // "_:bN..." — they aren't real Individuals no matter what
+        // ttl_parser tags them. `_flagBlankNodes` stamps `isBlankNode:true`
+        // on init; the style below matches that flag reliably (avoiding
+        // the escape-sensitive `[id ^= "_:"]` attribute-prefix selector).
+        { selector: 'node[?isBlankNode]', style: {
+          "background-color":"#f3f4f6","border-style":"dashed","border-color":"#9ca3af",
+          "color":"#6b7280","font-style":"italic","opacity":0.7,
+          "shape":"round-diamond","width":24,"height":24
+        }},
+        // Fanned super-edges: when multiple originals collapse
+        // into one boundary edge, `data.weight > 1`. Widen the line
+        // proportionally (mapData → 3..12 px) and paint it a distinct
+        // "bundle" purple so users can tell "45 relations" apart from
+        // a single relation. The `data.fan` array powers the hover
+        // popup at buildEdgePopup.
+        { selector: 'edge[?clusterManaged][weight > 1]', style: {
+          "width": "mapData(weight, 1, 40, 3, 12)",
+          "line-color":"#7c3aed","target-arrow-color":"#7c3aed","source-arrow-color":"#7c3aed",
+          "color":"#5b21b6","font-weight":"700","font-size":"12px",
+          "text-background-color":"#ede9fe","text-background-opacity":0.95,"text-background-padding":"3px"
+        }},
+        { selector: "node:selected", style: { "border-width":3,"border-color":"#0891b2" }},
+        { selector: "edge[edgeType='object-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","source-arrow-shape":"circle","source-arrow-fill":"filled","line-color":"#2563eb","target-arrow-color":"#2563eb","source-arrow-color":"#2563eb","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#2563eb","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='data-property']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","source-arrow-shape":"circle","source-arrow-fill":"hollow","line-color":"#16a34a","target-arrow-color":"#16a34a","source-arrow-color":"#16a34a","width":1.5,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-10,"color":"#16a34a","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='rdf-type']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-color":"#9ca3af","target-arrow-color":"#9ca3af","width":1,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#888","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='subclass']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-color":"#374151","target-arrow-color":"#374151","width":2,"font-size":"9px","text-rotation":"autorotate","text-margin-y":-10,"color":"#555","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='shacl-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#0891b2","target-arrow-color":"#0891b2","width":3,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#0891b2","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dashed","line-color":"#a855f7","target-arrow-color":"#a855f7","width":2,"font-size":"11px","font-weight":"bold","text-rotation":"autorotate","text-margin-y":-12,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.95,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif" }},
+        { selector: "edge[edgeType='owl-restriction'][owlVia='equivalentClass']", style: { "target-arrow-shape":"diamond","target-arrow-fill":"hollow" }},
+        { selector: "edge[edgeType='owl-restriction'][source = target]", style: { "curve-style":"bezier","control-point-step-size":40 }},
+        // proposed (not yet accepted) SHACL constraints. Opacity is
+        // mapped from the constraint's own confidence, so a weakly-evidenced
+        // suggestion literally looks fainter than a near-certain one. The value
+        // lives in element data rather than a style bypass, so LOD sweeps and
+        // style-preset swaps don't wipe it.
+        { selector: "edge[edgeType='recommended-constraint']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"hollow","line-style":"dashed","line-dash-pattern":[4,4],"line-color":"#7c3aed","target-arrow-color":"#7c3aed","width":2,"font-size":"10px","text-rotation":"autorotate","text-margin-y":-12,"color":"#7c3aed","text-background-color":"#fff","text-background-opacity":0.92,"text-background-padding":"3px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":"mapData(confidence, 0.5, 1, 0.28, 0.92)" }},
+        { selector: "edge[edgeType='recommended-constraint'][source = target]", style: { "curve-style":"bezier","control-point-step-size":55 }},
+        // Deprecated terms stay visible but read as retired. Cytoscape cannot
+        // strike a label through, so dimming plus a dashed border carries it.
+        { selector: "node[?deprecated]", style: { "opacity":0.45,"border-style":"dashed","border-width":2,"border-color":"#9ca3af" }},
+        { selector: "edge[edgeType='inferred']", style: { "label":"data(label)","curve-style":"bezier","target-arrow-shape":"triangle","target-arrow-fill":"filled","line-style":"dotted","line-color":"#a855f7","target-arrow-color":"#a855f7","width":1.5,"font-size":"12px","text-rotation":"autorotate","text-margin-y":-10,"color":"#a855f7","text-background-color":"#fff","text-background-opacity":0.9,"text-background-padding":"2px","font-family":"Inter, Segoe UI, system-ui, sans-serif","opacity":0.75 }},
+        // 0.75, not 0.7: `_inferredOverlayRules()` is appended to every preset
+        // (including the Ontoink restore) and declares 0.75, as does the
+        // playground sheet. The stray 0.7 here made inferred nodes visibly
+        // brighten the first time you switched styles and never go back.
+        { selector: "node[?inferred]", style: { "opacity":0.75,"border-style":"dotted","border-color":"#a855f7","border-width":2 }},
+    ];
+  }
 
   function _chowlkStyle() {
     // Chowlk (Chávez-Feria et al., ESWC 2022).
@@ -9744,7 +10364,7 @@ var ontoink = (function () {
   }
 
   var _STYLE_PRESETS = {
-    ontoink:  null,             // sentinel — restore snapshot
+    ontoink:  _baseStyleRules,  // the default sheet, rebuilt from source
     chowlk:   _chowlkStyle,
     graffoo:  _graffooStyle,
     vowl:     _vowlStyle
@@ -9804,33 +10424,23 @@ var ontoink = (function () {
     // picking "Style: Ontoink" after any other preset silently hit the
     // unknown-preset branch instead of restoring the default.
     presetName = String(presetName || "").toLowerCase();
-    inst.stylePreset = presetName;
-    if (presetName === "ontoink") {
-      // Restoring the original stylesheet reliably requires
-      // capturing it before we swapped it. `cy.style().json()` returns a
-      // normalised form that doesn't round-trip cleanly through fromJson
-      // on every Cytoscape version; rather than ship a fragile restore,
-      // tell the user to reload for the default. The snapshot is kept
-      // as a best-effort attempt for people who want to script it.
-      if (inst._originalStyle) {
-        try { cy.style(inst._originalStyle); console.info("[ontoink] restored Ontoink default"); return; }
-        catch (e) { console.warn("[ontoink] snapshot restore failed; reload the page for Ontoink default:", e); return; }
-      }
-      console.info("[ontoink] Reload the page to restore Ontoink default style.");
-      return;
-    }
-    if (!_STYLE_PRESETS[presetName]) {
+    var factory = _STYLE_PRESETS[presetName];
+    if (presetName !== "ontoink" && !factory) {
       console.warn("[ontoink] applyStylePreset: unknown preset '" + presetName + "'");
       return;
     }
-    // Snapshot the CURRENT stylesheet as best-effort so a later revert
-    // has SOMETHING to try. Fails silently — not the critical path.
-    if (!inst._originalStyle) {
-      try { inst._originalStyle = cy.style().json(); }
-      catch (e) { inst._originalStyle = null; }
-    }
-    var factory = _STYLE_PRESETS[presetName];
-    var stylesheet = (typeof factory === "function") ? factory() : factory;
+    inst.stylePreset = presetName;
+    // "Ontoink default" rebuilds the base stylesheet from source rather than
+    // replaying a snapshot. `cy.style().json()` serialises a function mapper as
+    // the literal string "fn" (see _baseStyleRules), so the old
+    // `inst._originalStyle` round-trip came back with `padding: fn` and
+    // `font-size: fn` dropped as invalid and `font-family: fn` accepted as a
+    // bogus family — shapes collapsed onto their labels, super-node labels read
+    // "fn", and Edit Layout's Size & Typography stopped working because the
+    // mappers it writes data for were gone. Rebuilding sidesteps serialisation
+    // entirely and makes the round-trip exact.
+    var stylesheet = (presetName === "ontoink") ? _baseStyleRules()
+                   : ((typeof factory === "function") ? factory() : factory);
     // `cy.style()` REPLACES the whole stylesheet, and no preset
     // declares the inferred-overlay selectors, so switching to Chowlk /
     // Graffoo / VOWL silently stripped the purple dotted styling from
@@ -9838,15 +10448,24 @@ var ontoink = (function () {
     // from asserted ones. Append the overlay rules to every preset (and to
     // any preset added later) rather than duplicating them three times.
     stylesheet = (stylesheet || []).concat(_inferredOverlayRules()).concat(_selectionOverlayRules());
-    // presets hard-code their own font/padding values; patch them
-    // so a user's Size & Typography settings survive a preset switch.
-    stylesheet = _typoPatch(stylesheet);
+    // presets hard-code their own font/padding/colour/shape values; patch them
+    // so a user's Edit Layout settings survive a preset switch.
+    stylesheet = _appearancePatch(_typoPatch(stylesheet));
     try {
       cy.style(stylesheet);
       console.info("[ontoink] applied style preset '" + presetName + "' (" + stylesheet.length + " selectors)");
     } catch (e) {
       console.error("[ontoink] applyStylePreset failed for '" + presetName + "':", e);
+      return;
     }
+    // An open Edit Layout panel is populated from the RENDERED style, so it
+    // goes stale the moment the stylesheet changes underneath it. Rebuild it
+    // (the double-toggle idiom resetTypography already uses) so its swatches
+    // keep matching the graph.
+    try {
+      var c = document.getElementById(id);
+      if (c && c.querySelector(".ov-color-panel")) { toggleColors(id); toggleColors(id); }
+    } catch (e2) {}
   }
 
   // ==========================================================================
@@ -9919,7 +10538,7 @@ var ontoink = (function () {
       var cy = cytoscape({
         container: canvas,
         elements: { nodes: [], edges: [] },
-        style: _typoPatch(_leStyle()),
+        style: _appearancePatch(_typoPatch(_leStyle())),
         layout: { name: "dagre", rankDir: "BT", nodeSep: 60, rankSep: 80, animate: false, fit: true, padding: 30 },
         wheelSensitivity: 0.15, minZoom: 0.05, maxZoom: 8,
         // live editor graphs are small by construction; keep the

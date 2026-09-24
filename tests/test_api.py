@@ -159,3 +159,60 @@ def test_recommend_shapes_rejects_an_unknown_method(client):
 def test_recommend_shapes_rejects_invalid_ttl(client):
     r = client.post("/recommend-shapes", json={"ttl": "not turtle <<>>"})
     assert r.status_code == 400
+
+
+def test_recommend_methods_lets_a_client_build_its_own_picker(client):
+    """A client should ask what this server can run, not hard-code a list."""
+    r = client.get("/recommend-methods")
+    assert r.status_code == 200
+    methods = {m["name"]: m for m in r.json()["methods"]}
+    assert set(methods) == {"auto", "baseline", "astrea", "shexer"}
+
+    # Availability is resolved server-side: sheXer is an optional dependency,
+    # so offering it blindly means a request that fails at run time.
+    assert isinstance(methods["shexer"]["available"], bool)
+
+    # Every method but the `auto` composition names the paper it implements.
+    for name, spec in methods.items():
+        if name == "auto":
+            assert spec["reference"] is None
+            continue
+        assert spec["reference"]["citation"] and spec["reference"]["doi"]
+
+    threshold = [p for p in methods["baseline"]["params"]
+                 if p["name"] == "min_count_threshold"][0]
+    assert (threshold["type"], threshold["default"]) == ("float", 0.9)
+    assert (threshold["min"], threshold["max"]) == (0.0, 1.0)
+
+
+def test_recommend_shapes_honours_hyperparameters(client):
+    """The knob has to reach the method, not just be accepted by the schema."""
+    ttl = (
+        "@prefix ex: <http://example.org/> .\n"
+        "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+        "ex:Person a owl:Class .\n"
+        'ex:a a ex:Person ; ex:name "A" ; ex:nick "aa" .\n'
+        'ex:b a ex:Person ; ex:name "B" ; ex:nick "bb" .\n'
+        'ex:c a ex:Person ; ex:name "C" .\n'
+        'ex:d a ex:Person ; ex:name "D" .\n'
+    )
+
+    def min_count_paths(params):
+        r = client.post("/recommend-shapes",
+                        json={"ttl": ttl, "method": "baseline", "params": params})
+        assert r.status_code == 200
+        return {c["path"] for c in r.json()["constraints"] if c["kind"] == "minCount"}
+
+    # `nick` is on 2 of 4 instances: required at 0.5, not at the 0.9 default.
+    assert "http://example.org/nick" not in min_count_paths(None)
+    assert "http://example.org/nick" in min_count_paths({"min_count_threshold": 0.5})
+
+
+def test_recommend_shapes_ignores_a_misspelled_parameter(client):
+    """A typo must degrade to the default, not 500 on an unexpected keyword."""
+    r = client.post("/recommend-shapes", json={
+        "ttl": RECOMMEND_TTL, "method": "baseline",
+        "params": {"min_cout_threshold": 0.1},
+    })
+    assert r.status_code == 200
+    assert r.json()["params"] == {}

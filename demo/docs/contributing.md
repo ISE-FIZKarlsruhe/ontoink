@@ -90,7 +90,7 @@ ontoink/
   recommend/          # SHACL shape induction
     types.py          #   normalised Constraint / Shape / ShapeSet model
     profiler.py       #   per-class instance profiling
-    methods.py        #   baseline (data-driven) + astrea (axiom-driven)
+    methods.py        #   baseline / astrea / shexer + citations & knob specs
     writer.py         #   Turtle emission, with confidence annotations
     drift.py          #   committed shapes vs. what the data implies
   resources/

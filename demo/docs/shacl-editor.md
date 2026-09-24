@@ -29,6 +29,13 @@ Build SHACL shapes visually — no Turtle knowledge needed. Load an existing sha
 .se-help-tip { display: none; position: absolute; bottom: 20px; left: -80px; width: 220px; background: #1f2937; color: #fff; font-size: 11px; font-weight: 400; padding: 8px 10px; border-radius: 6px; z-index: 100; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.2); text-transform: none; letter-spacing: 0; }
 .se-help-tip::after { content: ""; position: absolute; top: 100%; left: 90px; border: 6px solid transparent; border-top-color: #1f2937; }
 .se-help:hover .se-help-tip, .se-help:focus .se-help-tip { display: block; }
+/* Every select on this page is a light control on white, but the dropdown list
+   is painted by the browser and an <option> does not reliably inherit its
+   parent's colour — under the dark site theme the options took the page's white
+   text onto a white popup and the list read as empty. */
+select option { color: #374151; background-color: #fff; }
+select option:disabled { color: #9ca3af; }
+#se-rec-method, #se-rec-params input { color: #374151; background: #fff; }
 </style>
 
 <div id="se-app">
@@ -56,9 +63,8 @@ Build SHACL shapes visually — no Turtle knowledge needed. Load an existing sha
   <div style="padding:10px 0;">
     <p markdown="span" style="font-size:12px;color:#6b7280;margin:0 0 8px;">
       Runs the same induction engine as `ontoink.recommend` (Python) and the
-      `recommend_shapes:` fence key — `baseline` profiles instance
-      data (Mihindukulasooriya et al. 2018), `astrea` reads OWL axioms alone, and
-      works even when your file has no instances at all.
+      `recommend_shapes:` fence key. Every method offered here is a published
+      one, cited below the picker — pick one and its hyperparameters appear.
       [See how it works](examples/shape-recommendation.md).
     </p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
@@ -68,12 +74,14 @@ Build SHACL shapes visually — no Turtle knowledge needed. Load an existing sha
       <span style="color:#9ca3af;font-size:12px;">or</span>
       <input id="se-sparql-endpoint" placeholder="SPARQL endpoint URL" style="flex:1;min-width:200px;padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;color:#374151;background:#fff;">
       <button class="ov-btn" onclick="seRecommendFromEndpoint()">Recommend from Endpoint</button>
-      <select id="se-rec-method" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;color:#374151;background:#fff;" title="auto runs both and merges them; astrea needs no instance data">
-        <option value="auto" selected>Method: auto (axioms + data)</option>
-        <option value="baseline">Method: baseline (data only)</option>
-        <option value="astrea">Method: astrea (axioms only)</option>
-      </select>
+      <!-- Options are filled in from the engine's own method catalogue at load
+           time (seBuildMethodPicker), not written out here. A hard-coded list
+           silently omits any method added later, and cannot know which ones
+           this build can actually run. -->
+      <select id="se-rec-method" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;color:#374151;background:#fff;" onchange="seOnMethodChange()" title="Which induction method to run"></select>
     </div>
+    <div id="se-rec-method-info" style="font-size:11.5px;color:#6b7280;margin:0 0 8px;"></div>
+    <div id="se-rec-params" style="margin:0 0 8px;"></div>
     <textarea id="se-recommend-ttl" rows="6" placeholder="Or paste instance data TTL here..." style="width:100%;font-family:'JetBrains Mono',monospace;font-size:12px;border:1px solid #d1d5db;border-radius:6px;padding:8px;color:#374151;background:#fff;resize:vertical;"></textarea>
     <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
       <button class="ov-btn ov-btn-primary" onclick="seRecommendFromTTL()">Analyze &amp; Recommend</button>
@@ -500,7 +508,100 @@ function seEsc(s) {
 }
 function seRecMethod() {
   var sel = document.getElementById("se-rec-method");
-  return sel ? sel.value : "auto";
+  return (sel && sel.value) || "auto";
+}
+
+// Hyperparameter values the reader has set, keyed by method, so switching away
+// and back does not silently discard them.
+var seRecParams = {};
+
+function seMethodSpec(name) {
+  var all = (window.ontoink && window.ontoink.recommendMethods)
+    ? window.ontoink.recommendMethods() : [];
+  for (var i = 0; i < all.length; i++) if (all[i].name === name) return all[i];
+  return null;
+}
+
+/**
+ * Fill the method <select> from the engine's catalogue.
+ *
+ * Built rather than hard-coded so a method added to the engine appears here
+ * without a second edit, and so methods this build cannot run (sheXer is a
+ * Python library) are shown as disabled with the reason, rather than offered
+ * and then failing.
+ */
+function seBuildMethodPicker() {
+  var sel = document.getElementById("se-rec-method");
+  if (!sel || !window.ontoink || !window.ontoink.recommendMethods) return;
+  var methods = window.ontoink.recommendMethods();
+  sel.innerHTML = methods.map(function (m) {
+    return '<option value="' + seEsc(m.name) + '"' +
+           (m.name === "auto" ? " selected" : "") +
+           (m.available === false ? " disabled" : "") + ">Method: " +
+           seEsc(m.label || m.name) +
+           (m.available === false ? " — needs the Python engine" : "") +
+           "</option>";
+  }).join("");
+  seOnMethodChange();
+}
+
+function seOnMethodChange() {
+  var method = seRecMethod();
+  var spec = seMethodSpec(method) || {};
+
+  var info = document.getElementById("se-rec-method-info");
+  if (info) {
+    var h = spec.summary ? seEsc(spec.summary) : "";
+    if (spec.reference && spec.reference.citation) {
+      h += '<div style="margin-top:4px;padding-left:8px;border-left:2px solid #e5e7eb;">' +
+           seEsc(spec.reference.citation) +
+           (spec.reference.doi
+             ? ' <a href="https://doi.org/' + seEsc(spec.reference.doi) +
+               '" target="_blank" rel="noopener">doi:' + seEsc(spec.reference.doi) + "</a>"
+             : "") + "</div>";
+    }
+    info.innerHTML = h;
+  }
+
+  var box = document.getElementById("se-rec-params");
+  if (!box) return;
+  var knobs = spec.params || [];
+  if (!knobs.length) { box.innerHTML = ""; return; }
+
+  var saved = seRecParams[method] || {};
+  box.innerHTML =
+    '<details><summary style="font-size:12px;font-weight:600;cursor:pointer;color:#6366f1;">Hyperparameters</summary>' +
+    knobs.map(function (p) {
+      var value = saved[p.name] != null ? saved[p.name] : p["default"];
+      var common = 'data-param="' + seEsc(p.name) + '" onchange="seOnParamChange(this)"';
+      var input = p.type === "bool"
+        ? '<input type="checkbox" ' + (value ? "checked " : "") + common + ">"
+        : '<input type="number" value="' + seEsc(String(value)) + '"' +
+          (p.min != null ? ' min="' + seEsc(String(p.min)) + '"' : "") +
+          (p.max != null ? ' max="' + seEsc(String(p.max)) + '"' : "") +
+          (p.step != null ? ' step="' + seEsc(String(p.step)) + '"' : "") +
+          ' style="width:80px;padding:2px 4px;border:1px solid #d1d5db;border-radius:4px;text-align:right;" ' +
+          common + ">";
+      return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0;font-size:11.5px;color:#374151;">' +
+             '<span style="flex:1;">' + seEsc(p.label || p.name) + "</span>" + input + "</div>" +
+             '<div style="font-size:10.5px;color:#9ca3af;margin:-4px 0 6px;">' +
+             seEsc(p.doc || "") + "</div>";
+    }).join("") + "</details>";
+}
+
+function seOnParamChange(el) {
+  var method = seRecMethod();
+  seRecParams[method] = seRecParams[method] || {};
+  var name = el.getAttribute("data-param");
+  seRecParams[method][name] = el.type === "checkbox" ? el.checked : el.value;
+}
+
+function seRecOpts() {
+  // Recommendations skip classes the shapes you have already built in this
+  // session already target — se-ttl-output is exactly that Turtle.
+  var already = (document.getElementById("se-ttl-output") || {}).value || "";
+  var method = seRecMethod();
+  return { method: method, params: seRecParams[method] || {}, shacl: already };
 }
 function seShort(iri) {
   if (!iri) return "";
@@ -525,10 +626,7 @@ function seRecommendFromTTL() {
   var status = document.getElementById("se-recommend-status");
   status.textContent = "Analyzing...";
   try {
-    // Recommendations skip classes the shapes you have already built in this
-    // session already target — se-ttl-output is exactly that Turtle.
-    var already = (document.getElementById("se-ttl-output") || {}).value || "";
-    var result = window.ontoink.recommendShapes(ttl, { method: seRecMethod(), shacl: already });
+    var result = window.ontoink.recommendShapes(ttl, seRecOpts());
     seRenderRecommendations(result);
     status.textContent = result.shapes.length + " shape(s) recommended — " +
       result.stats.constraintsProposed + " constraint(s) total";
@@ -582,10 +680,8 @@ async function seRecommendFromEndpoint() {
     }
 
     status.textContent = "Analyzing " + triples.length + " triple(s)...";
-    var already = (document.getElementById("se-ttl-output") || {}).value || "";
     var result = window.ontoink.recommendShapes(
-      { triples: triples, prefixes: {} },
-      { method: seRecMethod(), shacl: already }
+      { triples: triples, prefixes: {} }, seRecOpts()
     );
     seRenderRecommendations(result);
     status.textContent = result.shapes.length + " shape(s) recommended from " +
@@ -597,6 +693,14 @@ async function seRecommendFromEndpoint() {
 
 function seRenderRecommendations(result) {
   var el = document.getElementById("se-recommend-results");
+  // The engine sets `notice` when it could not run what was asked for and fell
+  // back. Showing it matters more than the results below it: without it the
+  // reader believes they are looking at the method they picked.
+  var info = document.getElementById("se-rec-method-info");
+  if (info && result.notice) {
+    info.innerHTML = '<div style="color:#a16207;">' + seEsc(result.notice) + "</div>" +
+                     info.innerHTML;
+  }
   seRecState.shapes = result.shapes || [];
   seRecState.current = 0;
   seRecState.fullTurtle = result.turtle || "";
@@ -750,6 +854,7 @@ buildDataLists();
 // Rebuild datalists when prefixes change
 var origSeRender = seRender;
 seRender = function() { origSeRender(); buildDataLists(); };
+seBuildMethodPicker();
 </script>
 
 ---

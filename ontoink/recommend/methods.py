@@ -1,26 +1,35 @@
-"""Shape induction methods folded in from the shape-recommender benchmark.
+"""Shape induction methods drawn from the shape-recommender benchmark.
 
-Two of the eight benchmarked methods earned their way in:
+The rule for what ships here is that the method must be published and citable.
+A recommendation a user cannot trace to a peer-reviewed method is one they
+cannot defend, so the reference travels with the method — see METHOD_SPECS,
+which is what the panel, the docs and ``GET /recommend-methods`` all read. The
+research project alongside this one also holds several unpublished experimental
+inducers; none are exposed here, whatever they score.
 
 ``baseline``
     Mihindukulasooriya et al. (2018), *RDF Shape Induction Using Knowledge Base
     Profiling*, SAC 2018. Frequency-based profiling of instance data. Best
-    F1/complexity ratio in the benchmark (mean F1 0.695 across five datasets,
-    ~0.95 on the three clean ones).
+    F1-to-complexity ratio of the methods benchmarked (mean F1 0.87 over six
+    datasets).
 
 ``astrea``
-    Cimmino, Fernández-Izquierdo & García-Castro (2020), ASTREA. Derives
-    constraints purely from OWL axioms, never looking at data. It emits nothing
-    on benchmarks whose ontologies carry no restrictions, but produced 39-58
-    useful constraints on the real MWO and NFDIcore ontologies — which is the
-    case that matters here, because documentation ontologies usually ship
-    without instance data.
+    Cimmino, Fernández-Izquierdo & García-Castro (2020), ASTREA, ESWC 2020.
+    Derives constraints purely from OWL axioms, never looking at data. It scores
+    near zero on the benchmark, which measures the wrong case for it: half those
+    datasets ship no ontology at all. On the real MWO and NFDIcore ontologies —
+    restrictions, no individuals — it produces 39-58 useful constraints where
+    baseline produces none, and that is the state documentation ontologies are
+    usually in.
 
-The other six either under-performed (``a1_reasoner`` over-predicts, precision
-~0.25), duplicated the baseline in practice (``a3_llm`` returned byte-identical
-output to baseline on both real ontologies, across four providers), or were
-never really implemented (``a2_active``, ``a4_counterfactual``, ``a5_path``).
-They stay in the research project until that changes.
+``shexer``
+    Fernández-Álvarez, Labra-Gayo & Gayo-Avello (2022), *Automatic extraction of
+    shapes using sheXer*, Knowledge-Based Systems 238. Best mean F1 of the three
+    (0.90), almost all of the margin coming from real, messy Wikidata where its
+    sh:pattern and length constraints recover structure a frequency counter
+    cannot express. Unlike the other two this is not a reimplementation — it
+    drives the authors' own library, because a reimplementation by someone else
+    is not the same method. That makes it the only optional dependency here.
 """
 
 from __future__ import annotations
@@ -212,14 +221,268 @@ def induce_astrea(g: Graph, target_classes: Optional[list] = None) -> ShapeSet:
     return out
 
 
+def shexer_available() -> bool:
+    """Is the sheXer library importable?"""
+    import importlib.util
+
+    return importlib.util.find_spec("shexer") is not None
+
+
+def induce_shexer(
+    g: Graph,
+    acceptance_threshold: float = 0.0,
+    instances_cap: int = -1,
+    detect_minimal_iri: bool = True,
+    infer_numeric_types: bool = True,
+    target_classes: Optional[list] = None,
+) -> ShapeSet:
+    """Run the sheXer library and project its SHACL output into our model.
+
+    This drives the authors' own implementation rather than reimplementing the
+    algorithm — a reimplementation by someone else is not the same method, and
+    for a tool that cites its sources that distinction matters.
+
+    sheXer's SHACL serialiser has three quirks that have to be normalised or
+    the output cannot be compared with anything. Each is a serialisation
+    detail, not a change to what sheXer inferred:
+
+    * it writes ``sh:dataType`` (capital T), which is not the SHACL term;
+    * it expresses an object-property range as ``sh:node <OtherShape>`` rather
+      than ``sh:class <OtherClass>``, so the referenced shape's
+      ``sh:targetClass`` has to be dereferenced;
+    * it emits a property shape for ``rdf:type`` itself, which is structural
+      rather than a constraint anyone authors.
+
+    Raises ImportError when the library is absent; callers degrade to a
+    different method rather than failing the build.
+    """
+    from shexer.consts import SHACL_TURTLE
+    from shexer.shaper import Shaper
+
+    namespaces = {str(ns): prefix for prefix, ns in g.namespaces()}
+    # sheXer's two targeting modes are mutually exclusive: `all_classes_mode`
+    # shapes everything it finds, and it must be off for `target_classes` to be
+    # honoured. Deriving it from the caller's intent rather than exposing it as
+    # a checkbox means the two can never be set to contradict each other.
+    shaper = Shaper(
+        rdflib_graph=g,
+        all_classes_mode=target_classes is None,
+        target_classes=list(target_classes) if target_classes else None,
+        namespaces_dict=namespaces,
+        disable_comments=True,
+        detect_minimal_iri=detect_minimal_iri,
+        infer_numeric_types_for_untyped_literals=infer_numeric_types,
+        instances_cap=instances_cap,
+    )
+    shacl_text = shaper.shex_graph(
+        string_output=True, output_format=SHACL_TURTLE,
+        acceptance_threshold=acceptance_threshold,
+    )
+    return _shexer_shacl_to_shape_set(shacl_text, target_classes)
+
+
+def _shexer_shacl_to_shape_set(shacl_text: str, target_classes=None) -> ShapeSet:
+    from rdflib.namespace import SH
+
+    sh_datatype_typo = URIRef("http://www.w3.org/ns/shacl#dataType")
+    parsed = Graph()
+    parsed.parse(data=shacl_text, format="turtle")
+
+    shape_target = {
+        node: str(target)
+        for node, _, target in parsed.triples((None, SH.targetClass, None))
+        if isinstance(node, URIRef) and isinstance(target, URIRef)
+    }
+    wanted = set(target_classes) if target_classes else None
+
+    out = ShapeSet()
+    for shape_node, target_class in shape_target.items():
+        if wanted is not None and target_class not in wanted:
+            continue
+        for _, _, prop in parsed.triples((shape_node, SH.property, None)):
+            path = next(parsed.objects(prop, SH.path), None)
+            if not isinstance(path, URIRef) or path == RDF.type:
+                continue
+
+            def emit(kind, value, message="sheXer"):
+                out.add(Constraint(
+                    target_class=target_class, path=str(path), kind=kind,
+                    value=str(value), confidence=1.0, method="shexer",
+                    message=message,
+                ))
+
+            for v in parsed.objects(prop, SH.minCount):
+                emit(ConstraintKind.MIN_COUNT, v)
+            for v in parsed.objects(prop, SH.maxCount):
+                emit(ConstraintKind.MAX_COUNT, v)
+            for pred in (SH.datatype, sh_datatype_typo):
+                for v in parsed.objects(prop, pred):
+                    emit(ConstraintKind.DATATYPE, v)
+            for v in parsed.objects(prop, SH["class"]):
+                emit(ConstraintKind.CLASS, v)
+                emit(ConstraintKind.NODE_KIND, SH_IRI)
+            for v in parsed.objects(prop, SH.node):
+                resolved = shape_target.get(v)
+                if resolved:
+                    emit(ConstraintKind.CLASS, resolved, "sheXer sh:node")
+                    emit(ConstraintKind.NODE_KIND, SH_IRI, "sheXer sh:node")
+            for v in parsed.objects(prop, SH.nodeKind):
+                emit(ConstraintKind.NODE_KIND, v)
+            for v in parsed.objects(prop, SH.pattern):
+                emit(ConstraintKind.PATTERN, v)
+            for v in parsed.objects(prop, SH.minLength):
+                emit(ConstraintKind.MIN_LENGTH, v)
+            for v in parsed.objects(prop, SH.maxLength):
+                emit(ConstraintKind.MAX_LENGTH, v)
+    return out
+
+
 #: Method name → callable. ``auto`` is handled by :func:`ontoink.recommend.induce`.
 METHODS = {
     "baseline": induce_baseline,
     "astrea": induce_astrea,
+    "shexer": induce_shexer,
 }
 
-METHOD_DESCRIPTIONS = {
-    "baseline": "Frequency profiling of instance data (Mihindukulasooriya et al. 2018)",
-    "astrea": "OWL axiom-driven generation, no instance data required (ASTREA-like)",
-    "auto": "Axioms first, then instance-data profiling where instances exist",
+#: Everything a UI needs to offer a method and its knobs, and everything a
+#: reader needs to know whose algorithm they are running.
+#:
+#: Only methods with a published, citable reference are shipped. The research
+#: project alongside this one also contains six unpublished experimental
+#: methods (a1-a6); they are deliberately not exposed here, because a
+#: recommendation a user cannot trace to a peer-reviewed method is a
+#: recommendation they cannot defend.
+METHOD_SPECS = {
+    "auto": {
+        "label": "Auto — axioms, then data",
+        "summary": "Runs astrea and baseline and merges them, recording which "
+                   "method proposed each constraint.",
+        "reference": None,
+        "needs": "either",
+        "params": [],
+    },
+    "baseline": {
+        "label": "Baseline — frequency profiling",
+        "summary": "Profiles how instances actually use each property. Best "
+                   "F1-to-complexity ratio of the methods benchmarked.",
+        "reference": {
+            "citation": "Mihindukulasooriya, N., Rashid, M. R. A., Rizzo, G., "
+                        "García-Castro, R., Corcho, O., & Torchiano, M. (2018). "
+                        "RDF Shape Induction Using Knowledge Base Profiling. "
+                        "SAC 2018.",
+            "doi": "10.1145/3167132.3167341",
+        },
+        "needs": "instances",
+        # `induce_baseline` also takes `max_samples`, and it is deliberately not
+        # listed here. It caps the sample values the profiler retains, which
+        # nothing in this method reads — datatype and class inference run off
+        # the full frequency counts. It changes no output, in this port or in
+        # the reference implementation, so offering it as a control would put a
+        # slider on the panel that does nothing.
+        "params": [
+            {"name": "min_count_threshold", "type": "float", "default": 0.9,
+             "min": 0.0, "max": 1.0, "step": 0.05,
+             "label": "Required coverage",
+             "doc": "Emit sh:minCount 1 when at least this fraction of a "
+                    "class's instances carry the property. Lower proposes "
+                    "more and is wrong more often."},
+        ],
+    },
+    "astrea": {
+        "label": "Astrea — OWL axiom-driven",
+        "summary": "Derives constraints from the T-Box alone, so it works on "
+                   "an ontology that ships no individuals at all.",
+        "reference": {
+            "citation": "Cimmino, A., Fernández-Izquierdo, A., & García-Castro, R. "
+                        "(2020). Astrea: Automatic Generation of SHACL Shapes "
+                        "from Ontologies. ESWC 2020.",
+            "doi": "10.1007/978-3-030-49461-2_29",
+        },
+        "needs": "axioms",
+        "params": [],
+    },
+    "shexer": {
+        "label": "sheXer — original implementation",
+        "summary": "Runs the sheXer library itself and projects its SHACL "
+                   "output. Contributes sh:pattern and length constraints the "
+                   "other methods do not derive.",
+        "reference": {
+            "citation": "Fernández-Álvarez, D., Labra-Gayo, J. E., & "
+                        "Gayo-Avello, D. (2022). Automatic extraction of "
+                        "shapes using sheXer. Knowledge-Based Systems, 238, "
+                        "107975.",
+            "doi": "10.1016/j.knosys.2021.107975",
+            "software": "https://github.com/DaniFdezAlvarez/shexer",
+        },
+        "needs": "instances",
+        "extra": "shexer",
+        "params": [
+            {"name": "acceptance_threshold", "type": "float", "default": 0.0,
+             "min": 0.0, "max": 1.0, "step": 0.05,
+             "label": "Acceptance threshold",
+             "doc": "sheXer keeps a constraint when its observed conformance "
+                    "is at least this. 0 keeps everything it inferred."},
+            {"name": "instances_cap", "type": "int", "default": -1,
+             "min": -1, "max": 100000, "step": 100,
+             "label": "Instances examined per class",
+             "doc": "Stop after this many instances of a class. -1 examines "
+                    "every one; a cap trades fidelity for speed on graphs too "
+                    "large to profile whole."},
+            {"name": "detect_minimal_iri", "type": "bool", "default": True,
+             "label": "Detect minimal IRI",
+             "doc": "Let sheXer shorten IRIs against the declared prefixes."},
+            {"name": "infer_numeric_types", "type": "bool", "default": True,
+             "label": "Infer numeric datatypes",
+             "doc": "Type untyped literals that look numeric."},
+        ],
+    },
 }
+
+METHOD_DESCRIPTIONS = {name: spec["summary"] for name, spec in METHOD_SPECS.items()}
+
+
+def method_catalogue() -> list:
+    """The method list a UI renders, with availability resolved."""
+    out = []
+    for name, spec in METHOD_SPECS.items():
+        entry = {"name": name, **{k: v for k, v in spec.items() if k != "extra"}}
+        entry["available"] = shexer_available() if name == "shexer" else True
+        if name == "shexer" and not entry["available"]:
+            entry["unavailable_reason"] = (
+                "sheXer is not installed — pip install 'ontoink[shexer]'"
+            )
+        out.append(entry)
+    return out
+
+
+def coerce_params(method: str, params: Optional[dict]) -> dict:
+    """Validate and type-coerce user-supplied hyperparameters.
+
+    Unknown keys are dropped rather than passed through: they would reach a
+    method as an unexpected keyword and turn a typo in a YAML file into a
+    build error.
+    """
+    spec = METHOD_SPECS.get(method, {})
+    declared = {p["name"]: p for p in spec.get("params", [])}
+    out = {}
+    for key, value in (params or {}).items():
+        meta = declared.get(key)
+        if meta is None:
+            continue
+        try:
+            if meta["type"] == "float":
+                value = float(value)
+            elif meta["type"] == "int":
+                value = int(value)
+            elif meta["type"] == "bool":
+                value = (value if isinstance(value, bool)
+                         else str(value).strip().lower() in ("1", "true", "yes", "on"))
+        except (TypeError, ValueError):
+            continue
+        if meta["type"] in ("float", "int"):
+            if "min" in meta:
+                value = max(meta["min"], value)
+            if "max" in meta:
+                value = min(meta["max"], value)
+        out[key] = value
+    return out

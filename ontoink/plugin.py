@@ -163,6 +163,27 @@ class OntoinkPlugin(BasePlugin):
                             config.get("use_directory_urls", True),
                         )
                     )
+
+        # Vendored rdf-validate-shacl bundle, shipped for exactly the same
+        # reason as the reasoner above: ontoink.js (loadShaclValidator) imports
+        # `<root>/assets/shacl/shacl.mjs` same-origin. Until 0.7.8 this file
+        # lived only in the demo docs tree and was absent from the wheel, so
+        # every `pip install ontoink` site — the MatWerk shape documentation
+        # included — 404'd on it and silently fell back to validateMinimal(),
+        # a cardinality-only checker. Keeping it in resources/ means the demo
+        # site and installed sites are served the same engine.
+        shacl_dir = res / "assets" / "shacl"
+        if shacl_dir.is_dir():
+            for p in sorted(shacl_dir.iterdir()):
+                if p.is_file():
+                    files.append(
+                        File(
+                            f"assets/shacl/{p.name}",
+                            str(res),
+                            config["site_dir"],
+                            config.get("use_directory_urls", True),
+                        )
+                    )
         return files
 
     def on_post_page(self, output, page, config):

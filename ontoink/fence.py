@@ -150,6 +150,10 @@ def _apply_shape_recommendation(cytoscape_data, shape_path, cfg):
 
     try:
         data_graph, shape_graph = _load_graphs(cytoscape_data, shape_path)
+        # `params:` carries the chosen method's hyperparameters. For `auto` it
+        # is keyed by sub-method (`params: {baseline: {...}, astrea: {...}}`),
+        # because the two would otherwise share one namespace.
+        params = cfg.get("params")
         cytoscape_data["shape_recommendations"] = recommend_payload(
             data_graph,
             method=str(cfg.get("method", "auto")),
@@ -157,6 +161,7 @@ def _apply_shape_recommendation(cytoscape_data, shape_path, cfg):
             shape_graph=shape_graph,
             only_uncovered=bool(cfg.get("only_uncovered", True)),
             max_shapes=int(cfg.get("max_shapes", 50) or 50),
+            params=params if isinstance(params, dict) else None,
         )
     except Exception as exc:
         log.warning("ontoink: shape recommendation failed — %s: %s", type(exc).__name__, exc)

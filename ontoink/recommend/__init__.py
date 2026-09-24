@@ -20,15 +20,26 @@ from typing import Dict, List, Optional
 from rdflib import Graph, URIRef
 from rdflib.namespace import RDFS
 
-from .methods import METHOD_DESCRIPTIONS, METHODS, induce_astrea, induce_baseline
+from .methods import (
+    METHOD_DESCRIPTIONS,
+    METHOD_SPECS,
+    METHODS,
+    coerce_params,
+    induce_astrea,
+    induce_baseline,
+    induce_shexer,
+    method_catalogue,
+    shexer_available,
+)
 from .profiler import declared_classes, instantiated_classes
 from .types import Constraint, ConstraintKind, Shape, ShapeSet
 from .writer import shape_iri, write_node_shape_skeleton, write_shape_set
 
 __all__ = [
     "Constraint", "ConstraintKind", "Shape", "ShapeSet",
-    "METHODS", "METHOD_DESCRIPTIONS",
-    "induce", "induce_astrea", "induce_baseline",
+    "METHODS", "METHOD_DESCRIPTIONS", "METHOD_SPECS",
+    "coerce_params", "method_catalogue", "shexer_available",
+    "induce", "induce_astrea", "induce_baseline", "induce_shexer",
     "load_shape_set", "recommend_payload", "shape_for_class",
     "shape_iri", "write_node_shape_skeleton", "write_shape_set",
 ]
@@ -42,10 +53,15 @@ def induce(
     min_confidence: float = 0.0,
     target_classes: Optional[List[str]] = None,
     skip_classes: Optional[List[str]] = None,
+    params: Optional[dict] = None,
 ) -> ShapeSet:
     """Run shape induction over ``g``.
 
-    ``method`` is ``auto`` (default), ``baseline`` or ``astrea``.
+    ``method`` is ``auto`` (default), ``baseline``, ``astrea`` or ``shexer``.
+    ``params`` carries that method's hyperparameters; see
+    :data:`ontoink.recommend.methods.METHOD_SPECS` for the declared knobs,
+    their defaults and their ranges. Unknown keys are ignored, so a typo in a
+    fence's YAML degrades to the default instead of failing the build.
 
     ``auto`` runs the axiom-driven pass and then the data-driven one, merging
     into a single ShapeSet. That ordering is deliberate: axioms are assertions
@@ -53,17 +69,28 @@ def induce(
     constraint the axiom-derived one is recorded first and keeps its
     provenance. It also means ``auto`` still produces something useful for the
     documentation ontologies that ship no instance data at all.
+
+    ``shexer`` raises ImportError when its optional library is absent; the
+    caller decides whether to fall back or report it.
     """
     method = (method or "auto").lower()
     skip = set(skip_classes or ())
 
     if method == "auto":
-        out = induce_astrea(g, target_classes=target_classes)
-        data_shapes = induce_baseline(g, target_classes=target_classes)
+        # `auto` composes two methods, so it takes each one's own parameters
+        # under its own key rather than a flat namespace they would collide in.
+        nested = params or {}
+        out = induce_astrea(
+            g, target_classes=target_classes,
+            **coerce_params("astrea", nested.get("astrea")))
+        data_shapes = induce_baseline(
+            g, target_classes=target_classes,
+            **coerce_params("baseline", nested.get("baseline")))
         for c in data_shapes.all_constraints():
             out.add(c)
     elif method in METHODS:
-        out = METHODS[method](g, target_classes=target_classes)
+        out = METHODS[method](
+            g, target_classes=target_classes, **coerce_params(method, params))
     else:
         raise ValueError(
             f"unknown recommendation method {method!r}; "
@@ -152,18 +179,38 @@ def recommend_payload(
     shape_graph: Optional[Graph] = None,
     only_uncovered: bool = True,
     max_shapes: int = 50,
+    params: Optional[dict] = None,
 ) -> Dict:
     """Run induction and package the result for the browser / API.
 
     ``only_uncovered`` skips classes the author's shapes graph already targets,
     which is almost always what a reader wants: suggestions for the gaps, not a
     second opinion on the shapes they already wrote.
+
+    The payload carries the whole method catalogue, not just the result, so the
+    page can offer the other methods and their knobs without a round trip.
     """
     already = covered_classes(shape_graph)
-    shape_set = induce(
-        g, method=method, min_confidence=min_confidence,
-        skip_classes=already if only_uncovered else None,
-    )
+    fallback_note = None
+    try:
+        shape_set = induce(
+            g, method=method, min_confidence=min_confidence,
+            skip_classes=already if only_uncovered else None,
+            params=params,
+        )
+    except ImportError:
+        # Only shexer can raise this, and only when its optional library is
+        # missing. Degrade to the default rather than losing the panel — and
+        # say so on the payload so the page can explain itself.
+        fallback_note = (
+            f"{method!r} needs the sheXer library "
+            f"(pip install 'ontoink[shexer]'); fell back to 'auto'."
+        )
+        method = "auto"
+        shape_set = induce(
+            g, method=method, min_confidence=min_confidence,
+            skip_classes=already if only_uncovered else None,
+        )
 
     ranked = sorted(
         shape_set.shapes.values(),
@@ -189,9 +236,11 @@ def recommend_payload(
         for c in shape.constraints:
             kept.add(c)
 
-    return {
+    payload = {
         "method": method,
         "methodDescription": METHOD_DESCRIPTIONS.get(method, ""),
+        "params": coerce_params(method, params) if method != "auto" else (params or {}),
+        "methods": method_catalogue(),
         "shapes": shapes_payload,
         "constraints": constraints_payload,
         "turtle": write_shape_set(kept),
@@ -204,3 +253,6 @@ def recommend_payload(
             "constraintsProposed": len(constraints_payload),
         },
     }
+    if fallback_note:
+        payload["notice"] = fallback_note
+    return payload

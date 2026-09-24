@@ -230,13 +230,22 @@ Each `ontoink` code block accepts these YAML options:
 
 ```yaml
 recommend_shapes:
-  method: auto          # auto (default) | baseline | astrea
+  method: auto          # auto (default) | baseline | astrea | shexer
   min_confidence: 0.8   # drop constraints supported by less evidence
   only_uncovered: true  # skip classes your shapes file already targets
   max_shapes: 50
+  params:               # the chosen method's hyperparameters
+    min_count_threshold: 0.75
 ```
 
-The methods come from the accompanying shape-induction benchmark. `baseline` profiles instance data (Mihindukulasooriya et al. 2018); `astrea` derives constraints from OWL axioms alone, which is what makes suggestions possible for documentation ontologies that ship no instances; `auto` runs both and merges them, recording on each constraint which method proposed it.
+Every method is a published one, and the panel names its paper:
+
+- **`baseline`** — frequency profiling of instance data (Mihindukulasooriya et al. 2018).
+- **`astrea`** — constraints from OWL axioms alone, which is what makes suggestions possible for documentation ontologies that ship no instances (Cimmino et al. 2020).
+- **`shexer`** — runs the sheXer library itself (Fernández-Álvarez et al. 2022) and contributes `sh:pattern` and length constraints the others do not derive. Needs `pip install 'ontoink[shexer]'`; without it the build falls back to `auto` and says so on the panel.
+- **`auto`** — the default. Runs `astrea` then `baseline` and merges them, recording on each constraint which method proposed it.
+
+The **Shapes** panel lets a reader switch method and adjust its hyperparameters without rebuilding, with the citation shown beside the picker. Full parameter tables, benchmark results and the reasoning behind which methods ship are in [Shape Recommendation](examples/shape-recommendation.md).
 
 You can also induce a shape for one class at a time: right-click a class node → **Induce shape from this class**. The proposed constraints appear as dashed edges whose opacity tracks their confidence, and clicking one accepts it into the Edit & Validate buffer.
 

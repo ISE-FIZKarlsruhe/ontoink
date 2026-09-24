@@ -49,6 +49,19 @@
 }
 .ontoink-container:fullscreen { background: #fff; }
 .ontoink-container:fullscreen .ov-canvas { height: calc(100vh - 60px) !important; }
+
+/* Every <select> in the plugin sets its own colour, but the dropdown list is
+   painted by the browser rather than by the select's box, and an <option> does
+   not reliably inherit from its parent. Under a dark site theme the options
+   took the page's white text onto a white popup and became unreadable — the
+   list looked empty. This is deliberately stated once for the whole container:
+   every select here is a light control on white, so every option must be too,
+   and fixing them one at a time leaves the next one to be found by a reader. */
+.ontoink-container select option {
+  color: var(--ov-text);
+  background-color: #fff;
+}
+.ontoink-container select option:disabled { color: #9ca3af; }
 .ov-canvas { background: #fff; }
 
 /* ── Toolbar ───────────────────────────────────────────────────── */
@@ -1053,6 +1066,77 @@
 .ov-rec-head:first-child { margin-top: 0; }
 .ov-rec-method { font-weight: 400; color: #6b7280; font-size: 11px; }
 .ov-rec-note { font-size: 12px; color: #6b7280; margin: 4px 0; }
+
+/* Method picker + hyperparameters.
+   Sits above the results because the method decides what the results mean:
+   astrea restates the ontology's own axioms, the data-driven methods report
+   what instances actually do. The citation is shown, not linked away to the
+   docs, so the reader can attribute a suggestion without leaving the page. */
+.ov-rec-method-bar {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: #fcfcfd;
+}
+.ov-rec-method-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+.ov-rec-method-pick select {
+  flex: 1;
+  font: inherit;
+  font-weight: 400;
+  padding: 3px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  color: #374151;
+  background: #fff;
+}
+/* Option colours are set once for the whole container — see .ontoink-container
+   select option near the top of this file. */
+.ov-rec-method-summary { font-size: 11.5px; color: #4b5563; margin: 6px 0 0; }
+.ov-rec-cite {
+  font-size: 11px;
+  color: #6b7280;
+  margin: 4px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid #e5e7eb;
+  line-height: 1.45;
+}
+.ov-rec-cite a { color: var(--ov-suggest-accent); }
+.ov-rec-notice { color: #a16207; }
+
+.ov-rec-params { margin-top: 8px; font-size: 12px; }
+.ov-rec-params > summary { cursor: pointer; color: var(--ov-suggest-accent); font-weight: 600; }
+.ov-rec-param {
+  display: grid;
+  grid-template-columns: 1fr 90px;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 8px 0;
+  font-size: 11.5px;
+  color: #374151;
+}
+.ov-rec-param input[type="number"] {
+  font: inherit;
+  padding: 2px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  text-align: right;
+}
+.ov-rec-param input[type="checkbox"] { justify-self: end; }
+.ov-rec-param-doc {
+  grid-column: 1 / -1;
+  font-style: normal;
+  font-size: 10.5px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
 
 .ov-rec-shape { margin: 6px 0; font-size: 12px; }
 .ov-rec-shape > summary { cursor: pointer; color: var(--ov-suggest-accent); font-weight: 600; }

@@ -65,10 +65,19 @@ api = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
 ]
+# The sheXer recommendation method drives the authors' own library rather than
+# reimplementing their algorithm, so it is the only recommendation method with a
+# dependency outside rdflib. Optional because the other three stay useful
+# without it: `method: shexer` falls back to `auto` and says so on the panel.
+# Pinned at 2.7, the version whose SHACL serialiser quirks methods.py normalises.
+shexer = [
+    "shexer>=2.7",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov",
     "owlready2>=0.25",
+    "shexer>=2.7",
 ]
 cluster = ["igraph>=0.11", "leidenalg>=0.10"]
 topic   = ["anthropic>=0.34", "openai>=1.40"]
@@ -110,6 +119,12 @@ ontoink = [
     # directory — every `pip install ontoink` site kept 404-ing on
     # /assets/reasoner/bundle.mjs, the exact failure 0.7.4 set out to fix.
     "resources/assets/reasoner/*",
+    # 0.7.8 — same failure mode, second asset. The rdf-validate-shacl bundle
+    # backing the in-browser "full SHACL Core" validation lived only in
+    # demo/docs/assets/ and never entered the wheel, so installed sites 404'd
+    # on /assets/shacl/shacl.mjs and silently degraded to the cardinality-only
+    # validateMinimal() fallback.
+    "resources/assets/shacl/*",
 ]
 
 [tool.pytest.ini_options]

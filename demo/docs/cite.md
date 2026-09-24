@@ -11,7 +11,7 @@ If you use OntoInk in your research, documentation, or publications, please cite
   author       = {Norouzi, Ebrahim},
   title        = {OntoInk: Interactive Ontology Visualization, SHACL Validation, and Live TTL Editing for MkDocs},
   year         = {2026},
-  version      = {0.7.7},
+  version      = {0.7.8},
   publisher    = {GitHub},
   url          = {https://github.com/ISE-FIZKarlsruhe/ontoink},
   note         = {Python package available at \url{https://pypi.org/project/ontoink/}}
@@ -22,7 +22,7 @@ Machine-readable metadata lives in [`CITATION.cff`](https://github.com/ISE-FIZKa
 
 ## APA
 
-> Norouzi, E. (2026). *OntoInk: Interactive Ontology Visualization, SHACL Validation, and Live TTL Editing for MkDocs* (Version 0.7.7) [Computer software]. GitHub. https://github.com/ISE-FIZKarlsruhe/ontoink
+> Norouzi, E. (2026). *OntoInk: Interactive Ontology Visualization, SHACL Validation, and Live TTL Editing for MkDocs* (Version 0.7.8) [Computer software]. GitHub. https://github.com/ISE-FIZKarlsruhe/ontoink
 
 ---
 

@@ -133,6 +133,78 @@ def test_recommendation_payload_is_embedded_in_the_page(tmp_path):
     assert any(c["kind"] == "minCount" for c in rec["constraints"])
 
 
+def test_fence_hyperparameters_reach_the_method(tmp_path):
+    """`params:` in the fence has to change what the built page ships.
+
+    The plumbing runs fence YAML → recommend_payload → coerce_params → method,
+    and a break anywhere in it is invisible: the page still renders, just with
+    the defaults the author thought they had overridden.
+    """
+    ontology = textwrap.dedent("""\
+        @prefix ex: <http://example.org/> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        ex:Person a owl:Class .
+        ex:a a ex:Person ; ex:name "A" ; ex:nick "aa" .
+        ex:b a ex:Person ; ex:name "B" ; ex:nick "bb" .
+        ex:c a ex:Person ; ex:name "C" .
+        ex:d a ex:Person ; ex:name "D" .
+        """)
+
+    def min_count_paths(where: Path, params_block: str) -> set:
+        page = textwrap.dedent("""\
+            ```ontoink
+            source: onto.ttl
+            recommend_shapes:
+              method: baseline
+            %s```
+            """) % params_block
+        site = build_site(where, page, ontology=ontology)
+        rec = _graph_payload(index_html(site))["shape_recommendations"]
+        return {c["path"] for c in rec["constraints"] if c["kind"] == "minCount"}
+
+    # `nick` is on 2 of 4 instances: required at 0.5, not at the 0.9 default.
+    assert "http://example.org/nick" not in min_count_paths(tmp_path / "default", "")
+    assert "http://example.org/nick" in min_count_paths(
+        tmp_path / "tuned", "  params:\n    min_count_threshold: 0.5\n")
+
+
+def test_a_misspelled_fence_parameter_does_not_break_the_build(tmp_path):
+    """It degrades to the default — an unknown keyword would fail the build."""
+    site = build_site(tmp_path, textwrap.dedent("""\
+        ```ontoink
+        source: onto.ttl
+        recommend_shapes:
+          method: baseline
+          params:
+            min_cout_threshold: 0.1
+        ```
+        """))
+    rec = _graph_payload(index_html(site))["shape_recommendations"]
+    assert rec["params"] == {}
+    assert rec["shapes"], "the diagram lost its suggestions over a typo"
+
+
+def test_the_page_ships_the_method_catalogue_for_its_picker(tmp_path):
+    """The panel offers other methods without a round trip, so it needs the list."""
+    site = build_site(tmp_path, textwrap.dedent("""\
+        ```ontoink
+        source: onto.ttl
+        recommend_shapes: true
+        ```
+        """))
+    rec = _graph_payload(index_html(site))["shape_recommendations"]
+    methods = {m["name"]: m for m in rec["methods"]}
+    assert set(methods) == {"auto", "baseline", "astrea", "shexer"}
+    assert methods["baseline"]["reference"]["doi"] == "10.1145/3167132.3167341"
+
+    html = index_html(site)
+    assert has_button(html, "toggleRecommendations")
+    for handler in ("setRecommendMethod", "setRecommendParam", "resetRecommendParams"):
+        assert f"{handler}: {handler}" in html, (
+            f"{handler} is not exported, so the CSP shim cannot dispatch it"
+        )
+
+
 def test_no_shapes_button_when_the_feature_is_off(tmp_path):
     """A button whose panel would be empty should not be rendered at all."""
     site = build_site(tmp_path, "```ontoink\nsource: onto.ttl\n```\n")
@@ -201,6 +273,22 @@ def test_cq_results_reach_the_build_report(tmp_path):
     # The per-question detail must be in the written file, not just the summary.
     questions = report["competencyQuestions"][0]["questions"]
     assert [q["passed"] for q in questions] == [True, False]
+
+
+def test_dropdown_options_are_readable_under_a_dark_site_theme(tmp_path):
+    """Every <select> the plugin ships must state its options' colours.
+
+    The dropdown list is painted by the browser rather than by the select's own
+    box, and an <option> does not reliably inherit its parent's colour. Under a
+    dark site theme the options took the page's white text onto a white popup:
+    the method picker opened to what looked like an empty list. A select is
+    styled by whoever adds it, so the rule is stated once for the container.
+    """
+    site = build_site(tmp_path, "```ontoink\nsource: onto.ttl\n```\n")
+    html = index_html(site)
+    assert ".ontoink-container select option" in html, (
+        "the container-wide option colour rule is missing from the shipped CSS"
+    )
 
 
 # ── build artefacts ───────────────────────────────────────────────────────

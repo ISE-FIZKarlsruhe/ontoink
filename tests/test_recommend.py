@@ -254,6 +254,184 @@ def test_payload_is_json_serialisable(data_graph):
     assert payload["stats"]["constraintsProposed"] == len(payload["constraints"])
 
 
+# ── the method catalogue and its hyperparameters ──────────────────────────
+
+def test_the_catalogue_states_availability_rather_than_assuming_it():
+    catalogue = {m["name"]: m for m in recommend.method_catalogue()}
+    assert set(catalogue) == {"auto", "baseline", "astrea", "shexer"}
+    for name in ("auto", "baseline", "astrea"):
+        assert catalogue[name]["available"] is True
+    # sheXer is an optional dependency, so its availability is resolved, not
+    # declared — a client that offers it blindly gets a failure at run time.
+    assert catalogue["shexer"]["available"] == recommend.shexer_available()
+    if not catalogue["shexer"]["available"]:
+        assert "ontoink[shexer]" in catalogue["shexer"]["unavailable_reason"]
+
+
+def test_the_catalogue_never_leaks_packaging_details():
+    """`extra` is how *we* install a method; it is not a fact about the method."""
+    for spec in recommend.method_catalogue():
+        assert "extra" not in spec
+
+
+def test_unknown_parameters_are_dropped_not_forwarded(data_graph):
+    """A typo in a fence's YAML must degrade to the default, not fail the build.
+
+    Forwarded, an unknown key reaches the method as an unexpected keyword
+    argument and turns a misspelling into a TypeError at build time.
+    """
+    assert recommend.coerce_params("baseline", {"min_cout_threshold": 0.5}) == {}
+    # …and the whole path tolerates it, not just the coercion helper.
+    recommend.recommend_payload(data_graph, method="baseline",
+                                params={"nonsense": 1, "min_count_threshold": 0.5})
+
+
+@pytest.mark.parametrize("given,expected", [
+    (5, 1.0),          # above the declared maximum
+    (-3, 0.0),         # below the declared minimum
+    ("0.25", 0.25),    # a string, as an HTML input would send it
+    ("nonsense", None),  # uncoercible: dropped rather than crashing
+])
+def test_parameters_are_coerced_and_clamped(given, expected):
+    got = recommend.coerce_params("baseline", {"min_count_threshold": given})
+    if expected is None:
+        assert got == {}
+    else:
+        assert got == {"min_count_threshold": expected}
+
+
+def test_the_baseline_threshold_reaches_the_algorithm():
+    """A knob the UI reports but the method ignores is worse than no knob."""
+    g = Graph()
+    g.parse(data="""
+        @prefix ex: <http://example.org/> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        ex:Person a owl:Class .
+        ex:a a ex:Person ; ex:name "A" ; ex:nick "aa" .
+        ex:b a ex:Person ; ex:name "B" ; ex:nick "bb" .
+        ex:c a ex:Person ; ex:name "C" .
+        ex:d a ex:Person ; ex:name "D" .
+    """, format="turtle")
+
+    def min_counts(threshold):
+        shapes = recommend.induce(g, method="baseline",
+                                  params={"min_count_threshold": threshold})
+        return {c.path for c in shapes.all_constraints()
+                if c.kind is ConstraintKind.MIN_COUNT}
+
+    # `nick` is on 2 of 4 instances: required at 0.5, not at the 0.9 default.
+    assert "http://example.org/nick" not in min_counts(0.9)
+    assert "http://example.org/nick" in min_counts(0.5)
+
+
+def test_auto_takes_its_parameters_keyed_by_sub_method():
+    """A flat namespace would let two composed methods collide on a name."""
+    g = Graph()
+    g.parse(data="""
+        @prefix ex: <http://example.org/> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        ex:Person a owl:Class .
+        ex:a a ex:Person ; ex:name "A" ; ex:nick "aa" .
+        ex:b a ex:Person ; ex:name "B" ; ex:nick "bb" .
+        ex:c a ex:Person ; ex:name "C" .
+        ex:d a ex:Person ; ex:name "D" .
+    """, format="turtle")
+
+    strict = recommend.induce(g, method="auto").keys()
+    loose = recommend.induce(
+        g, method="auto", params={"baseline": {"min_count_threshold": 0.5}}).keys()
+    assert loose > strict
+
+
+def test_the_payload_carries_the_catalogue_so_a_page_needs_no_round_trip(data_graph):
+    payload = recommend.recommend_payload(data_graph, method="baseline",
+                                          params={"min_count_threshold": 0.5})
+    assert payload["params"] == {"min_count_threshold": 0.5}
+    assert {m["name"] for m in payload["methods"]} == {"auto", "baseline",
+                                                       "astrea", "shexer"}
+
+
+def test_asking_for_shexer_without_it_falls_back_and_says_so(data_graph, monkeypatch):
+    """The degradation path, tested whether or not sheXer happens to be installed.
+
+    Skipping this when the library is present would mean the branch is only
+    ever exercised on machines that cannot exercise the method it guards — so
+    the ImportError is forced rather than waited for.
+    """
+    def missing(*args, **kwargs):
+        raise ImportError("No module named 'shexer'")
+
+    monkeypatch.setitem(recommend.METHODS, "shexer", missing)
+
+    payload = recommend.recommend_payload(data_graph, method="shexer")
+    assert payload["method"] == "auto"
+    assert "ontoink[shexer]" in payload["notice"]
+    assert payload["constraints"], "fell back but produced nothing"
+
+
+# ── sheXer, when its optional library is installed ────────────────────────
+
+pytest_shexer = pytest.mark.skipif(
+    not recommend.shexer_available(), reason="sheXer is not installed")
+
+
+@pytest_shexer
+def test_shexer_produces_constraints_and_records_its_provenance(data_graph):
+    shapes = recommend.induce(data_graph, method="shexer")
+    assert len(shapes) > 0
+    assert {c.method for c in shapes.all_constraints()} == {"shexer"}
+
+
+@pytest_shexer
+def test_shexer_agrees_with_baseline_on_a_clean_graph(data_graph):
+    """Both read the same instances; on unambiguous data they should concur.
+
+    Not an equality assertion — sheXer derives kinds the baseline never emits.
+    What must hold is that it does not *contradict* the baseline.
+    """
+    baseline = recommend.induce(data_graph, method="baseline").keys()
+    shexer = recommend.induce(data_graph, method="shexer").keys()
+    assert baseline <= shexer
+
+
+@pytest_shexer
+def test_shexer_output_is_normalised_into_the_shared_model(data_graph):
+    """The serialiser quirks must not reach the constraint model.
+
+    sheXer writes `sh:dataType` (capital T, not a SHACL term), expresses an
+    object range as `sh:node <OtherShape>` rather than `sh:class <Class>`, and
+    emits a property shape for `rdf:type`. All three are serialisation details;
+    none survives into what the panel and the drift diff compare.
+    """
+    shapes = recommend.induce(data_graph, method="shexer")
+    kinds = {c.kind for c in shapes.all_constraints()}
+    assert ConstraintKind.DATATYPE in kinds
+    assert all(k in set(ConstraintKind) for k in kinds)
+
+    paths = {c.path for c in shapes.all_constraints()}
+    assert "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" not in paths
+
+    # sh:node dereferenced to the shape's own target class, not left as a
+    # shape IRI: ex:owns points at ex:Dog, and no *Shape IRI may appear.
+    classes = {c.value for c in shapes.all_constraints()
+               if c.kind is ConstraintKind.CLASS}
+    assert "http://example.org/Dog" in classes
+    assert not any(v.endswith("Shape") for v in classes)
+
+
+@pytest_shexer
+def test_shexer_honours_target_classes(data_graph):
+    shapes = recommend.induce(data_graph, method="shexer",
+                              target_classes=["http://example.org/Person"])
+    assert set(shapes.shapes) == {"http://example.org/Person"}
+
+
+@pytest_shexer
+def test_shexer_written_turtle_round_trips(data_graph):
+    ttl = recommend.write_shape_set(recommend.induce(data_graph, method="shexer"))
+    Graph().parse(data=ttl, format="turtle")
+
+
 def test_load_shape_set_reads_authored_constraints():
     shapes = Graph()
     shapes.parse(data="""

@@ -75,17 +75,24 @@ Works from uploaded TTL data or directly from SPARQL endpoints. Navigate shapes 
 
 #### The `ontoink.recommend` package (0.7.7)
 
-The browser recommender above serves the SHACL Editor page. Since 0.7.7 the same job is also done at build time by `ontoink/recommend/`, ported from a benchmark that compared eight shape-induction methods on five datasets plus two real ontologies (MWO, NFDIcore). Two methods earned their way in:
+The browser recommender above serves the SHACL Editor page. Since 0.7.7 the same job is also done at build time by `ontoink/recommend/`, drawn from a benchmark that compared shape-induction methods on six datasets plus two real ontologies (MWO, NFDIcore).
 
-| Method | Reads | Why it is here |
-|:-------|:------|:---------------|
-| `baseline` | instance data | Best F1-to-complexity ratio in the benchmark (mean F1 0.695; ~0.95 on the three clean datasets). Faithful reimplementation of Mihindukulasooriya et al. (2018). |
-| `astrea` | OWL axioms only | Emits nothing on benchmarks whose ontologies carry no restrictions, but produced 39–58 useful constraints on MWO and NFDIcore. Documentation ontologies usually ship no individuals, so this is the case that matters most here. |
-| `auto` | both | The default. Axioms first — they are assertions the author made on purpose — then instance data, merged and deduplicated on the `(class, path, kind, value)` identity tuple. |
+**The rule for what ships: published, citable methods only.** A recommendation a user cannot trace to a peer-reviewed method is one they cannot defend in review, so the method's paper travels with it — into the panel, the API catalogue and the docs. The research project alongside this one contains several unpublished experimental inducers; none of them are exposed here, whatever they score.
 
-The six methods left in the research project were excluded on evidence, not taste: the reasoner-aware method over-predicted (precision ~0.25); the LLM-augmented one produced output byte-identical to the baseline on both real ontologies across four providers, so its benchmark win exists only on a purpose-built identifiers dataset; and the active-learning, counterfactual and property-path methods were partly unimplemented against their own docstrings.
+| Method | Reads | Reference | Mean F1 |
+|:-------|:------|:----------|:--------|
+| `baseline` | instance data | Mihindukulasooriya et al. (2018), SAC. [10.1145/3167132.3167341](https://doi.org/10.1145/3167132.3167341) | 0.871 |
+| `astrea` | OWL axioms only | Cimmino et al. (2020), ESWC. [10.1007/978-3-030-49461-2_29](https://doi.org/10.1007/978-3-030-49461-2_29) | 0.148 |
+| `shexer` | instance data | Fernández-Álvarez et al. (2022), KBS 238. [10.1016/j.knosys.2021.107975](https://doi.org/10.1016/j.knosys.2021.107975) | **0.903** |
+| `auto` | both | Composition, not a method. The default. | 0.853 |
 
-Two design decisions are worth stating:
+`astrea`'s 0.148 is the benchmark measuring the wrong case for it, not a weak method: half these datasets ship no ontology, so an axiom-driven inducer has nothing to read. On MWO and NFDIcore — restrictions, no individuals — it produces 39–58 useful constraints where `baseline` produces none. That is the case documentation ontologies are actually in, and it is why `auto` runs the axiom pass first: axioms are assertions the author made on purpose, so when both passes propose the same constraint the axiom-derived one keeps its provenance.
+
+`shexer` is handled differently from the other two. `baseline` and `astrea` are reimplementations; `shexer` drives the authors' own library, because a reimplementation by someone else is not the same method and this package cites its sources. That makes it the only method with a dependency outside rdflib, so it is an optional extra (`pip install 'ontoink[shexer]'`) and asking for it without it installed degrades to `auto` with a notice rather than failing the build. Its SHACL serialiser needs three quirks normalised before its output can be compared with anything — `sh:dataType` with a capital T, object ranges expressed as `sh:node <OtherShape>` rather than `sh:class`, and a property shape for `rdf:type` itself — each a serialisation detail, none a change to what sheXer inferred.
+
+Every method also declares its hyperparameters — name, type, default, range and what each one does — in one table that the fence, the API's `GET /recommend-methods`, the diagram panel and the SHACL Editor all read. **Knobs that do not change the output are deliberately absent.** `induce_baseline` takes a `max_samples` argument that caps retained sample values, which nothing in the method reads; exposing it would put a control on the panel that moves and does nothing.
+
+Two more design decisions are worth stating:
 
 - **Evidence travels with the constraint.** The research writers computed a confidence per constraint and dropped it during serialisation, which left a consumer unable to distinguish a constraint backed by 45 of 45 instances from one backed by 9 of 10. Emitted shapes now carry `sh:description` plus `oi:confidence`, `oi:support`, `oi:population` and `oi:method`. These are annotations — a SHACL processor ignores them, so the output is still a plain shapes graph you can hand to `pyshacl` unchanged.
 - **Nothing is written on the user's behalf.** A suggestion can be copied, or appended to the Edit & Validate buffer, and that is where it stops. The proposal has to survive the user pressing *Validate* before they decide to keep it; a recommender that edits source files is one that has to be right every time.

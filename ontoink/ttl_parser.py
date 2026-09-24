@@ -3369,8 +3369,31 @@ def _compute_metrics(
     }
 
 
+def _consistency_enabled() -> bool:
+    """Whether the HermiT consistency check should run for this build.
+
+    The check spawns a JVM through owlready2 and, on documentation-sized
+    fences, costs far more than the rest of the pipeline put together — so it
+    has to be switchable. ``ONTOINK_CONSISTENCY`` is the explicit control;
+    ``ONTOINK_REASONER=none`` also disables it, because a user who asked for no
+    reasoning at all does not expect a reasoner to be started anyway. Note the
+    two variables are otherwise independent: ONTOINK_REASONER selects which
+    backend *materialises inferences*, which is a different feature from
+    checking the ontology for contradictions.
+    """
+    import os
+
+    explicit = os.environ.get("ONTOINK_CONSISTENCY")
+    if explicit is not None:
+        return explicit.strip().lower() not in {"off", "0", "false", "no", "none"}
+    return (os.environ.get("ONTOINK_REASONER") or "").strip().lower() != "none"
+
+
 def _check_consistency(g: Graph) -> dict:
     """Check ontology consistency using owlready2/HermiT."""
+    if not _consistency_enabled():
+        return {"status": "skipped", "message": "Consistency check disabled"}
+
     try:
         import owlready2
         import os

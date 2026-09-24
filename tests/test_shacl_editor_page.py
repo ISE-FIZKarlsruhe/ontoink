@@ -21,38 +21,18 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
+from .js_engine import build_engine, run_node
+
 ROOT = Path(__file__).resolve().parents[1]
-ONTOINK_JS = ROOT / "ontoink" / "resources" / "ontoink.js"
 EDITOR_PAGE = ROOT / "demo" / "docs" / "shacl-editor.md"
 
 pytestmark = pytest.mark.skipif(
     shutil.which("node") is None, reason="Node.js is not installed"
 )
-
-ENGINE_FUNCTIONS = [
-    "parseTtlMinimal", "tokenize", "_shortIri", "_indexTriples", "_isMeta",
-    "_isDatatypeIri", "_isLiteralTerm", "_literalDatatype",
-    "_instantiatedClasses", "_declaredClasses", "_profileClass",
-    "_constraint", "_constraintKey", "_mergeConstraints", "_addConstraint",
-    "_induceBaseline", "_induceAstrea", "_shapeIri", "_formatValue",
-    "_emitShape", "_coveredClassesFromTriples", "_labelFor", "recommendShapes",
-]
-
-ENGINE_CONSTANTS = "\n".join([
-    'var _RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";',
-    'var _RDFS = "http://www.w3.org/2000/01/rdf-schema#";',
-    'var _OWL = "http://www.w3.org/2002/07/owl#";',
-    'var _XSD = "http://www.w3.org/2001/XMLSchema#";',
-    'var _SH_IRI = "http://www.w3.org/ns/shacl#IRI";',
-    'var _META_NS = [_OWL, _RDF_TYPE.substring(0, _RDF_TYPE.lastIndexOf("#") + 1), _RDFS, "http://www.w3.org/ns/shacl#"];',
-    'var _NUMERIC_KINDS = {minCount:1,maxCount:1,minLength:1,maxLength:1,minInclusive:1,maxInclusive:1};',
-    'var _IRI_KINDS = {datatype:1,"class":1,nodeKind:1};',
-])
 
 # Minimal DOM: an id-keyed registry of plain objects, plus just enough of
 # document/window/navigator/Blob/URL for the page script's top-level init
@@ -100,19 +80,6 @@ var window = {};
 """
 
 
-def _extract_function(source: str, name: str) -> str:
-    start = source.index(f"function {name}(")
-    depth = 0
-    for i in range(source.index("{", start), len(source)):
-        if source[i] == "{":
-            depth += 1
-        elif source[i] == "}":
-            depth -= 1
-            if depth == 0:
-                return source[start:i + 1]
-    raise AssertionError(f"unbalanced braces while extracting {name}")
-
-
 def _page_script() -> str:
     text = EDITOR_PAGE.read_text(encoding="utf-8")
     blocks = re.findall(r"<script>(.*?)</script>", text, re.S)
@@ -123,14 +90,11 @@ def _page_script() -> str:
 @pytest.fixture(scope="module")
 def harness() -> str:
     """DOM stub + the shared engine + the page's own shipped script, in order."""
-    js_source = ONTOINK_JS.read_text(encoding="utf-8")
-    engine = ENGINE_CONSTANTS + "\n" + "\n".join(
-        _extract_function(js_source, n) for n in ENGINE_FUNCTIONS
-    )
     return "\n".join([
         DOM_STUB,
-        engine,
-        "window.ontoink = { recommendShapes: recommendShapes };",
+        build_engine(),
+        "window.ontoink = { recommendShapes: recommendShapes,"
+        " recommendMethods: methodCatalogue };",
         _page_script(),
     ])
 
@@ -155,17 +119,13 @@ ex:fido a ex:Dog .
 """
 
 
-def _run(harness: str, tail: str, tmp_path) -> dict:
-    script_path = tmp_path / "run.js"
-    script_path.write_text(harness + "\n" + tail, encoding="utf-8")
-    proc = subprocess.run(
-        ["node", str(script_path)], capture_output=True, text=True,
-    )
+def _run(harness: str, tail: str) -> dict:
+    proc = run_node(harness + "\n" + tail)
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout.strip().splitlines()[-1])
 
 
-def test_analyze_and_recommend_populates_results(harness, tmp_path):
+def test_analyze_and_recommend_populates_results(harness):
     """The button a reader actually clicks must reach the shared engine."""
     tail = f"""
       document.getElementById("se-recommend-ttl").value = {json.dumps(TTL_FIXTURE)};
@@ -178,25 +138,25 @@ def test_analyze_and_recommend_populates_results(harness, tmp_path):
         resultsHtmlNonEmpty: document.getElementById("se-recommend-results").innerHTML.length > 0
       }}));
     """
-    out = _run(harness, tail, tmp_path)
+    out = _run(harness, tail)
     assert out["shapeCount"] > 0, out
     assert out["firstClass"] == "http://example.org/Person"
     assert out["resultsHtmlNonEmpty"] is True
     assert "recommended" in out["status"]
 
 
-def test_empty_input_shows_an_alert_not_a_crash(harness, tmp_path):
+def test_empty_input_shows_an_alert_not_a_crash(harness):
     tail = """
       document.getElementById("se-recommend-ttl").value = "";
       var threw = false;
       try { seRecommendFromTTL(); } catch (e) { threw = true; }
       console.log(JSON.stringify({ threw: threw }));
     """
-    out = _run(harness, tail, tmp_path)
+    out = _run(harness, tail)
     assert out["threw"] is False
 
 
-def test_astrea_method_selection_reaches_the_engine(harness, tmp_path):
+def test_astrea_method_selection_reaches_the_engine(harness):
     """The method <select> must actually change what gets induced."""
     axioms_only = """
         @prefix ex: <http://example.org/> .
@@ -219,14 +179,14 @@ def test_astrea_method_selection_reaches_the_engine(harness, tmp_path):
       var astreaShapes = seRecState.shapes.length;
       console.log(JSON.stringify({{ baselineShapes: baselineShapes, astreaShapes: astreaShapes }}));
     """
-    out = _run(harness, tail, tmp_path)
+    out = _run(harness, tail)
     # No instances anywhere in this fixture: baseline (data-driven) must find
     # nothing, astrea (axiom-driven) must find the someValuesFrom restriction.
     assert out["baselineShapes"] == 0, out
     assert out["astreaShapes"] > 0, out
 
 
-def test_accept_and_edit_adds_a_real_shape_to_the_builder(harness, tmp_path):
+def test_accept_and_edit_adds_a_real_shape_to_the_builder(harness):
     tail = f"""
       document.getElementById("se-recommend-ttl").value = {json.dumps(TTL_FIXTURE)};
       seRecommendFromTTL();
@@ -238,13 +198,102 @@ def test_accept_and_edit_adds_a_real_shape_to_the_builder(harness, tmp_path):
         turtleContainsTargetClass: document.getElementById("se-ttl-output").value.indexOf("http://example.org/Person") >= 0
       }}));
     """
-    out = _run(harness, tail, tmp_path)
+    out = _run(harness, tail)
     assert out["added"] == 1
     assert out["turtleContainsNodeShape"] is True
     assert out["turtleContainsTargetClass"] is True
 
 
-def test_download_produces_a_ttl_file_with_a_prefix_header(harness, tmp_path):
+PARTIAL_COVERAGE_TTL = """
+@prefix ex: <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+ex:Person a owl:Class .
+ex:a a ex:Person ; ex:name "A" ; ex:nick "aa" ; ex:email "a@x" .
+ex:b a ex:Person ; ex:name "B" ; ex:nick "bb" .
+ex:c a ex:Person ; ex:name "C" .
+ex:d a ex:Person ; ex:name "D" .
+"""
+
+
+def test_the_method_picker_is_built_from_the_engine_catalogue(harness):
+    """A hard-coded <option> list silently omits methods added to the engine."""
+    tail = """
+      var opts = document.getElementById("se-rec-method").innerHTML;
+      var names = (window.ontoink.recommendMethods() || []).map(function (m) { return m.name; });
+      console.log(JSON.stringify({
+        names: names,
+        allPresent: names.every(function (n) { return opts.indexOf('value="' + n + '"') >= 0; }),
+        shexerDisabled: /value="shexer"[^>]*disabled/.test(opts)
+      }));
+    """
+    out = _run(harness, tail)
+    assert set(out["names"]) == {"auto", "baseline", "astrea", "shexer"}, out
+    assert out["allPresent"] is True, out
+    # sheXer is a Python library; the browser build must offer it as unavailable
+    # rather than as a choice that fails when clicked.
+    assert out["shexerDisabled"] is True, out
+
+
+def test_the_citation_for_the_chosen_method_is_shown(harness):
+    tail = """
+      var out = {};
+      ["baseline", "astrea"].forEach(function (m) {
+        document.getElementById("se-rec-method").value = m;
+        seOnMethodChange();
+        out[m] = document.getElementById("se-rec-method-info").innerHTML;
+      });
+      console.log(JSON.stringify(out));
+    """
+    out = _run(harness, tail)
+    assert "Mihindukulasooriya" in out["baseline"] and "10.1145/3167132.3167341" in out["baseline"]
+    assert "Cimmino" in out["astrea"] and "10.1007/978-3-030-49461-2_29" in out["astrea"]
+
+
+def test_hyperparameters_render_and_change_the_result(harness):
+    """The knob must reach the engine, not just appear on the page."""
+    tail = f"""
+      document.getElementById("se-recommend-ttl").value = {json.dumps(PARTIAL_COVERAGE_TTL)};
+      document.getElementById("se-rec-method").value = "baseline";
+      seOnMethodChange();
+      var paramsHtml = document.getElementById("se-rec-params").innerHTML;
+
+      seRecommendFromTTL();
+      var strictCount = seRecState.constraintsByClass["http://example.org/Person"].length;
+
+      seOnParamChange({{
+        getAttribute: function () {{ return "min_count_threshold"; }},
+        type: "number", value: "0.1"
+      }});
+      seRecommendFromTTL();
+      var looseCount = seRecState.constraintsByClass["http://example.org/Person"].length;
+
+      console.log(JSON.stringify({{
+        rendersThreshold: paramsHtml.indexOf("min_count_threshold") >= 0,
+        strictCount: strictCount, looseCount: looseCount
+      }}));
+    """
+    out = _run(harness, tail)
+    assert out["rendersThreshold"] is True, out
+    # `nick` is on 2 of 4 and `email` on 1 of 4, so dropping the threshold from
+    # the 0.9 default to 0.1 must add sh:minCount for both.
+    assert out["looseCount"] > out["strictCount"], out
+
+
+def test_astrea_offers_no_knobs_because_it_has_none(harness):
+    """An empty menu is the honest rendering for a method with no parameters."""
+    tail = """
+      document.getElementById("se-rec-method").value = "astrea";
+      seOnMethodChange();
+      console.log(JSON.stringify({
+        params: document.getElementById("se-rec-params").innerHTML
+      }));
+    """
+    out = _run(harness, tail)
+    assert out["params"] == "", out
+
+
+def test_download_produces_a_ttl_file_with_a_prefix_header(harness):
     """A downloaded single shape must be a standalone, valid Turtle file.
 
     _emitShape (and its Python twin, write_node_shape_skeleton) deliberately
@@ -261,12 +310,12 @@ def test_download_produces_a_ttl_file_with_a_prefix_header(harness, tmp_path):
         filename: _downloads[0] && _downloads[0].download
       }}));
     """
-    out = _run(harness, tail, tmp_path)
+    out = _run(harness, tail)
     assert out["downloadCount"] == 1
     assert out["filename"].endswith(".ttl")
 
 
-def test_already_covered_classes_are_not_re_recommended(harness, tmp_path):
+def test_already_covered_classes_are_not_re_recommended(harness):
     """Accepting a shape must narrow what gets recommended next.
 
     seRecommendFromTTL reads se-ttl-output — the builder's own rendered
@@ -285,6 +334,6 @@ def test_already_covered_classes_are_not_re_recommended(harness, tmp_path):
         personGoneAfter: classesAfter.indexOf("http://example.org/Person") === -1
       }}));
     """
-    out = _run(harness, tail, tmp_path)
+    out = _run(harness, tail)
     assert out["acceptedWasPerson"] is True
     assert out["personGoneAfter"] is True

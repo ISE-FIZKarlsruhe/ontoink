@@ -152,7 +152,65 @@ def test_apostrophe_in_a_value_survives_escaping(shim_source):
     ]
 
 
+# ── the shapes-panel method picker ────────────────────────────────────────
+
+def test_this_dot_value_and_this_dot_checked_reach_the_handler(shim_source):
+    """The knob inputs pass their own value; the shim must read it off the element."""
+    script = shim_source + """
+      var el = { value: "0.75", checked: true };
+      function args(stmt) {
+        var m = stmt.match(/^ontoink\\.([A-Za-z_$][\\w$]*)\\(([\\s\\S]*)\\)$/);
+        return _oiSplitTop(m[2], ",").map(function (a) { return _oiArg(a, el, null); });
+      }
+      console.log(JSON.stringify({
+        number: args("ontoink.setRecommendParam('g0','min_count_threshold',this.value)"),
+        checkbox: args("ontoink.setRecommendParam('g0','detect_minimal_iri',this.checked)"),
+        grouped: args("ontoink.setRecommendParam('g0','min_count_threshold',this.value,'baseline')")
+      }));
+    """
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    got = json.loads(out.stdout)
+    assert got["number"] == ["g0", "min_count_threshold", "0.75"]
+    assert got["checkbox"] == ["g0", "detect_minimal_iri", True]
+    # `auto` composes two methods, so its knobs carry a fourth argument naming
+    # which one they belong to — a call shape nothing else in the UI emits.
+    assert got["grouped"] == ["g0", "min_count_threshold", "0.75", "baseline"]
+
+
 # ── the contract the emitters rely on ─────────────────────────────────────
+
+def test_every_handler_ontoink_js_emits_is_exported(shim_source):
+    """The same dead-button contract as below, for handlers the JS emits itself.
+
+    `fence.py` is not the only emitter: panels rendered in the browser build
+    their own `data-oi-on*` attributes, and the method picker and hyperparameter
+    menu are entirely of that kind. A handler missing from the api object leaves
+    a control that renders, accepts clicks and does nothing.
+    """
+    import re
+
+    source = ONTOINK_JS.read_text(encoding="utf-8")
+    api_start = source.index("var api = {")
+    api_block = source[api_start:source.index("\n  };", api_start)]
+
+    # Scan a window after each `data-oi-on*=` rather than trying to match the
+    # attribute as one quoted literal. These attributes are assembled by string
+    # concatenation — `'...setRecommendMethod(\'' + id + "',this.value)"' — so
+    # the handler name and its arguments routinely straddle several JS string
+    # pieces, and a single-literal regex finds almost none of them.
+    handlers = set()
+    for m in re.finditer(r"data-oi-on\w+=", source):
+        window = source[m.end():m.end() + 300]
+        handlers.update(re.findall(r"ontoink\.([A-Za-z_$][\w$]*)\(", window))
+
+    for expected in ("setRecommendMethod", "setRecommendParam",
+                     "resetRecommendParams", "toggleRecommendations"):
+        assert expected in handlers, f"{expected} is no longer emitted anywhere"
+    assert len(handlers) > 20, f"the scan found only {len(handlers)} handlers"
+
+    missing = [h for h in sorted(handlers) if f"{h}:" not in api_block]
+    assert not missing, f"handlers emitted by ontoink.js but not exported: {missing}"
+
 
 def test_every_handler_the_fence_emits_is_exported(shim_source):
     """A handler missing from the api object is a silently dead button."""

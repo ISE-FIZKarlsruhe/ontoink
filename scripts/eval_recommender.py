@@ -22,7 +22,8 @@ research prototype's record, and overwriting them would destroy the only copy.
 Usage::
 
     python scripts/eval_recommender.py
-    python scripts/eval_recommender.py --out some/dir --methods baseline,auto
+    python scripts/eval_recommender.py --methods baseline,shexer
+    python scripts/eval_recommender.py --datasets foaf-toy,identifiers --out /tmp/x
 """
 
 from __future__ import annotations
@@ -47,24 +48,30 @@ from ontoink import recommend  # noqa: E402
 DEFAULT_SR = REPO / "shape-recommender"
 DEFAULT_OUT = DEFAULT_SR / "results" / "ontoink-port"
 
-#: dataset -> (data, ontology or None, gold). Mirrors benchmarks/grid.yaml.
-BENCHMARKS = {
-    "foaf-toy": ("data/benchmarks/foaf-toy/data.ttl",
-                 "data/benchmarks/foaf-toy/ontology.ttl",
-                 "data/gold/foaf-toy.ttl"),
-    "lubm-small": ("data/benchmarks/lubm-small/data.ttl",
-                   "data/benchmarks/lubm-small/ontology.ttl",
-                   "data/gold/lubm-small.ttl"),
-    "identifiers": ("data/benchmarks/identifiers/data.ttl",
-                    None,
-                    "data/gold/identifiers.ttl"),
-    "lubm-1u": ("data/benchmarks/synthetic/lubm-1u/data.ttl",
-                "data/benchmarks/synthetic/lubm-1u/ontology.ttl",
-                "data/gold/lubm-1u.ttl"),
-    "wd-q-subset": ("data/benchmarks/real/wd-q-subset/data.ttl",
-                    "data/benchmarks/real/wd-q-subset/ontology.ttl",
-                    "data/gold/wd-q-subset.ttl"),
-}
+
+def load_benchmarks(sr: Path) -> dict:
+    """Read the dataset list from the research project's own ``grid.yaml``.
+
+    This used to be a copy of that list, maintained by hand — and it went stale
+    the first time the project changed: it still named ``wd-q-subset``, a
+    47-triple stub retired in favour of the 16k-triple ``wd-humans``, and had
+    never heard of ``dbpedia-scientists``. A duplicated benchmark list reports
+    coverage it does not have, so read the original.
+
+    Returns dataset -> (data, ontology or None, gold), relative to ``sr``.
+    """
+    import yaml
+
+    grid = sr / "benchmarks" / "grid.yaml"
+    if not grid.is_file():
+        return {}
+    cfg = yaml.safe_load(grid.read_text(encoding="utf-8")) or {}
+    out = {}
+    for ds in cfg.get("datasets", []):
+        name, data, gold = ds.get("name"), ds.get("data"), ds.get("gold")
+        if name and data and gold:
+            out[name] = (data, ds.get("ontology"), gold)
+    return out
 
 
 def score(predicted_keys, gold_keys) -> dict:
@@ -118,9 +125,9 @@ def load(path: Path) -> Graph:
     return g
 
 
-def run(sr: Path, out: Path, methods: list[str]) -> dict:
+def run(sr: Path, out: Path, methods: list[str], benchmarks: dict) -> dict:
     rows = []
-    for dataset, (data_rel, onto_rel, gold_rel) in BENCHMARKS.items():
+    for dataset, (data_rel, onto_rel, gold_rel) in benchmarks.items():
         data_path, gold_path = sr / data_rel, sr / gold_rel
         if not data_path.is_file() or not gold_path.is_file():
             print(f"  ! skipping {dataset}: missing data or gold")
@@ -138,15 +145,21 @@ def run(sr: Path, out: Path, methods: list[str]) -> dict:
                 merged.add(triple)
 
         for method in methods:
-            # `baseline` reads instance data only, so the ontology is noise for
-            # it; the axiom-driven methods need it. Recording which graph each
-            # method saw is the point — it is the largest single source of
-            # variation between runs.
-            use_merged = method != "baseline"
+            # A method that reads instance data only takes the data graph; the
+            # ontology is noise to it. The axiom-driven ones need the merged
+            # graph. Which graph each method saw is recorded rather than
+            # assumed — it is the largest single source of variation between
+            # runs of the same code.
+            needs = recommend.METHOD_SPECS.get(method, {}).get("needs")
+            use_merged = needs != "instances"
             graph = merged if use_merged else data_graph
             mode = ("data+ontology" if use_merged and has_ontology else "data-only")
 
-            predicted = recommend.induce(graph, method=method)
+            try:
+                predicted = recommend.induce(graph, method=method)
+            except ImportError as exc:
+                print(f"  ! skipping {method} on {dataset}: {exc}")
+                continue
             result = score(predicted.keys(), gold_keys)
             result.update(method=method, dataset=dataset, input_mode=mode,
                           n_triples=len(graph))
@@ -180,8 +193,11 @@ def main() -> int:
                         help="path to the sibling research project")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT,
                         help="output directory (never results/raw)")
-    parser.add_argument("--methods", default="baseline,astrea,auto",
-                        help="comma-separated induction methods")
+    parser.add_argument("--methods", default="",
+                        help="comma-separated induction methods "
+                             "(default: every available method plus auto)")
+    parser.add_argument("--datasets", default="",
+                        help="comma-separated subset of grid.yaml datasets")
     args = parser.parse_args()
 
     sr: Path = args.shape_recommender
@@ -197,24 +213,42 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+    benchmarks = load_benchmarks(sr)
+    if not benchmarks:
+        print(f"error: no datasets declared in {sr / 'benchmarks' / 'grid.yaml'}",
+              file=sys.stderr)
+        return 1
+    if args.datasets:
+        wanted = {d.strip() for d in args.datasets.split(",") if d.strip()}
+        unknown = wanted - set(benchmarks)
+        if unknown:
+            print(f"error: not in grid.yaml: {', '.join(sorted(unknown))}",
+                  file=sys.stderr)
+            return 1
+        benchmarks = {k: v for k, v in benchmarks.items() if k in wanted}
+
+    if args.methods:
+        methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+    else:
+        methods = [m["name"] for m in recommend.method_catalogue() if m["available"]]
     args.out.mkdir(parents=True, exist_ok=True)
     print(f"Evaluating ontoink {ontoink.__version__} against {resolved.name} "
-          f"({len(BENCHMARKS)} datasets x {len(methods)} methods)")
+          f"({len(benchmarks)} datasets x {len(methods)} methods: "
+          f"{', '.join(methods)})")
 
-    payload = run(sr, args.out, methods)
+    payload = run(sr, args.out, methods, benchmarks)
     write_summary(args.out, payload)
 
     by_method: dict[str, list[float]] = {}
-    print(f"\n{'dataset':<14}{'method':<10}{'input':<16}"
+    print(f"\n{'dataset':<21}{'method':<10}{'input':<16}"
           f"{'P':>7}{'R':>7}{'F1':>7}{'   pred/gold':>13}")
-    print("-" * 74)
+    print("-" * 81)
     for row in payload["results"]:
         by_method.setdefault(row["method"], []).append(row["f1"])
-        print(f"{row['dataset']:<14}{row['method']:<10}{row['input_mode']:<16}"
+        print(f"{row['dataset']:<21}{row['method']:<10}{row['input_mode']:<16}"
               f"{row['precision']:>7.3f}{row['recall']:>7.3f}{row['f1']:>7.3f}"
               f"{'   ' + str(row['n_predicted']) + '/' + str(row['n_gold']):>13}")
-    print("-" * 74)
+    print("-" * 81)
     for method, scores in by_method.items():
         print(f"  mean F1 {method:<10} {sum(scores) / len(scores):.4f}")
 

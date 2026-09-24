@@ -56,10 +56,14 @@ class RecommendRequest(BaseModel):
     ttl: str
     # Existing shapes, so the recommender can skip classes already covered.
     shacl: Optional[str] = None
-    method: str = "auto"          # auto | baseline | astrea
+    method: str = "auto"          # auto | baseline | astrea | shexer
     min_confidence: float = 0.0
     only_uncovered: bool = True
     max_shapes: int = 50
+    # Hyperparameters for the chosen method; for `auto`, keyed by sub-method.
+    # Declared knobs, defaults and ranges are in the /recommend-methods
+    # response. Unknown keys are ignored rather than rejected.
+    params: Optional[Dict[str, Any]] = None
 
 
 class TtlRequest(BaseModel):
@@ -192,7 +196,21 @@ def recommend_shapes(req: RecommendRequest) -> Dict[str, Any]:
         shape_graph=shape_graph,
         only_uncovered=req.only_uncovered,
         max_shapes=req.max_shapes,
+        params=req.params,
     )
+
+
+@app.get("/recommend-methods")
+def recommend_methods() -> Dict[str, Any]:
+    """The induction methods this server can run, with their knobs and sources.
+
+    Availability is resolved here rather than assumed: sheXer is an optional
+    dependency, so a client should ask instead of offering a method that will
+    fail.
+    """
+    from .recommend import method_catalogue
+
+    return {"methods": method_catalogue()}
 
 
 # ── Ontology dereference proxy ────────────────────────────────────────────

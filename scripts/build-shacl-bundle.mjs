@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /*
  * Build a same-origin ESM bundle of the rdf-validate-shacl SHACL engine for the
- * browser. Output: demo/docs/assets/shacl/shacl.mjs
+ * browser. Output: ontoink/resources/assets/shacl/shacl.mjs
  *
  * DEVELOPER-run, cross-platform (Windows/macOS/Linux). NOT run by CI or Docker.
- * The produced bundle is committed to the repo (under demo/docs/assets/shacl/)
+ * The produced bundle is committed to the repo (under ontoink/resources/assets/shacl/,
+ * so that it ships in the wheel and is copied into every built site by on_files)
  * so mkdocs serves it verbatim on GitHub Pages and in the Docker serve/all
  * modes. Re-run and commit the result when bumping the SHACL dependencies.
  *
@@ -17,7 +18,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT_DIR = join(ROOT, 'demo', 'docs', 'assets', 'shacl');
+const OUT_DIR = join(ROOT, 'ontoink', 'resources', 'assets', 'shacl');
 const OUT_FILE = join(OUT_DIR, 'shacl.mjs');
 
 // Thin browser entry: parse Turtle into an rdf-ext dataset and validate with
