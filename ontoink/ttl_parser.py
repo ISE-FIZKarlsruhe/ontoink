@@ -36,6 +36,14 @@ NODE_STYLES = {
     "Literal": ("ellipse", "#93D053"),
     "Datatype": ("diamond", "#93D053"),
     "SHACL Shape": ("round-rectangle", "#A5F3FC"),
+    # A property drawn as a node - which happens whenever it carries statements of its own,
+    # such as rdfs:domain, rdfs:range or rdfs:subPropertyOf. Without these two entries every
+    # such property fell through to "Individual", because the node-type decision was a
+    # two-way branch on membership of `classes`. Reported against the componency pattern,
+    # where all four object properties - has component, is component of, hasPart, isPartOf -
+    # were drawn as individuals despite being declared `rdf:type owl:ObjectProperty`.
+    "ObjectProperty": ("hexagon", "#BFDBFE"),
+    "DatatypeProperty": ("hexagon", "#BBF7D0"),
 }
 
 # Edge type → (line-style, line-color, arrow-shape, width)
@@ -196,6 +204,35 @@ def _detect_property_types(g: Graph) -> Tuple[Set[str], Set[str]]:
     for s, _, _ in g.triples((None, RDF.type, OWL.DatatypeProperty)):
         data_props.add(str(s))
     return obj_props, data_props
+
+
+def _node_kind(iri, classes, obj_props=(), data_props=()) -> str:
+    """What a resource drawn as a node is: a class, a property, or an individual.
+
+    The decision used to be ``"Class" if iri in classes else "Individual"``, written in four
+    places. That is only correct in an ontology with no properties in it: a property that
+    carries statements of its own - ``rdfs:domain``, ``rdfs:range``, ``rdfs:subPropertyOf`` -
+    becomes a node like anything else, is not in ``classes``, and so was drawn and labelled as
+    an individual.
+
+    It showed up in the componency pattern, where all four object properties were drawn as
+    individuals while being declared ``rdf:type owl:ObjectProperty`` three lines above. The
+    information was never missing: ``_detect_property_types`` had already collected both sets
+    and the caller simply did not consult them.
+
+    Classes win over properties when a resource is somehow both, because a punned IRI drawn as
+    a rectangle is the lesser surprise - and because ``classes`` is also what the subclass
+    edges are built from, so disagreeing with it would draw a hierarchy between nodes that are
+    not shown as classes.
+    """
+    key = str(iri)
+    if key in classes:
+        return "Class"
+    if key in obj_props:
+        return "ObjectProperty"
+    if key in data_props:
+        return "DatatypeProperty"
+    return "Individual"
 
 
 # Properties whose object on a restriction bnode acts as the "filler" --
@@ -805,10 +842,10 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
         if s_id not in nodes and isinstance(s, URIRef):
             s_str = str(s)
             source_name, color = detect_source(s_str)
-            node_type = "Class" if s_str in classes else "Individual"
+            node_type = _node_kind(s_str, classes, obj_props, data_props)
             shape = NODE_STYLES[node_type][0]
-            if node_type == "Individual":
-                color = NODE_STYLES["Individual"][1]
+            if node_type != "Class":
+                color = NODE_STYLES[node_type][1]
             nodes[s_id] = {
                 "data": {
                     "id": s_id,
@@ -827,10 +864,10 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
             if o_id not in nodes:
                 o_str = str(o)
                 source_name, color = detect_source(o_str)
-                node_type = "Class" if o_str in classes else "Individual"
+                node_type = _node_kind(o_str, classes, obj_props, data_props)
                 shape = NODE_STYLES[node_type][0]
-                if node_type == "Individual":
-                    color = NODE_STYLES["Individual"][1]
+                if node_type != "Class":
+                    color = NODE_STYLES[node_type][1]
                 nodes[o_id] = {
                     "data": {
                         "id": o_id,
@@ -921,10 +958,10 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
         if subj_id in nodes:
             continue
         source_name, color = detect_source(subj_iri)
-        node_type = "Class" if subj_iri in classes else "Individual"
+        node_type = _node_kind(subj_iri, classes, obj_props, data_props)
         shape = NODE_STYLES[node_type][0]
-        if node_type == "Individual":
-            color = NODE_STYLES["Individual"][1]
+        if node_type != "Class":
+            color = NODE_STYLES[node_type][1]
         nodes[subj_id] = {
             "data": {
                 "id": subj_id,
@@ -1034,10 +1071,10 @@ def parse_ttl_to_cytoscape(data_path: str, shape_path: str = None, policy: Optio
             target_id = _node_id(URIRef(filler_iri))
             if target_id not in nodes:
                 source_name, color = detect_source(filler_iri)
-                node_type = "Class" if filler_iri in classes else "Individual"
+                node_type = _node_kind(filler_iri, classes, obj_props, data_props)
                 shape = NODE_STYLES[node_type][0]
-                if node_type == "Individual":
-                    color = NODE_STYLES["Individual"][1]
+                if node_type != "Class":
+                    color = NODE_STYLES[node_type][1]
                 nodes[target_id] = {
                     "data": {
                         "id": target_id,

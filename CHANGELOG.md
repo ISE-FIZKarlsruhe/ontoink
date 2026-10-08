@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.9] - 2026-10-08
+
+### Fixed — object and datatype properties were drawn as individuals
+
+- **A property drawn as a node was labelled an individual.** Reported against the componency content pattern, where all four object properties — `has component`, `is component of`, `hasPart`, `isPartOf` — appeared as individuals while being declared `rdf:type owl:ObjectProperty` three lines above in the same file. The pattern was correct; the visualisation was not. The node-type decision was a two-way branch, `node_type = "Class" if iri in classes else "Individual"`, written out at four call sites in `ttl_parser.py` — correct only for an ontology with no properties in it. A property that carries statements of its own (`rdfs:domain`, `rdfs:range`, `rdfs:subPropertyOf`) becomes a node like anything else, is not a member of `classes`, and so fell through to "Individual". Nothing was missing from the data: `_detect_property_types` had already collected both sets and the callers did not consult them. There is now one `_node_kind()` helper used at all four sites, plus `ObjectProperty` and `DatatypeProperty` entries in `NODE_STYLES` so a property has its own shape and colour (a hexagon, blue for object and green for datatype). A class still wins when an IRI is somehow both, because `classes` is what the subclass edges are built from and disagreeing with it would draw a hierarchy between nodes not shown as classes. Measured over the 163 patterns in the OntoBoard pattern library: 1085 nodes across 147 of them were affected — 997 object properties and 88 datatype properties — and `Individual` drops from 1657 to 572. Class counts are unchanged by construction, since the helper tests `classes` first.
+
+---
+
 ## [0.7.8] - 2026-09-24
 
 ### Fixed — two assets that never reached installed sites, and a reasoner that ignored being switched off
